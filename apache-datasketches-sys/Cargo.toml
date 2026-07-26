@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Raw cxx bridge to Apache DataSketches C++ (do not use directly; see apache-datasketches)"
+keywords = ["datasketches", "hyperloglog", "sketch", "ffi"]
+categories = ["external-ffi-bindings"]
 links = "datasketches"
 
 [lib]

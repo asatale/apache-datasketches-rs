@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Safe, idiomatic Rust bindings for Apache DataSketches"
+keywords = ["datasketches", "hyperloglog", "sketch", "cardinality"]
+categories = ["data-structures", "algorithms"]
 
 [features]
 default = ["hll"]
