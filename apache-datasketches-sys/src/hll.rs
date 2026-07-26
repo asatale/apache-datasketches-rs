@@ -9,6 +9,7 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("hll_sketch_shim.h");
+        include!("hll_union_shim.h");
 
         type HllSketchShim;
 
@@ -33,5 +34,24 @@ pub mod ffi {
 
         fn serialize_compact(self: &HllSketchShim) -> Vec<u8>;
         fn serialize_updatable(self: &HllSketchShim) -> Vec<u8>;
+
+        type HllUnionShim;
+
+        fn new_hll_union(lg_max_k: u8) -> Result<UniquePtr<HllUnionShim>>;
+
+        fn update_sketch(self: Pin<&mut HllUnionShim>, sketch: &HllSketchShim);
+        fn update_u64(self: Pin<&mut HllUnionShim>, value: u64);
+        fn update_i64(self: Pin<&mut HllUnionShim>, value: i64);
+        fn update_f64(self: Pin<&mut HllUnionShim>, value: f64);
+        fn update_str(self: Pin<&mut HllUnionShim>, value: &str);
+        fn update_bytes(self: Pin<&mut HllUnionShim>, value: &[u8]);
+
+        fn get_result(self: &HllUnionShim, tgt_type: TargetHllType) -> UniquePtr<HllSketchShim>;
+
+        fn get_estimate(self: &HllUnionShim) -> f64;
+        fn get_lower_bound(self: &HllUnionShim, num_std_dev: u8) -> Result<f64>;
+        fn get_upper_bound(self: &HllUnionShim, num_std_dev: u8) -> Result<f64>;
+        fn is_empty(self: &HllUnionShim) -> bool;
+        fn reset(self: Pin<&mut HllUnionShim>);
     }
 }
