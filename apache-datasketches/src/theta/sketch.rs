@@ -103,4 +103,8 @@ impl ThetaSketch {
     pub fn get_num_retained(&self) -> u32 {
         self.inner.get_num_retained()
     }
+
+    pub fn compact(&self, ordered: bool) -> super::CompactThetaSketch {
+        super::CompactThetaSketch::from_shim(self.inner.compact(ordered))
+    }
 }

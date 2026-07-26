@@ -10,8 +10,10 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("theta_sketch_shim.h");
+        include!("theta_compact_shim.h");
 
         type ThetaSketchShim;
+        type CompactThetaSketchShim = crate::theta_compact::ffi::CompactThetaSketchShim;
 
         fn new_theta_sketch(lg_k: u8, rf: ResizeFactor, p: f32) -> Result<UniquePtr<ThetaSketchShim>>;
 
@@ -38,5 +40,6 @@ pub mod ffi {
         fn is_ordered(self: &ThetaSketchShim) -> bool;
         fn get_theta(self: &ThetaSketchShim) -> f64;
         fn get_num_retained(self: &ThetaSketchShim) -> u32;
+        fn compact(self: &ThetaSketchShim, ordered: bool) -> UniquePtr<CompactThetaSketchShim>;
     }
 }
