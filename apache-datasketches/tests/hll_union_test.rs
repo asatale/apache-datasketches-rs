@@ -360,3 +360,42 @@ fn union_two_sketches_with_overlap(num: u64, lg_k: u8, tgt_type: TargetHllType) 
 fn hll_union_check_hll_to_hll() {
     union_two_sketches_with_overlap(1_000_000, 11, TargetHllType::Hll4);
 }
+
+// --- HllUnion::serialize_compact / serialize_updatable ---------------------------------------
+//
+// NOT part of upstream HllUnionTest.cpp: hll_union has no native serialize/deserialize (only
+// hll_sketch does -- see vendor/datasketches-cpp/hll/include/hll.hpp), so upstream has nothing
+// to port here. These cover the serialize_compact/serialize_updatable convenience methods added
+// to the Rust HllUnion wrapper, which serialize get_result(tgt_type) directly. Mirrors the
+// round-trip structure of hll_sketch_test.rs's hll_sketch_check_compact_flag, scaled across LIST,
+// SET, and HLL modes and all three TargetHllType results.
+fn check_union_round_trip(lg_k: u8, n: u64, tgt_type: TargetHllType, compact: bool) {
+    let mut sk = HllSketch::new(lg_k, tgt_type).unwrap();
+    for i in 0..n {
+        sk.update_u64(i);
+    }
+    let mut u = HllUnion::new(lg_k).unwrap();
+    u.update_sketch(&sk);
+
+    let bytes = if compact {
+        u.serialize_compact(tgt_type)
+    } else {
+        u.serialize_updatable(tgt_type)
+    };
+
+    let deserialized = HllSketch::deserialize(&bytes).unwrap();
+    let direct = u.get_result(tgt_type);
+    assert_eq!(deserialized.get_estimate(), direct.get_estimate());
+}
+
+#[test]
+fn hll_union_check_serialize_compact_and_updatable() {
+    for &tgt_type in &[TargetHllType::Hll4, TargetHllType::Hll6, TargetHllType::Hll8] {
+        check_union_round_trip(8, 5, tgt_type, true); // LIST mode
+        check_union_round_trip(8, 5, tgt_type, false);
+        check_union_round_trip(8, 100, tgt_type, true); // SET mode
+        check_union_round_trip(8, 100, tgt_type, false);
+        check_union_round_trip(11, 100_000, tgt_type, true); // HLL mode
+        check_union_round_trip(11, 100_000, tgt_type, false);
+    }
+}
