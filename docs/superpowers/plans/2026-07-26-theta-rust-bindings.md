@@ -4053,7 +4053,135 @@ hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 ```
 
-- [ ] **Step 3: Verify default build now compiles nothing feature-gated (sanity check for the flip)**
+- [ ] **Step 3: Gate every existing test binary behind its sketch family's feature**
+
+None of the test files created in this plan or in the prior HLL work declare `#[cfg(feature = ...)]`, and neither `Cargo.toml` declares `required-features` for any `[[test]]` — today that's harmless because `default = ["hll"]` always compiles `hll` in, but once Step 1/2 flip `default` to `[]`, a bare `cargo test --workspace` would try to compile every theta/hll test binary with neither feature enabled and fail with "module not found" errors, not run zero tests as one might assume. Add an explicit `[[test]]` entry with `required-features` for every test binary in both crates so Cargo skips (rather than fails to compile) tests whose feature isn't enabled.
+
+Append to `apache-datasketches-sys/Cargo.toml`:
+
+```toml
+[[test]]
+name = "hll_sketch_link_test"
+required-features = ["hll"]
+
+[[test]]
+name = "theta_sketch_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compact_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_wrapped_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_link_test"
+required-features = ["theta"]
+```
+
+Append to `apache-datasketches/Cargo.toml`:
+
+```toml
+[[test]]
+name = "concurrency_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_sketch_smoke_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_sketch_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_union_smoke_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_union_test"
+required-features = ["hll"]
+
+[[test]]
+name = "theta_sketch_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compact_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_wrapped_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_input_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_similarity_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_input_dispatch_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_setop_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_sketch_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compressed_round_trip_test"
+required-features = ["theta"]
+```
+
+- [ ] **Step 4: Verify default build now compiles nothing feature-gated (sanity check for the flip)**
 
 ```bash
 cargo build --workspace
@@ -4064,19 +4192,19 @@ cargo build --workspace --features apache-datasketches/hll,apache-datasketches/t
 
 Expected: all four PASS; the first produces a workspace with no HLL or Theta types compiled in (matching the new `default = []`), and each subsequent invocation compiles in exactly the requested family/families, confirming the two features remain independently selectable and additive.
 
-- [ ] **Step 4: Update `apache-datasketches-sys/README.md`**
+- [ ] **Step 5: Update `apache-datasketches-sys/README.md`**
 
 Add a "Theta" section mirroring the existing "HLL" section's structure (feature name, what it wraps, example `Cargo.toml` snippet), and update every existing `Cargo.toml` usage snippet in the file to explicitly list `features = ["hll"]` (or `["theta"]`, or `["hll", "theta"]`) instead of relying on a default feature, since `default = []` now means no snippet works without an explicit feature list. Add a note that `default` is now empty and users must opt into `hll` and/or `theta` explicitly.
 
-- [ ] **Step 5: Update `apache-datasketches/README.md`**
+- [ ] **Step 6: Update `apache-datasketches/README.md`**
 
 Add a "Theta sketches" section documenting `ThetaSketch`/`ThetaSketchBuilder`, `CompactThetaSketch`, `WrappedCompactThetaSketch`, `ThetaUnion`/`ThetaUnionBuilder`, `ThetaIntersection`, `ThetaAnotB`, and `jaccard_similarity`/`JaccardBounds`, each with a one- or two-line usage snippet, mirroring the existing "HLL sketches" section's depth and style. Update the crate-level usage example at the top of the README to show `features = ["hll"]` and/or `features = ["theta"]` explicitly (no default feature is enabled anymore).
 
-- [ ] **Step 6: Update root `README.md`**
+- [ ] **Step 7: Update root `README.md`**
 
 Update the root README's feature-flag table/section (wherever it currently documents `default = ["hll"]`) to reflect `default = []`, listing `hll` and `theta` as the two available opt-in features, each with a one-line description (Theta's should mention set operations: union, intersection, a-not-b, and Jaccard similarity, alongside cardinality estimation), consistent with this repo's "keep READMEs in sync" convention of updating root + per-crate READMEs together whenever a sketch family ships.
 
-- [ ] **Step 7: Write `apache-datasketches/examples/theta.rs`**
+- [ ] **Step 8: Write `apache-datasketches/examples/theta.rs`**
 
 Mirroring `examples/hll.rs`'s structure and level of detail:
 
@@ -4143,7 +4271,7 @@ fn main() {
 }
 ```
 
-- [ ] **Step 8: Run the example**
+- [ ] **Step 9: Run the example**
 
 ```bash
 cargo run --example theta --features theta -p apache-datasketches
@@ -4151,7 +4279,7 @@ cargo run --example theta --features theta -p apache-datasketches
 
 Expected: prints all six lines above without panicking; estimates are all within a few percent of the true set sizes (10,000 / 10,000 / ~15,000 / ~5,000 / ~5,000 / similarity ≈ 0.33).
 
-- [ ] **Step 9: Run the full workspace test suite one final time across all feature combinations**
+- [ ] **Step 10: Run the full workspace test suite one final time across all feature combinations**
 
 ```bash
 cargo test --workspace
@@ -4160,9 +4288,9 @@ cargo test --workspace --features apache-datasketches/theta
 cargo test --workspace --features apache-datasketches/hll,apache-datasketches/theta
 ```
 
-Expected: all PASS in all four configurations (the first, with no features, should show zero theta/hll tests collected, since every test file in both crates is behind `#[cfg(feature = ...)]` or its whole crate requires the feature to compile at all — matching HLL's existing precedent for feature-gated tests).
+Expected: all PASS in all four configurations. The first (`default = []`, no features) compiles both crates' library code with no HLL or Theta types, and — thanks to the `required-features` entries added in Step 3 — every `hll_*`/`theta_*` test binary is skipped rather than failing to compile, so the run reports 0 tests executed with no compile errors. Each subsequent invocation runs exactly the test binaries whose `required-features` are satisfied.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add apache-datasketches-sys/Cargo.toml apache-datasketches/Cargo.toml apache-datasketches-sys/README.md apache-datasketches/README.md README.md apache-datasketches/examples/theta.rs
