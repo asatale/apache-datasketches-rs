@@ -65,6 +65,14 @@ so `HllUnion::serialize_compact`/`serialize_updatable` serialize
 deserializing, feed the deserialized `HllSketch` back into a new
 `HllUnion` via `update_sketch`.
 
+## Examples
+
+Standalone runnable demos live under `apache-datasketches/examples/`:
+
+```bash
+cargo run -p apache-datasketches --example hll
+```
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature, enabled by default (sketch + union).
