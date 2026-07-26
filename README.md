@@ -1,4 +1,4 @@
-# apache-rust-sketch-wrapper
+# apache-datasketches-rs
 
 Rust bindings for [Apache DataSketches](https://github.com/apache/datasketches-cpp),
 built via the `cxx` crate over a pinned git submodule.
