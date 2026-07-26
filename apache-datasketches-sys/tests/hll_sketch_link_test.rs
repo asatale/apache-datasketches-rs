@@ -1,3 +1,5 @@
+#![cfg(feature = "hll")]
+
 use apache_datasketches_sys::hll::ffi;
 
 #[test]

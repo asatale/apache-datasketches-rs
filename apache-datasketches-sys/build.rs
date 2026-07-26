@@ -5,13 +5,22 @@ fn main() {
         bridges.push("src/hll.rs");
     }
     if cfg!(feature = "theta") {
-        bridges.push("src/theta_sketch.rs");
-        bridges.push("src/theta_compact.rs");
-        bridges.push("src/theta_wrapped.rs");
-        bridges.push("src/theta_union.rs");
-        bridges.push("src/theta_intersection.rs");
-        bridges.push("src/theta_a_not_b.rs");
-        bridges.push("src/theta_jaccard.rs");
+        // These bridge modules are added incrementally by the Theta sketch
+        // family plan's tasks; only reference the ones that exist so far so
+        // that `--features theta` keeps building at every intermediate task.
+        for path in [
+            "src/theta_sketch.rs",
+            "src/theta_compact.rs",
+            "src/theta_wrapped.rs",
+            "src/theta_union.rs",
+            "src/theta_intersection.rs",
+            "src/theta_a_not_b.rs",
+            "src/theta_jaccard.rs",
+        ] {
+            if std::path::Path::new(path).exists() {
+                bridges.push(path);
+            }
+        }
     }
 
     if bridges.is_empty() {
@@ -56,14 +65,20 @@ fn main() {
             .file("cpp/hll/hll_union_shim.cc");
     }
     if cfg!(feature = "theta") {
-        build
-            .file("cpp/theta/theta_sketch_shim.cc")
-            .file("cpp/theta/theta_compact_shim.cc")
-            .file("cpp/theta/theta_wrapped_shim.cc")
-            .file("cpp/theta/theta_union_shim.cc")
-            .file("cpp/theta/theta_intersection_shim.cc")
-            .file("cpp/theta/theta_a_not_b_shim.cc")
-            .file("cpp/theta/theta_jaccard_shim.cc");
+        // Same incremental-availability rationale as the bridges list above.
+        for path in [
+            "cpp/theta/theta_sketch_shim.cc",
+            "cpp/theta/theta_compact_shim.cc",
+            "cpp/theta/theta_wrapped_shim.cc",
+            "cpp/theta/theta_union_shim.cc",
+            "cpp/theta/theta_intersection_shim.cc",
+            "cpp/theta/theta_a_not_b_shim.cc",
+            "cpp/theta/theta_jaccard_shim.cc",
+        ] {
+            if std::path::Path::new(path).exists() {
+                build.file(path);
+            }
+        }
     }
 
     build.compile("apache_datasketches_sys");
