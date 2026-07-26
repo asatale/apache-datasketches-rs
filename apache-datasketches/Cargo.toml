@@ -1,0 +1,16 @@
+[package]
+name = "apache-datasketches"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Safe, idiomatic Rust bindings for Apache DataSketches"
+
+[features]
+default = ["hll"]
+hll = ["apache-datasketches-sys/hll"]
+
+[dependencies]
+apache-datasketches-sys = { version = "0.1.0", path = "../apache-datasketches-sys", default-features = false }
+cxx = "1"
+thiserror = "1"

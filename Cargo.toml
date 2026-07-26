@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apache-datasketches-sys"]
+members = ["apache-datasketches-sys", "apache-datasketches"]
 
 [workspace.package]
 version = "0.1.0"
