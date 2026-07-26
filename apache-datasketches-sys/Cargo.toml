@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Raw cxx bridge to Apache DataSketches C++ (do not use directly; see apache-datasketches)"
+readme = "README.md"
 keywords = ["datasketches", "hyperloglog", "sketch", "ffi"]
 categories = ["external-ffi-bindings"]
 links = "datasketches"
