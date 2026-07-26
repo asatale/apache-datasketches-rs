@@ -22,6 +22,20 @@ std::unique_ptr<HllSketchShim> HllUnionShim::get_result(TargetHllType tgt_type) 
   return std::make_unique<HllSketchShim>(u_.get_result(to_cpp_target_type(tgt_type)));
 }
 
+rust::Vec<uint8_t> HllUnionShim::serialize_compact(TargetHllType tgt_type) const {
+  auto bytes = u_.get_result(to_cpp_target_type(tgt_type)).serialize_compact();
+  rust::Vec<uint8_t> out;
+  for (auto b : bytes) out.push_back(b);
+  return out;
+}
+
+rust::Vec<uint8_t> HllUnionShim::serialize_updatable(TargetHllType tgt_type) const {
+  auto bytes = u_.get_result(to_cpp_target_type(tgt_type)).serialize_updatable();
+  rust::Vec<uint8_t> out;
+  for (auto b : bytes) out.push_back(b);
+  return out;
+}
+
 double HllUnionShim::get_estimate() const { return u_.get_estimate(); }
 double HllUnionShim::get_lower_bound(uint8_t num_std_dev) const {
   return u_.get_lower_bound(num_std_dev);

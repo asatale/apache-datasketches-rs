@@ -46,6 +46,21 @@ impl HllUnion {
         HllSketch { inner }
     }
 
+    /// Serializes `get_result(tgt_type)` in compact form. A union has no
+    /// serializable state of its own upstream (only the result sketch
+    /// does) — to resume accumulating after deserializing, use
+    /// `HllSketch::deserialize` and feed the sketch back in via
+    /// `update_sketch`.
+    pub fn serialize_compact(&self, tgt_type: TargetHllType) -> Vec<u8> {
+        self.inner.serialize_compact(tgt_type.into())
+    }
+
+    /// Serializes `get_result(tgt_type)` in updatable form. See
+    /// [`Self::serialize_compact`] for why `HllUnion` has no `deserialize`.
+    pub fn serialize_updatable(&self, tgt_type: TargetHllType) -> Vec<u8> {
+        self.inner.serialize_updatable(tgt_type.into())
+    }
+
     pub fn get_estimate(&self) -> f64 {
         self.inner.get_estimate()
     }
