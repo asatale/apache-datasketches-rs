@@ -9,3 +9,5 @@ pub mod theta_compact;
 pub mod theta_wrapped;
 #[cfg(feature = "theta")]
 pub mod theta_input;
+#[cfg(feature = "theta")]
+pub mod theta_union;
