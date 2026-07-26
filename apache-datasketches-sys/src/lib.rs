@@ -5,3 +5,5 @@ pub mod hll;
 pub mod theta_sketch;
 #[cfg(feature = "theta")]
 pub mod theta_compact;
+#[cfg(feature = "theta")]
+pub mod theta_wrapped;
