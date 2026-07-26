@@ -8,9 +8,20 @@ built via the `cxx` crate over a pinned git submodule.
 - `apache-datasketches-sys` — raw `cxx` bridge (do not use directly).
 - `apache-datasketches` — safe, idiomatic Rust API.
 
+## Usage
+
+```rust
+use apache_datasketches::hll::{HllSketch, TargetHllType};
+
+let mut sketch = HllSketch::new(12, TargetHllType::Hll4)?;
+sketch.update_str("some-key");
+sketch.update_u64(42);
+println!("estimate: {}", sketch.get_estimate());
+```
+
 ## Sketch families
 
-- [x] HLL (HyperLogLog) — `hll` feature, enabled by default.
+- [x] HLL (HyperLogLog) — `hll` feature, enabled by default (sketch + union).
 
 ## Vendored C++ version
 
