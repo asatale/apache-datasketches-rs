@@ -9,13 +9,15 @@ fn main() {
         return;
     }
 
-    // The datasketches-cpp submodule lives at the workspace root
-    // (`vendor/datasketches-cpp`), one level up from this crate's manifest
-    // directory. Cargo runs build scripts with the crate directory as the
-    // current directory, so we anchor these include paths on
-    // CARGO_MANIFEST_DIR rather than assuming a relative "vendor/..." path.
+    // We build against a copy of the needed datasketches-cpp headers
+    // vendored into this crate (`vendor/datasketches-cpp`), not the
+    // workspace-root git submodule: crates.io packaging only includes files
+    // inside the crate directory, so a path escaping it via `../` would be
+    // missing from the published tarball. The workspace-root submodule
+    // remains the source of truth for updating the pinned version (see
+    // vendor/README.md); this copy is refreshed from it manually.
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let vendor_dir = manifest_dir.join("../vendor/datasketches-cpp");
+    let vendor_dir = manifest_dir.join("vendor/datasketches-cpp");
 
     // cxx-build generates the bridge header at
     // OUT_DIR/cxxbridge/include/<pkg-name>/src/hll.rs.h, but our shim headers
