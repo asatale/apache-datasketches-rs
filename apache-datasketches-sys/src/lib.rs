@@ -7,3 +7,5 @@ pub mod theta_sketch;
 pub mod theta_compact;
 #[cfg(feature = "theta")]
 pub mod theta_wrapped;
+#[cfg(feature = "theta")]
+pub mod theta_input;
