@@ -24,5 +24,5 @@ cp vendor/datasketches-cpp/LICENSE apache-datasketches-sys/vendor/datasketches-c
 cp vendor/datasketches-cpp/NOTICE apache-datasketches-sys/vendor/datasketches-cpp/NOTICE
 ```
 
-When a future sketch family needs headers outside `common/`+`hll/`, add
-its `include/` directory to both this script and `build.rs`.
+When a future sketch family needs headers outside `common/`+`hll/`+`theta/`,
+add its `include/` directory to both this script and `build.rs`.
