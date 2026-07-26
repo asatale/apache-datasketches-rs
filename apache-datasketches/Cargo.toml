@@ -12,6 +12,7 @@ categories = ["data-structures", "algorithms"]
 [features]
 default = ["hll"]
 hll = ["apache-datasketches-sys/hll"]
+theta = ["apache-datasketches-sys/theta"]
 
 [dependencies]
 apache-datasketches-sys = { version = "0.1.1", path = "../apache-datasketches-sys", default-features = false }
