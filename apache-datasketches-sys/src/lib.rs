@@ -11,3 +11,5 @@ pub mod theta_wrapped;
 pub mod theta_input;
 #[cfg(feature = "theta")]
 pub mod theta_union;
+#[cfg(feature = "theta")]
+pub mod theta_intersection;

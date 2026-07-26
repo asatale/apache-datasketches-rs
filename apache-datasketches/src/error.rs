@@ -10,6 +10,10 @@ pub enum SketchError {
 
     #[error("datasketches C++ error: {0}")]
     Cpp(String),
+
+    /// `ThetaIntersection::get_result()` was called before any `update()`.
+    #[error("intersection has no result: no update() call has been made yet")]
+    EmptyIntersection,
 }
 
 impl From<cxx::Exception> for SketchError {
