@@ -15,3 +15,5 @@ pub mod theta_union;
 pub mod theta_intersection;
 #[cfg(feature = "theta")]
 pub mod theta_a_not_b;
+#[cfg(feature = "theta")]
+pub mod theta_jaccard;
