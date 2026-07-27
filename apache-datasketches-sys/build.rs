@@ -5,9 +5,6 @@ fn main() {
         bridges.push("src/hll.rs");
     }
     if cfg!(feature = "theta") {
-        // These bridge modules are added incrementally by the Theta sketch
-        // family plan's tasks; only reference the ones that exist so far so
-        // that `--features theta` keeps building at every intermediate task.
         for path in [
             "src/theta_sketch.rs",
             "src/theta_compact.rs",
@@ -17,6 +14,18 @@ fn main() {
             "src/theta_a_not_b.rs",
             "src/theta_jaccard.rs",
         ] {
+            if std::path::Path::new(path).exists() {
+                bridges.push(path);
+            }
+        }
+    }
+    if cfg!(feature = "cpc") {
+        // Same incremental-availability rationale as theta above: these
+        // bridge modules are added incrementally by the CPC sketch
+        // family plan's tasks; only reference the ones that exist so far
+        // so that `--features cpc` keeps building at every intermediate
+        // task.
+        for path in ["src/cpc_sketch.rs", "src/cpc_union.rs"] {
             if std::path::Path::new(path).exists() {
                 bridges.push(path);
             }
@@ -53,9 +62,11 @@ fn main() {
         .include(vendor_dir.join("common/include"))
         .include(vendor_dir.join("hll/include"))
         .include(vendor_dir.join("theta/include"))
+        .include(vendor_dir.join("cpc/include"))
         .include("cpp")
         .include("cpp/hll")
         .include("cpp/theta")
+        .include("cpp/cpc")
         .include(generated_header_dir)
         .flag_if_supported("-std=c++17");
 
@@ -65,7 +76,6 @@ fn main() {
             .file("cpp/hll/hll_union_shim.cc");
     }
     if cfg!(feature = "theta") {
-        // Same incremental-availability rationale as the bridges list above.
         for path in [
             "cpp/theta/theta_sketch_shim.cc",
             "cpp/theta/theta_compact_shim.cc",
@@ -75,6 +85,13 @@ fn main() {
             "cpp/theta/theta_a_not_b_shim.cc",
             "cpp/theta/theta_jaccard_shim.cc",
         ] {
+            if std::path::Path::new(path).exists() {
+                build.file(path);
+            }
+        }
+    }
+    if cfg!(feature = "cpc") {
+        for path in ["cpp/cpc/cpc_sketch_shim.cc", "cpp/cpc/cpc_union_shim.cc"] {
             if std::path::Path::new(path).exists() {
                 build.file(path);
             }
@@ -109,4 +126,10 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/theta/theta_a_not_b_shim.cc");
     println!("cargo:rerun-if-changed=cpp/theta/theta_jaccard_shim.h");
     println!("cargo:rerun-if-changed=cpp/theta/theta_jaccard_shim.cc");
+    println!("cargo:rerun-if-changed=src/cpc_sketch.rs");
+    println!("cargo:rerun-if-changed=src/cpc_union.rs");
+    println!("cargo:rerun-if-changed=cpp/cpc/cpc_sketch_shim.h");
+    println!("cargo:rerun-if-changed=cpp/cpc/cpc_sketch_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/cpc/cpc_union_shim.h");
+    println!("cargo:rerun-if-changed=cpp/cpc/cpc_union_shim.cc");
 }

@@ -18,6 +18,7 @@ path = "src/lib.rs"
 default = []
 hll = []
 theta = []
+cpc = []
 
 [dependencies]
 cxx = "1"
