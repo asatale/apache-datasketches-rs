@@ -3,6 +3,14 @@
 Rust bindings for [Apache DataSketches](https://github.com/apache/datasketches-cpp),
 built via the `cxx` crate over a pinned git submodule.
 
+`default = []` for both crates — no sketch family is compiled in unless
+you opt in explicitly via Cargo features:
+
+```toml
+[dependencies]
+apache-datasketches = { version = "0.1", features = ["hll", "theta"] }
+```
+
 ## Crates
 
 - `apache-datasketches-sys` — raw `cxx` bridge (do not use directly).
@@ -70,12 +78,18 @@ deserializing, feed the deserialized `HllSketch` back into a new
 Standalone runnable demos live under `apache-datasketches/examples/`:
 
 ```bash
-cargo run -p apache-datasketches --example hll
+cargo run -p apache-datasketches --example hll --features hll
+cargo run -p apache-datasketches --example theta --features theta
 ```
 
 ## Sketch families
 
-- [x] HLL (HyperLogLog) — `hll` feature, enabled by default (sketch + union).
+`default = []` for both crates; enable one or both of the following
+opt-in features:
+
+- [x] `hll` (HyperLogLog) — cardinality estimation (sketch + union).
+- [x] `theta` — cardinality estimation plus set operations: union,
+  intersection, a-not-b, and Jaccard similarity.
 
 ## Vendored C++ version
 

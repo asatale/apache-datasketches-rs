@@ -15,7 +15,7 @@ name = "apache_datasketches_sys"
 path = "src/lib.rs"
 
 [features]
-default = ["hll"]
+default = []
 hll = []
 theta = []
 
@@ -24,3 +24,35 @@ cxx = "1"
 
 [build-dependencies]
 cxx-build = "1"
+
+[[test]]
+name = "hll_sketch_link_test"
+required-features = ["hll"]
+
+[[test]]
+name = "theta_sketch_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compact_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_wrapped_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_link_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_link_test"
+required-features = ["theta"]

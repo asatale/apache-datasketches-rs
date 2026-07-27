@@ -10,7 +10,7 @@ keywords = ["datasketches", "hyperloglog", "sketch", "cardinality"]
 categories = ["data-structures", "algorithms"]
 
 [features]
-default = ["hll"]
+default = []
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 
@@ -18,3 +18,95 @@ theta = ["apache-datasketches-sys/theta"]
 apache-datasketches-sys = { version = "0.1.1", path = "../apache-datasketches-sys", default-features = false }
 cxx = "1"
 thiserror = "1"
+
+[[example]]
+name = "hll"
+required-features = ["hll"]
+
+[[example]]
+name = "theta"
+required-features = ["theta"]
+
+[[test]]
+name = "concurrency_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_sketch_smoke_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_sketch_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_union_smoke_test"
+required-features = ["hll"]
+
+[[test]]
+name = "hll_union_test"
+required-features = ["hll"]
+
+[[test]]
+name = "theta_sketch_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compact_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_wrapped_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_input_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_smoke_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_jaccard_similarity_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_input_dispatch_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_setop_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_sketch_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_union_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_intersection_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_a_not_b_test"
+required-features = ["theta"]
+
+[[test]]
+name = "theta_compressed_round_trip_test"
+required-features = ["theta"]
