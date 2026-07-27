@@ -127,3 +127,7 @@ required-features = ["cpc"]
 [[test]]
 name = "cpc_union_test"
 required-features = ["cpc"]
+
+[[test]]
+name = "cpc_concurrency_test"
+required-features = ["cpc"]
