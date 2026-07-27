@@ -13,6 +13,7 @@ categories = ["data-structures", "algorithms"]
 default = []
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
+cpc = ["apache-datasketches-sys/cpc"]
 
 [dependencies]
 apache-datasketches-sys = { version = "0.2.0", path = "../apache-datasketches-sys", default-features = false }
@@ -110,3 +111,7 @@ required-features = ["theta"]
 [[test]]
 name = "theta_compressed_round_trip_test"
 required-features = ["theta"]
+
+[[test]]
+name = "cpc_sketch_smoke_test"
+required-features = ["cpc"]
