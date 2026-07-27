@@ -20,3 +20,5 @@ pub mod theta_jaccard;
 
 #[cfg(feature = "cpc")]
 pub mod cpc_sketch;
+#[cfg(feature = "cpc")]
+pub mod cpc_union;
