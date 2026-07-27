@@ -115,3 +115,7 @@ required-features = ["theta"]
 [[test]]
 name = "cpc_sketch_smoke_test"
 required-features = ["cpc"]
+
+[[test]]
+name = "cpc_union_smoke_test"
+required-features = ["cpc"]

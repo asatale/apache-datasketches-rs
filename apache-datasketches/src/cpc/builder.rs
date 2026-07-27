@@ -29,3 +29,33 @@ impl CpcSketchBuilder {
         super::CpcSketch::from_lg_k(self.lg_k)
     }
 }
+
+/// Builder for [`crate::cpc::CpcUnion`], mirroring upstream's
+/// `cpc_union_alloc` constructor. `lg_k` defaults to `11`
+/// (`cpc_constants::DEFAULT_LG_K`). The seed is never exposed, same as
+/// [`CpcSketchBuilder`].
+#[derive(Debug, Clone, Copy)]
+pub struct CpcUnionBuilder {
+    lg_k: u8,
+}
+
+impl Default for CpcUnionBuilder {
+    fn default() -> Self {
+        Self { lg_k: 11 }
+    }
+}
+
+impl CpcUnionBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn lg_k(mut self, lg_k: u8) -> Self {
+        self.lg_k = lg_k;
+        self
+    }
+
+    pub fn build(self) -> Result<super::CpcUnion, SketchError> {
+        super::CpcUnion::from_lg_k(self.lg_k)
+    }
+}
