@@ -18,11 +18,13 @@ kept in sync with the upstream project.
 ## Features
 
 `default = []` — no sketch family is compiled in unless you opt in
-explicitly. Enable one or both of:
+explicitly. Enable one or more of:
 
 - `hll` — raw bridge to the HLL (HyperLogLog) sketch and union C++ types.
 - `theta` — raw bridge to the Theta sketch, union, intersection, a-not-b,
   and Jaccard similarity C++ types.
+- `cpc` — raw bridge to the CPC (Compressed Probabilistic Counting) sketch
+  and union C++ types.
 
 ```toml
 [dependencies]
@@ -37,4 +39,9 @@ apache-datasketches-sys = { version = "0.2", features = ["theta"] }
 ```toml
 [dependencies]
 apache-datasketches-sys = { version = "0.2", features = ["hll", "theta"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches-sys = { version = "0.2", features = ["cpc"] }
 ```

@@ -5,7 +5,7 @@ built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
 `default = []` — no sketch family is enabled unless you opt in explicitly.
-Add the `hll` and/or `theta` feature to your `Cargo.toml`:
+Add the `hll`, `theta`, and/or `cpc` feature to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -19,7 +19,12 @@ apache-datasketches = { version = "0.2", features = ["theta"] }
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta"] }
+apache-datasketches = { version = "0.2", features = ["cpc"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc"] }
 ```
 
 > **Breaking change in 0.2.0:** prior versions defaulted to `features = ["hll"]`.
@@ -112,11 +117,50 @@ See `examples/theta.rs` (`cargo run -p apache-datasketches --example theta
 estimation, union, intersection, a-not-b, Jaccard similarity, and
 serialize/deserialize round-tripping.
 
+## CPC sketches
+
+The CPC (Compressed Probabilistic Counting) sketch family (`cpc` feature)
+supports cardinality estimation, like HLL and Theta, with a more compact
+serialized form. Unlike Theta, CPC has no set operations beyond union —
+no intersection, a-not-b, or Jaccard similarity.
+
+```rust
+use apache_datasketches::cpc::CpcSketchBuilder;
+
+let mut sketch = CpcSketchBuilder::new().lg_k(11).build()?;
+sketch.update_u64(42);
+println!("estimate: {}", sketch.get_estimate());
+```
+
+- `CpcSketch` / `CpcSketchBuilder` — the sketch; build with
+  `CpcSketchBuilder::new().lg_k(..).build()`. Supports the full upstream
+  `update` overload set (`update_u64`/`update_i64`/`update_u32`/
+  `update_i32`/`update_u16`/`update_i16`/`update_u8`/`update_i8`/
+  `update_f64`/`update_f32`/`update_str`/`update_bytes`), `serialize`/
+  `CpcSketch::deserialize`, and `get_lg_k`/`get_lower_bound`/
+  `get_upper_bound`/`to_string_summary`.
+- `CpcUnion` / `CpcUnionBuilder` — merges multiple sketches; build with
+  `CpcUnionBuilder::new().lg_k(..).build()`, feed sketches via `update`,
+  and read the merged sketch via `get_result()`.
+- `get_max_serialized_size_bytes(lg_k)` — the estimated maximum compressed
+  serialized size, in bytes, for a given `lg_k`; useful for pre-allocating
+  buffers.
+- `cpc::init()` — eagerly initializes CPC's global decompression tables.
+  Upstream's lazy self-initialization on first serialize/deserialize is
+  **not thread-safe**; call `init()` once, single-threaded, before
+  spawning worker threads that will serialize or deserialize CPC sketches
+  concurrently. Single-threaded callers never need to call this.
+
+See `examples/cpc.rs` (`cargo run -p apache-datasketches --example cpc
+--features cpc`) for a complete runnable demo.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
 - [x] Theta — `theta` feature (sketch, union, intersection, a-not-b,
   Jaccard similarity).
+- [x] CPC (Compressed Probabilistic Counting) — `cpc` feature (sketch +
+  union).
 
 ## License
 

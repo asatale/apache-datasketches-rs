@@ -28,6 +28,10 @@ required-features = ["hll"]
 name = "theta"
 required-features = ["theta"]
 
+[[example]]
+name = "cpc"
+required-features = ["cpc"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

@@ -8,7 +8,7 @@ you opt in explicitly via Cargo features:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta"] }
+apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc"] }
 ```
 
 ## Crates
@@ -80,16 +80,20 @@ Standalone runnable demos live under `apache-datasketches/examples/`:
 ```bash
 cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
+cargo run -p apache-datasketches --example cpc --features cpc
 ```
 
 ## Sketch families
 
-`default = []` for both crates; enable one or both of the following
+`default = []` for both crates; enable one or more of the following
 opt-in features:
 
 - [x] `hll` (HyperLogLog) — cardinality estimation (sketch + union).
 - [x] `theta` — cardinality estimation plus set operations: union,
   intersection, a-not-b, and Jaccard similarity.
+- [x] `cpc` (Compressed Probabilistic Counting) — cardinality estimation
+  with a more compact serialized form (sketch + union; no set operations
+  beyond union).
 
 ## Vendored C++ version
 
