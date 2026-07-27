@@ -9,18 +9,22 @@ Add the `hll` and/or `theta` feature to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.1", features = ["hll"] }
+apache-datasketches = { version = "0.2", features = ["hll"] }
 ```
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.1", features = ["theta"] }
+apache-datasketches = { version = "0.2", features = ["theta"] }
 ```
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.1", features = ["hll", "theta"] }
+apache-datasketches = { version = "0.2", features = ["hll", "theta"] }
 ```
+
+> **Breaking change in 0.2.0:** prior versions defaulted to `features = ["hll"]`.
+> As of 0.2.0, `default = []` — existing consumers upgrading from 0.1.x must
+> add `features = ["hll"]` explicitly to keep HLL support enabled.
 
 ## Usage
 

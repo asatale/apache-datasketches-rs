@@ -26,15 +26,15 @@ explicitly. Enable one or both of:
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.1", features = ["hll"] }
+apache-datasketches-sys = { version = "0.2", features = ["hll"] }
 ```
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.1", features = ["theta"] }
+apache-datasketches-sys = { version = "0.2", features = ["theta"] }
 ```
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.1", features = ["hll", "theta"] }
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta"] }
 ```

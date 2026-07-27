@@ -8,7 +8,7 @@ you opt in explicitly via Cargo features:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.1", features = ["hll", "theta"] }
+apache-datasketches = { version = "0.2", features = ["hll", "theta"] }
 ```
 
 ## Crates
