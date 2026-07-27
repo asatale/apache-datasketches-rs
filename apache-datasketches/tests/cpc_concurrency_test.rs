@@ -1,8 +1,9 @@
 // apache-datasketches/tests/cpc_concurrency_test.rs
 //! New, non-upstream tests: `Send` verification (matching this plan's
-//! HLL/Theta precedent) and a concurrent-use scenario for `cpc::init()`,
-//! which addresses CPC's global-decompression-table initialization
-//! hazard documented in `apache_datasketches::cpc::init`.
+//! HLL/Theta precedent) and a concurrent smoke test that exercises real
+//! concurrent `CpcSketch` usage, including the recommended pattern of
+//! calling `cpc::init()` eagerly (see `apache_datasketches::cpc::init` for
+//! why that's a latency optimization, not a correctness fix).
 use apache_datasketches::cpc::{self, CpcSketch, CpcSketchBuilder, CpcUnion};
 use std::thread;
 
@@ -31,11 +32,12 @@ fn cpc_sketch_moves_across_thread_boundary() {
 }
 
 #[test]
-fn init_then_concurrent_serialize_deserialize() {
-    // cpc::init() must be called single-threaded before any concurrent
-    // first-use of serialize/deserialize, since upstream's lazy
-    // self-initialization of the global decompression tables is not
-    // thread-safe. Calling it here, before spawning, avoids the race.
+fn concurrent_serialize_deserialize_across_threads() {
+    // Not testing a correctness hazard (see cpc::init()'s doc comment: the
+    // lazy table init is safe under concurrent access via C++11 magic
+    // statics). This demonstrates the recommended pattern of calling
+    // init() eagerly to avoid a first-use latency stall, and exercises
+    // real concurrent CpcSketch usage across threads.
     cpc::init();
 
     let handles: Vec<_> = (0..8u64)

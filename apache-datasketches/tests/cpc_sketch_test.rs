@@ -240,9 +240,11 @@ fn update_string_equivalence() {
 
 #[test]
 fn max_serialized_size() {
-    assert_eq!(get_max_serialized_size_bytes(4), 24 + 40);
+    assert_eq!(get_max_serialized_size_bytes(4).unwrap(), 24 + 40);
     assert_eq!(
-        get_max_serialized_size_bytes(26),
+        get_max_serialized_size_bytes(26).unwrap(),
         ((0.6 * (1u64 << 26) as f64) as usize) + 40
     );
+    assert!(get_max_serialized_size_bytes(3).is_err());
+    assert!(get_max_serialized_size_bytes(27).is_err());
 }

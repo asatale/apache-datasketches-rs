@@ -104,6 +104,9 @@ impl CpcSketch {
 
 /// The estimated maximum compressed serialized size, in bytes, of a CPC
 /// sketch built with the given `lg_k`. Useful for pre-allocating buffers.
-pub fn get_max_serialized_size_bytes(lg_k: u8) -> usize {
+///
+/// Returns an error if `lg_k` is outside the valid range (`4..=26`).
+pub fn get_max_serialized_size_bytes(lg_k: u8) -> Result<usize, SketchError> {
     sys::cpc_sketch_max_serialized_size_bytes(lg_k)
+        .map_err(|e| SketchError::InvalidConfig(e.what().to_string()))
 }

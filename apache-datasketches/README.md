@@ -147,9 +147,11 @@ println!("estimate: {}", sketch.get_estimate());
   buffers.
 - `cpc::init()` — eagerly initializes CPC's global decompression tables.
   Upstream's lazy self-initialization on first serialize/deserialize is
-  **not thread-safe**; call `init()` once, single-threaded, before
-  spawning worker threads that will serialize or deserialize CPC sketches
-  concurrently. Single-threaded callers never need to call this.
+  safe under concurrent access (C++11 magic-static guarantees), so this
+  isn't a correctness fix; it's a latency optimization that moves the
+  one-time table-building cost off the hot path and avoids threads
+  stalling behind whichever one wins the lazy-init race. Single-threaded
+  callers never need to call this.
 
 See `examples/cpc.rs` (`cargo run -p apache-datasketches --example cpc
 --features cpc`) for a complete runnable demo.

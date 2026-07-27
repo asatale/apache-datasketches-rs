@@ -7,7 +7,7 @@ pub mod ffi {
 
         fn new_cpc_sketch(lg_k: u8) -> Result<UniquePtr<CpcSketchShim>>;
         fn cpc_sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<CpcSketchShim>>;
-        fn cpc_sketch_max_serialized_size_bytes(lg_k: u8) -> usize;
+        fn cpc_sketch_max_serialized_size_bytes(lg_k: u8) -> Result<usize>;
         fn cpc_init();
 
         fn update_u64(self: Pin<&mut CpcSketchShim>, value: u64);
