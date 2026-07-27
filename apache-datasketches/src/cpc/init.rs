@@ -13,5 +13,8 @@ use apache_datasketches_sys::cpc_sketch::ffi as sys;
 /// hot path, and avoids every thread that happens to hit the lazy path
 /// first stalling behind whichever one wins the initialization race.
 pub fn init() {
-    sys::cpc_init();
+    sys::cpc_init().expect(
+        "cpc_init should never fail: the decompression tables it builds are \
+         derived from fixed, compile-time-constant permutation data",
+    );
 }

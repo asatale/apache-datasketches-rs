@@ -41,6 +41,7 @@ rust::String CpcSketchShim::to_string_summary() const {
 rust::Vec<uint8_t> CpcSketchShim::serialize() const {
   auto bytes = sketch_.serialize();
   rust::Vec<uint8_t> out;
+  out.reserve(bytes.size());
   for (auto b : bytes) out.push_back(b);
   return out;
 }

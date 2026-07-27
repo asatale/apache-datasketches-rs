@@ -38,10 +38,10 @@ apache-datasketches-sys = { version = "0.2", features = ["theta"] }
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["hll", "theta"] }
+apache-datasketches-sys = { version = "0.2", features = ["cpc"] }
 ```
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["cpc"] }
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc"] }
 ```

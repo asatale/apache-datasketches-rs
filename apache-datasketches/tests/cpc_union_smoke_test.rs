@@ -24,3 +24,12 @@ fn union_merges_two_sketches() {
 fn invalid_lg_k_is_err() {
     assert!(CpcUnionBuilder::new().lg_k(3).build().is_err());
 }
+
+#[test]
+fn default_builder_uses_lg_k_11() {
+    let mut union = CpcUnionBuilder::new().build().unwrap();
+    let mut sketch = CpcSketchBuilder::new().lg_k(11).build().unwrap();
+    sketch.update_u64(1);
+    union.update(&sketch);
+    assert_eq!(union.get_result().get_lg_k(), 11);
+}

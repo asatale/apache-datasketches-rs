@@ -7,7 +7,7 @@ inside this crate's own directory — can produce a self-contained tarball.
 
 Only the headers actually compiled (`common/include`, `hll/include`,
 `theta/include`, `cpc/include`, `LICENSE`, `NOTICE`) are copied;
-`version.hpp.in` is skipped since nothing in the HLL path includes it.
+`version.hpp.in` is skipped since none of the compiled headers include it.
 
 ## Updating after bumping the submodule's pinned tag
 
