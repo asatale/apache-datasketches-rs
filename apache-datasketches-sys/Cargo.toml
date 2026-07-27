@@ -57,3 +57,7 @@ required-features = ["theta"]
 [[test]]
 name = "theta_jaccard_link_test"
 required-features = ["theta"]
+
+[[test]]
+name = "cpc_sketch_link_test"
+required-features = ["cpc"]

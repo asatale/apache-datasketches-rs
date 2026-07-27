@@ -17,3 +17,6 @@ pub mod theta_intersection;
 pub mod theta_a_not_b;
 #[cfg(feature = "theta")]
 pub mod theta_jaccard;
+
+#[cfg(feature = "cpc")]
+pub mod cpc_sketch;
