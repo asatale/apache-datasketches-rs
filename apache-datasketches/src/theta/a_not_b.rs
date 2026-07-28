@@ -4,6 +4,10 @@ use apache_datasketches_sys::theta_a_not_b::ffi as sys;
 use apache_datasketches_sys::theta_input::ThetaInputRef;
 use cxx::UniquePtr;
 
+/// Computes the set difference ("A not B": items in `a` but not `b`) of two
+/// theta sketches via [`Self::compute`]. Stateless between calls — unlike
+/// [`super::ThetaUnion`]/[`super::ThetaIntersection`], there is no
+/// accumulation across repeated calls.
 pub struct ThetaAnotB {
     inner: UniquePtr<sys::ThetaAnotBShim>,
 }
@@ -17,12 +21,18 @@ impl Default for ThetaAnotB {
 }
 
 impl ThetaAnotB {
+    /// Creates a new, reusable a-not-b calculator.
     pub fn new() -> Self {
         Self {
             inner: sys::new_theta_a_not_b(),
         }
     }
 
+    /// Computes the set difference `a - b` (items in `a` that are not in
+    /// `b`) as a [`CompactThetaSketch`]. `a` and `b` may independently be
+    /// any of [`super::ThetaSketch`], [`CompactThetaSketch`], or
+    /// [`super::WrappedCompactThetaSketch`]. If `ordered` is `true`, the
+    /// result's entries are sorted by hash value.
     pub fn compute(
         &self,
         a: &impl ThetaInput,

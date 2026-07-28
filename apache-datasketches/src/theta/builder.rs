@@ -5,9 +5,13 @@ use apache_datasketches_sys::theta_sketch::ffi as sys;
 /// matching `theta_constants::DEFAULT_RESIZE_FACTOR`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResizeFactor {
+    /// Grow by 1x (i.e. never resize past the initial allocation).
     X1,
+    /// Grow by 2x each time the hash table fills.
     X2,
+    /// Grow by 4x each time the hash table fills.
     X4,
+    /// Grow by 8x each time the hash table fills. The default.
     X8,
 }
 
@@ -51,25 +55,35 @@ impl Default for ThetaSketchBuilder {
 }
 
 impl ThetaSketchBuilder {
+    /// Creates a new builder with default settings (`lg_k = 12`,
+    /// `resize_factor = X8`, `p = 1.0`).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the base-2 log of the target number of retained entries.
     pub fn lg_k(mut self, lg_k: u8) -> Self {
         self.lg_k = lg_k;
         self
     }
 
+    /// Sets the hash table's growth [`ResizeFactor`].
     pub fn resize_factor(mut self, resize_factor: ResizeFactor) -> Self {
         self.resize_factor = resize_factor;
         self
     }
 
+    /// Sets the sampling probability. `1.0` (the default) disables
+    /// sampling; values below `1.0` put the sketch into estimation mode
+    /// from the start.
     pub fn p(mut self, p: f32) -> Self {
         self.p = p;
         self
     }
 
+    /// Builds the sketch. Returns
+    /// [`SketchError::InvalidConfig`](crate::SketchError::InvalidConfig) if
+    /// `lg_k` is out of range.
     pub fn build(self) -> Result<super::ThetaSketch, crate::error::SketchError> {
         super::ThetaSketch::from_parts(self.lg_k, self.resize_factor, self.p)
     }

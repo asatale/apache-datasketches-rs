@@ -6,8 +6,11 @@ use apache_datasketches_sys::theta_jaccard::ffi as sys;
 /// estimated Jaccard index of two theta sketches, in `[0.0, 1.0]`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct JaccardBounds {
+    /// Lower bound of the confidence interval around [`Self::estimate`].
     pub lower_bound: f64,
+    /// The estimated Jaccard index.
     pub estimate: f64,
+    /// Upper bound of the confidence interval around [`Self::estimate`].
     pub upper_bound: f64,
 }
 

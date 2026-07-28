@@ -16,15 +16,19 @@ impl Default for CpcSketchBuilder {
 }
 
 impl CpcSketchBuilder {
+    /// Creates a new builder with the default `lg_k` (`11`).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the base-2 log of the number of bins in the sketch (`4..=26`).
     pub fn lg_k(mut self, lg_k: u8) -> Self {
         self.lg_k = lg_k;
         self
     }
 
+    /// Builds the sketch. Returns [`SketchError::InvalidConfig`] if `lg_k`
+    /// is out of range.
     pub fn build(self) -> Result<super::CpcSketch, SketchError> {
         super::CpcSketch::from_lg_k(self.lg_k)
     }
@@ -46,15 +50,19 @@ impl Default for CpcUnionBuilder {
 }
 
 impl CpcUnionBuilder {
+    /// Creates a new builder with the default `lg_k` (`11`).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the base-2 log of the number of bins in the union (`4..=26`).
     pub fn lg_k(mut self, lg_k: u8) -> Self {
         self.lg_k = lg_k;
         self
     }
 
+    /// Builds the union. Returns [`SketchError::InvalidConfig`] if `lg_k`
+    /// is out of range.
     pub fn build(self) -> Result<super::CpcUnion, SketchError> {
         super::CpcUnion::from_lg_k(self.lg_k)
     }

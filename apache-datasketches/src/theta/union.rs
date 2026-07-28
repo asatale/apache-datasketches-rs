@@ -26,25 +26,34 @@ impl Default for ThetaUnionBuilder {
 }
 
 impl ThetaUnionBuilder {
+    /// Creates a new builder with default settings (`lg_k = 12`,
+    /// `resize_factor = X8`, `p = 1.0`).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the base-2 log of the target number of retained entries in the
+    /// union's result.
     pub fn lg_k(mut self, lg_k: u8) -> Self {
         self.lg_k = lg_k;
         self
     }
 
+    /// Sets the hash table's growth [`ResizeFactor`].
     pub fn resize_factor(mut self, resize_factor: ResizeFactor) -> Self {
         self.resize_factor = resize_factor;
         self
     }
 
+    /// Sets the sampling probability. `1.0` (the default) disables
+    /// sampling.
     pub fn p(mut self, p: f32) -> Self {
         self.p = p;
         self
     }
 
+    /// Builds the union. Returns [`SketchError::InvalidConfig`] if `lg_k`
+    /// is out of range.
     pub fn build(self) -> Result<ThetaUnion, SketchError> {
         let inner = sys::new_theta_union(self.lg_k, self.resize_factor.into(), self.p)
             .map_err(|e| SketchError::InvalidConfig(e.what().to_string()))?;
@@ -62,6 +71,7 @@ pub struct ThetaUnion {
 unsafe impl Send for ThetaUnion {}
 
 impl ThetaUnion {
+    /// Merges the given sketch into this union's running result.
     pub fn update(&mut self, input: &impl ThetaInput) {
         match input.as_theta_input() {
             ThetaInputRef::Sketch(s) => self.inner.pin_mut().update_with_sketch(s),
@@ -70,10 +80,14 @@ impl ThetaUnion {
         }
     }
 
+    /// Returns the union's current result as a
+    /// [`CompactThetaSketch`]. If `ordered` is `true`, the result's
+    /// entries are sorted by hash value.
     pub fn get_result(&self, ordered: bool) -> CompactThetaSketch {
         CompactThetaSketch::from_shim(self.inner.get_result(ordered))
     }
 
+    /// Resets this union to its initial, empty state.
     pub fn reset(&mut self) {
         self.inner.pin_mut().reset();
     }
