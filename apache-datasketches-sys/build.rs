@@ -68,7 +68,12 @@ fn main() {
         .include("cpp/theta")
         .include("cpp/cpc")
         .include(generated_header_dir)
-        .flag_if_supported("-std=c++17");
+        .flag_if_supported("-std=c++17")
+        // Upstream datasketches-cpp declares virtual destructors on a couple
+        // of `final` classes (e.g. hll_sketch_alloc, AuxHashMap) — harmless,
+        // but noisy under clang. Silenced here rather than patched in the
+        // vendored headers so we don't diverge from upstream.
+        .flag_if_supported("-Wno-unnecessary-virtual-specifier");
 
     if cfg!(feature = "hll") {
         build
