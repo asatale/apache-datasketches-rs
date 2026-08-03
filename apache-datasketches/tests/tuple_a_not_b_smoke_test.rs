@@ -28,6 +28,24 @@ fn a_not_b_half_overlap_all_four_combinations() {
 }
 
 #[test]
+fn mixed_type_overloads_preserve_operand_order() {
+    // Asymmetric fixture: a - b estimates 500, b - a estimates 0.
+    let a = sketch(1, 0..1000, &[1.0]);
+    let b = sketch(1, 0..500, &[1.0]);
+    let ca = a.compact(true);
+    let cb = b.compact(true);
+    let calc = ArrayOfDoublesAnotB::new();
+
+    // (Sketch, Compact) path.
+    assert_eq!(calc.compute(&a, &cb, true).unwrap().get_estimate(), 500.0);
+    assert_eq!(calc.compute(&b, &ca, true).unwrap().get_estimate(), 0.0);
+
+    // (Compact, Sketch) path.
+    assert_eq!(calc.compute(&ca, &b, true).unwrap().get_estimate(), 500.0);
+    assert_eq!(calc.compute(&cb, &a, true).unwrap().get_estimate(), 0.0);
+}
+
+#[test]
 fn a_not_b_preserves_values() {
     let a = sketch(2, 0..1, &[5.0, 6.0]);
     let b = sketch(2, 100..101, &[1.0, 1.0]);
