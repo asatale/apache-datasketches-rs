@@ -22,11 +22,14 @@
 //!   multiple sketches, summing values per index on collision.
 //! - [`ArrayOfDoublesIntersection`] — computes the intersection of sketches
 //!   fed via `update`, summing values per index.
+//! - [`ArrayOfDoublesAnotB`] — computes the set difference (keys in `a` but
+//!   not `b`), preserving `a`'s values.
 //!
 //! [`ArrayOfDoublesSketch`] and [`CompactArrayOfDoublesSketch`] can both be
 //! passed interchangeably (via the sealed [`ArrayOfDoublesInput`] trait) to
 //! every set operation in this module.
 
+mod a_not_b;
 mod builder;
 mod compact;
 mod input;
@@ -34,6 +37,7 @@ mod intersection;
 mod sketch;
 mod union;
 
+pub use a_not_b::ArrayOfDoublesAnotB;
 pub use builder::{ArrayOfDoublesSketchBuilder, ResizeFactor};
 pub use compact::CompactArrayOfDoublesSketch;
 pub use input::ArrayOfDoublesInput;
