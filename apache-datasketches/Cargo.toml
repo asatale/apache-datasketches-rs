@@ -14,11 +14,12 @@ default = []
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 cpc = ["apache-datasketches-sys/cpc"]
+tuple = ["apache-datasketches-sys/tuple"]
 
 [package.metadata.docs.rs]
 # default = [] means docs.rs's default build would show an empty crate;
 # build with every sketch family enabled instead.
-features = ["hll", "theta", "cpc"]
+features = ["hll", "theta", "cpc", "tuple"]
 
 [dependencies]
 apache-datasketches-sys = { version = "0.2.0", path = "../apache-datasketches-sys", default-features = false }

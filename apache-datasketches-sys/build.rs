@@ -31,6 +31,26 @@ fn main() {
             }
         }
     }
+    if cfg!(feature = "tuple") {
+        // Same incremental-availability rationale as theta and cpc above:
+        // these bridge modules are added one per task by the
+        // ArrayOfDoubles (Tuple) plan, so only reference the ones that
+        // exist so far and keep `--features tuple` building throughout.
+        // Note: src/array_of_doubles_input.rs is deliberately absent — it
+        // is a plain Rust module, not a cxx bridge.
+        for path in [
+            "src/array_of_doubles_sketch.rs",
+            "src/array_of_doubles_compact.rs",
+            "src/array_of_doubles_union.rs",
+            "src/array_of_doubles_intersection.rs",
+            "src/array_of_doubles_a_not_b.rs",
+            "src/array_of_doubles_jaccard.rs",
+        ] {
+            if std::path::Path::new(path).exists() {
+                bridges.push(path);
+            }
+        }
+    }
 
     if bridges.is_empty() {
         return;
@@ -63,10 +83,12 @@ fn main() {
         .include(vendor_dir.join("hll/include"))
         .include(vendor_dir.join("theta/include"))
         .include(vendor_dir.join("cpc/include"))
+        .include(vendor_dir.join("tuple/include"))
         .include("cpp")
         .include("cpp/hll")
         .include("cpp/theta")
         .include("cpp/cpc")
+        .include("cpp/tuple")
         .include(generated_header_dir)
         .flag_if_supported("-std=c++17")
         // Upstream datasketches-cpp declares virtual destructors on a couple
@@ -97,6 +119,20 @@ fn main() {
     }
     if cfg!(feature = "cpc") {
         for path in ["cpp/cpc/cpc_sketch_shim.cc", "cpp/cpc/cpc_union_shim.cc"] {
+            if std::path::Path::new(path).exists() {
+                build.file(path);
+            }
+        }
+    }
+    if cfg!(feature = "tuple") {
+        for path in [
+            "cpp/tuple/array_of_doubles_sketch_shim.cc",
+            "cpp/tuple/array_of_doubles_compact_shim.cc",
+            "cpp/tuple/array_of_doubles_union_shim.cc",
+            "cpp/tuple/array_of_doubles_intersection_shim.cc",
+            "cpp/tuple/array_of_doubles_a_not_b_shim.cc",
+            "cpp/tuple/array_of_doubles_jaccard_shim.cc",
+        ] {
             if std::path::Path::new(path).exists() {
                 build.file(path);
             }
@@ -137,4 +173,23 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/cpc/cpc_sketch_shim.cc");
     println!("cargo:rerun-if-changed=cpp/cpc/cpc_union_shim.h");
     println!("cargo:rerun-if-changed=cpp/cpc/cpc_union_shim.cc");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_sketch.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_compact.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_input.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_union.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_intersection.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_a_not_b.rs");
+    println!("cargo:rerun-if-changed=src/array_of_doubles_jaccard.rs");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_sketch_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_sketch_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_compact_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_compact_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_union_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_union_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_intersection_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_intersection_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_a_not_b_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_a_not_b_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_jaccard_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_jaccard_shim.cc");
 }

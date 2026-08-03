@@ -19,6 +19,7 @@ default = []
 hll = []
 theta = []
 cpc = []
+tuple = []
 
 [dependencies]
 cxx = "1"
