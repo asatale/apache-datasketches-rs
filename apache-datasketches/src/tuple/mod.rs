@@ -20,6 +20,8 @@
 //!   result.
 //! - [`ArrayOfDoublesUnion`] / [`ArrayOfDoublesUnionBuilder`] — merges
 //!   multiple sketches, summing values per index on collision.
+//! - [`ArrayOfDoublesIntersection`] — computes the intersection of sketches
+//!   fed via `update`, summing values per index.
 //!
 //! [`ArrayOfDoublesSketch`] and [`CompactArrayOfDoublesSketch`] can both be
 //! passed interchangeably (via the sealed [`ArrayOfDoublesInput`] trait) to
@@ -28,11 +30,13 @@
 mod builder;
 mod compact;
 mod input;
+mod intersection;
 mod sketch;
 mod union;
 
 pub use builder::{ArrayOfDoublesSketchBuilder, ResizeFactor};
 pub use compact::CompactArrayOfDoublesSketch;
 pub use input::ArrayOfDoublesInput;
+pub use intersection::ArrayOfDoublesIntersection;
 pub use sketch::ArrayOfDoublesSketch;
 pub use union::{ArrayOfDoublesUnion, ArrayOfDoublesUnionBuilder};
