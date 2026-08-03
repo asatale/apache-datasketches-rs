@@ -74,3 +74,7 @@ required-features = ["tuple"]
 [[test]]
 name = "array_of_doubles_compact_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "array_of_doubles_union_link_test"
+required-features = ["tuple"]

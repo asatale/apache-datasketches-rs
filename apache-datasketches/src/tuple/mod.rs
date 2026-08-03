@@ -18,11 +18,21 @@
 //! - [`CompactArrayOfDoublesSketch`] — an immutable, serializable snapshot
 //!   produced by `ArrayOfDoublesSketch::compact` or by a set operation's
 //!   result.
+//! - [`ArrayOfDoublesUnion`] / [`ArrayOfDoublesUnionBuilder`] — merges
+//!   multiple sketches, summing values per index on collision.
+//!
+//! [`ArrayOfDoublesSketch`] and [`CompactArrayOfDoublesSketch`] can both be
+//! passed interchangeably (via the sealed [`ArrayOfDoublesInput`] trait) to
+//! every set operation in this module.
 
 mod builder;
 mod compact;
+mod input;
 mod sketch;
+mod union;
 
 pub use builder::{ArrayOfDoublesSketchBuilder, ResizeFactor};
 pub use compact::CompactArrayOfDoublesSketch;
+pub use input::ArrayOfDoublesInput;
 pub use sketch::ArrayOfDoublesSketch;
+pub use union::{ArrayOfDoublesUnion, ArrayOfDoublesUnionBuilder};
