@@ -33,4 +33,7 @@ pub mod theta;
 #[cfg(feature = "cpc")]
 pub mod cpc;
 
+#[cfg(feature = "tuple")]
+pub mod tuple;
+
 pub use error::SketchError;

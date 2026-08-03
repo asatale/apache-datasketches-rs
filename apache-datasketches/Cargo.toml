@@ -141,3 +141,7 @@ required-features = ["cpc"]
 [[test]]
 name = "cpc_concurrency_test"
 required-features = ["cpc"]
+
+[[test]]
+name = "tuple_sketch_smoke_test"
+required-features = ["tuple"]

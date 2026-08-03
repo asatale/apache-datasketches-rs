@@ -22,3 +22,6 @@ pub mod theta_jaccard;
 pub mod cpc_sketch;
 #[cfg(feature = "cpc")]
 pub mod cpc_union;
+
+#[cfg(feature = "tuple")]
+pub mod array_of_doubles_sketch;
