@@ -7,6 +7,10 @@ use cxx::UniquePtr;
 /// of distinct keys added via `update_*`, and carries a fixed-width array of
 /// `f64` values per retained key, summed on collision. Build one with
 /// [`ArrayOfDoublesSketchBuilder`](super::ArrayOfDoublesSketchBuilder).
+///
+/// Call [`Self::compact`] to produce an immutable, serializable
+/// [`super::CompactArrayOfDoublesSketch`] snapshot for storage, transmission,
+/// or use as input to a set operation.
 pub struct ArrayOfDoublesSketch {
     pub(crate) inner: UniquePtr<sys::ArrayOfDoublesSketchShim>,
 }
@@ -217,5 +221,13 @@ impl ArrayOfDoublesSketch {
             values.chunks(num_values).map(|c| c.to_vec()).collect()
         };
         hashes.into_iter().zip(grouped)
+    }
+
+    /// Produces an immutable, serializable
+    /// [`super::CompactArrayOfDoublesSketch`] snapshot of this sketch's
+    /// current state. If `ordered` is `true`, the snapshot's entries are
+    /// sorted by hash value.
+    pub fn compact(&self, ordered: bool) -> super::CompactArrayOfDoublesSketch {
+        super::CompactArrayOfDoublesSketch::from_shim(self.inner.compact(ordered))
     }
 }

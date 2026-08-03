@@ -145,3 +145,7 @@ required-features = ["cpc"]
 [[test]]
 name = "tuple_sketch_smoke_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_compact_smoke_test"
+required-features = ["tuple"]

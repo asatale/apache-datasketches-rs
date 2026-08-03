@@ -13,8 +13,10 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("array_of_doubles_sketch_shim.h");
+        include!("array_of_doubles_compact_shim.h");
 
         type ArrayOfDoublesSketchShim;
+        type CompactArrayOfDoublesSketchShim = crate::array_of_doubles_compact::ffi::CompactArrayOfDoublesSketchShim;
 
         fn new_array_of_doubles_sketch(lg_k: u8, rf: TupleResizeFactor, p: f32, num_values: u8) -> Result<UniquePtr<ArrayOfDoublesSketchShim>>;
 
@@ -45,5 +47,7 @@ pub mod ffi {
 
         fn entry_hashes(self: &ArrayOfDoublesSketchShim) -> Vec<u64>;
         fn entry_values(self: &ArrayOfDoublesSketchShim) -> Vec<f64>;
+
+        fn compact(self: &ArrayOfDoublesSketchShim, ordered: bool) -> UniquePtr<CompactArrayOfDoublesSketchShim>;
     }
 }

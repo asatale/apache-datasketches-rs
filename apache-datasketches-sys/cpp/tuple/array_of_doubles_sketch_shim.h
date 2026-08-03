@@ -22,6 +22,9 @@ namespace apache_datasketches_rs {
 // bridge already emits apache_datasketches_rs::ResizeFactor there.
 enum class TupleResizeFactor : std::uint8_t;
 
+// Forward declaration; defined in array_of_doubles_compact_shim.h.
+class CompactArrayOfDoublesSketchShim;
+
 // Defined once, in array_of_doubles_sketch_shim.cc; forward-declared in every
 // other tuple shim header that needs it (currently the union shim). Both
 // translation units land in the same static library, so a single definition
@@ -57,6 +60,8 @@ public:
   double get_theta() const;
   uint32_t get_num_retained() const;
   uint8_t get_num_values() const;
+
+  std::unique_ptr<CompactArrayOfDoublesSketchShim> compact(bool ordered) const;
 
   rust::Vec<uint64_t> entry_hashes() const;
   rust::Vec<double> entry_values() const;

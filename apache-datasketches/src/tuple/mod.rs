@@ -15,9 +15,14 @@
 //!
 //! - [`ArrayOfDoublesSketch`] / [`ArrayOfDoublesSketchBuilder`] — the
 //!   updatable sketch.
+//! - [`CompactArrayOfDoublesSketch`] — an immutable, serializable snapshot
+//!   produced by `ArrayOfDoublesSketch::compact` or by a set operation's
+//!   result.
 
 mod builder;
+mod compact;
 mod sketch;
 
 pub use builder::{ArrayOfDoublesSketchBuilder, ResizeFactor};
+pub use compact::CompactArrayOfDoublesSketch;
 pub use sketch::ArrayOfDoublesSketch;

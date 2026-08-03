@@ -25,3 +25,5 @@ pub mod cpc_union;
 
 #[cfg(feature = "tuple")]
 pub mod array_of_doubles_sketch;
+#[cfg(feature = "tuple")]
+pub mod array_of_doubles_compact;
