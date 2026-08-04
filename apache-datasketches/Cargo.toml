@@ -165,3 +165,15 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_jaccard_smoke_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "array_of_doubles_sketch_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_validation_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_concurrency_test"
+required-features = ["tuple"]
