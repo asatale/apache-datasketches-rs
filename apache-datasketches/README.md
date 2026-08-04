@@ -5,7 +5,7 @@ built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
 `default = []` — no sketch family is enabled unless you opt in explicitly.
-Add the `hll`, `theta`, and/or `cpc` feature to your `Cargo.toml`:
+Add the `hll`, `theta`, `cpc`, and/or `tuple` feature to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -24,7 +24,12 @@ apache-datasketches = { version = "0.2", features = ["cpc"] }
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc"] }
+apache-datasketches = { version = "0.2", features = ["tuple"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
 ```
 
 > **Breaking change in 0.2.0:** prior versions defaulted to `features = ["hll"]`.
@@ -156,6 +161,31 @@ println!("estimate: {}", sketch.get_estimate());
 See `examples/cpc.rs` (`cargo run -p apache-datasketches --example cpc
 --features cpc`) for a complete runnable demo.
 
+## Tuple sketches
+
+The Tuple (ArrayOfDoubles) sketch family (`tuple` feature) supports
+cardinality estimation like HLL/Theta/CPC, but each distinct key also
+carries a fixed-width array of `f64` values, summed on collision — plus
+set operations (union, intersection, a-not-b) and Jaccard similarity.
+
+```rust
+use apache_datasketches::tuple::ArrayOfDoublesSketchBuilder;
+
+let mut sketch = ArrayOfDoublesSketchBuilder::new()
+    .lg_k(12)
+    .num_values(2)
+    .build()?;
+sketch.update_u64(42, &[1.0, 2.50])?;
+println!("estimate: {}", sketch.get_estimate());
+```
+
+Values from all entries that hashed to the same key are summed; read them
+back per-entry via `entries()`, scaling by `1.0 / get_theta()` to estimate
+population totals.
+
+See `examples/tuple.rs` (`cargo run -p apache-datasketches --example tuple
+--features tuple`) for a complete runnable demo.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
@@ -163,6 +193,9 @@ See `examples/cpc.rs` (`cargo run -p apache-datasketches --example cpc
   Jaccard similarity).
 - [x] CPC (Compressed Probabilistic Counting) — `cpc` feature (sketch +
   union).
+- [x] Tuple (ArrayOfDoubles) — `tuple` feature (sketch with per-key `f64`
+  arrays summed on collision, union, intersection, a-not-b, Jaccard
+  similarity).
 
 ## License
 

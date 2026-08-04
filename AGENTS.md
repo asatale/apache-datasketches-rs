@@ -76,6 +76,18 @@ When adding a new sketch operation, expect to touch all three layers in parallel
 register the new bridge module/`.cc` file under the right feature) and the family's `mod.rs` (to
 re-export the new public type).
 
+### `cxx::bridge` names must be globally unique across the sys crate
+
+Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique
+across all bridges in the sys crate. cxx keys the generated `extern "C"` trampoline on the namespace
+and the name only — not on parameter types and not on the bridge module — so two bridges declaring the
+same free-function name emit the same symbol and the linker silently picks one, which manifests as a
+crash or wrong results rather than a link error. Prefix with the family name when a name would
+otherwise repeat (`tuple_jaccard_*`, `TupleResizeFactor`, `TupleJaccardBoundsFfi`). Methods are safe
+because the receiver type is part of the symbol, but do not rely on that when refactoring a method into
+a free function. `build.rs` runs a check at build time that scans the bridges being compiled and panics
+on a duplicate definition — see the comment there for what it does and does not catch.
+
 ### Vendored C++ sources — two copies, one source of truth
 
 - `vendor/datasketches-cpp` (repo root) — the git submodule, pinned to a tag (see its `README.md`).
@@ -101,7 +113,8 @@ these existence checks when adding new files unless the whole family is already 
 
 ### Rustdoc coverage is enforced
 
-Both crates set `#![warn(missing_docs)]` at the crate root. Every public item (types, variants, fields,
+`apache-datasketches/src/lib.rs` sets `#![warn(missing_docs)]` at the crate root (the sys crate does
+not, since its FFI surface is unstable and not meant to be consumed directly). Every public item (types, variants, fields,
 methods, modules) needs a `///`/`//!` doc comment. Keep this clean when adding public API.
 
 ### Design docs

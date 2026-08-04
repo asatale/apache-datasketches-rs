@@ -25,6 +25,8 @@ explicitly. Enable one or more of:
   and Jaccard similarity C++ types.
 - `cpc` — raw bridge to the CPC (Compressed Probabilistic Counting) sketch
   and union C++ types.
+- `tuple` — raw bridge to the Tuple (ArrayOfDoubles) sketch, union,
+  intersection, a-not-b, and Jaccard similarity C++ types.
 
 ```toml
 [dependencies]
@@ -43,5 +45,10 @@ apache-datasketches-sys = { version = "0.2", features = ["cpc"] }
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc"] }
+apache-datasketches-sys = { version = "0.2", features = ["tuple"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
 ```

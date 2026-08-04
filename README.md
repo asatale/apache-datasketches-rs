@@ -8,7 +8,7 @@ you opt in explicitly via Cargo features:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc"] }
+apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
 ```
 
 ## Crates
@@ -81,6 +81,7 @@ Standalone runnable demos live under `apache-datasketches/examples/`:
 cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
+cargo run -p apache-datasketches --example tuple --features tuple
 ```
 
 ## Sketch families
@@ -94,6 +95,10 @@ opt-in features:
 - [x] `cpc` (Compressed Probabilistic Counting) — cardinality estimation
   with a more compact serialized form (sketch + union; no set operations
   beyond union).
+- [x] `tuple` (ArrayOfDoubles) — cardinality estimation where each distinct
+  key also carries a fixed-width array of `f64` values, summed on
+  collision, plus set operations: union, intersection, a-not-b, and
+  Jaccard similarity.
 
 ## Vendored C++ version
 
