@@ -14,9 +14,14 @@ namespace apache_datasketches_rs {
 // already emits apache_datasketches_rs::JaccardBoundsFfi there.
 struct TupleJaccardBoundsFfi;
 
-TupleJaccardBoundsFfi jaccard_sketch_sketch(const ArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b);
-TupleJaccardBoundsFfi jaccard_sketch_compact(const ArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b);
-TupleJaccardBoundsFfi jaccard_compact_sketch(const CompactArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b);
-TupleJaccardBoundsFfi jaccard_compact_compact(const CompactArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b);
+// Named tuple_jaccard_* rather than jaccard_* because cxx's generated extern
+// "C" trampoline symbol is derived from the C++ namespace and function name
+// only; the theta bridge's jaccard_* overloads (see ../theta/theta_jaccard_shim.h)
+// would otherwise collide at link time when both bridges are compiled
+// together (--all-features).
+TupleJaccardBoundsFfi tuple_jaccard_sketch_sketch(const ArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b);
+TupleJaccardBoundsFfi tuple_jaccard_sketch_compact(const ArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b);
+TupleJaccardBoundsFfi tuple_jaccard_compact_sketch(const CompactArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b);
+TupleJaccardBoundsFfi tuple_jaccard_compact_compact(const CompactArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b);
 
 } // namespace apache_datasketches_rs

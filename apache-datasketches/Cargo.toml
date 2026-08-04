@@ -38,6 +38,10 @@ required-features = ["theta"]
 name = "cpc"
 required-features = ["cpc"]
 
+[[example]]
+name = "tuple"
+required-features = ["tuple"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

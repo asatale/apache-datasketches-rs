@@ -17,7 +17,7 @@ fn sketch(keys: std::ops::Range<u64>) -> cxx::UniquePtr<sketch_ffi::ArrayOfDoubl
 fn identical_sketches_are_fully_similar() {
     let a = sketch(0..1000);
     let b = sketch(0..1000);
-    let bounds = jaccard_ffi::jaccard_sketch_sketch(&a, &b);
+    let bounds = jaccard_ffi::tuple_jaccard_sketch_sketch(&a, &b);
     assert_eq!(bounds.estimate, 1.0);
     assert_eq!(bounds.lower_bound, 1.0);
     assert_eq!(bounds.upper_bound, 1.0);
@@ -27,7 +27,7 @@ fn identical_sketches_are_fully_similar() {
 fn disjoint_sketches_are_dissimilar() {
     let a = sketch(0..1000);
     let b = sketch(2000..3000);
-    let bounds = jaccard_ffi::jaccard_sketch_sketch(&a, &b);
+    let bounds = jaccard_ffi::tuple_jaccard_sketch_sketch(&a, &b);
     assert_eq!(bounds.estimate, 0.0);
 }
 
@@ -40,10 +40,10 @@ fn half_overlap_is_about_one_third_all_four_combinations() {
 
     // |A ∩ B| / |A ∪ B| = 500 / 1500 = 1/3
     for bounds in [
-        jaccard_ffi::jaccard_sketch_sketch(&a, &b),
-        jaccard_ffi::jaccard_sketch_compact(&a, &cb),
-        jaccard_ffi::jaccard_compact_sketch(&ca, &b),
-        jaccard_ffi::jaccard_compact_compact(&ca, &cb),
+        jaccard_ffi::tuple_jaccard_sketch_sketch(&a, &b),
+        jaccard_ffi::tuple_jaccard_sketch_compact(&a, &cb),
+        jaccard_ffi::tuple_jaccard_compact_sketch(&ca, &b),
+        jaccard_ffi::tuple_jaccard_compact_compact(&ca, &cb),
     ] {
         assert!(
             (bounds.estimate - 1.0 / 3.0).abs() < 0.01,

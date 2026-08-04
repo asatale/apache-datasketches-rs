@@ -10,7 +10,7 @@ built via the `cxx` crate over a pinned git submodule. Two-crate workspace:
 - `apache-datasketches-sys` — raw `cxx` FFI bridge. Unstable, low-level; not meant to be used directly.
 - `apache-datasketches` — safe, idiomatic Rust API that wraps `-sys`. This is what consumers depend on.
 
-Both crates have `default = []`; every sketch family is opt-in via Cargo features: `hll`, `theta`, `cpc`.
+Both crates have `default = []`; every sketch family is opt-in via Cargo features: `hll`, `theta`, `cpc`, `tuple`.
 
 ## Setup
 
@@ -34,7 +34,8 @@ cargo test --workspace
 cargo test -p apache-datasketches --features hll
 cargo test -p apache-datasketches --features theta
 cargo test -p apache-datasketches --features cpc
-cargo test --workspace --features hll,theta,cpc
+cargo test -p apache-datasketches --features tuple
+cargo test --workspace --features hll,theta,cpc,tuple
 
 # Run a single test
 cargo test -p apache-datasketches --features hll hll_sketch_test::some_test_name
@@ -46,6 +47,7 @@ cargo test -p apache-datasketches-sys --features hll
 cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
+cargo run -p apache-datasketches --example tuple --features tuple
 
 # Lint (missing_docs is enforced — see below)
 cargo clippy --workspace --all-features
@@ -79,7 +81,7 @@ re-export the new public type).
 - `vendor/datasketches-cpp` (repo root) — the git submodule, pinned to a tag (see its `README.md`).
   This is the source of truth when bumping the pinned version.
 - `apache-datasketches-sys/vendor/datasketches-cpp` — a **manual copy** of just the headers actually
-  compiled (`common/`, `hll/`, `theta/`, `cpc/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
+  compiled (`common/`, `hll/`, `theta/`, `cpc/`, `tuple/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
   what `build.rs` actually builds against, and what ships in the published `-sys` crate tarball,
   because `cargo package` only includes files inside the crate's own directory (a `../` path escaping
   it would be missing from the published package).

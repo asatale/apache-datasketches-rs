@@ -54,16 +54,16 @@ pub fn array_of_doubles_jaccard_similarity(
     }
     let ffi = match (a.as_input(), b.as_input()) {
         (ArrayOfDoublesInputRef::Sketch(a), ArrayOfDoublesInputRef::Sketch(b)) => {
-            sys::jaccard_sketch_sketch(a, b)
+            sys::tuple_jaccard_sketch_sketch(a, b)
         }
         (ArrayOfDoublesInputRef::Sketch(a), ArrayOfDoublesInputRef::Compact(b)) => {
-            sys::jaccard_sketch_compact(a, b)
+            sys::tuple_jaccard_sketch_compact(a, b)
         }
         (ArrayOfDoublesInputRef::Compact(a), ArrayOfDoublesInputRef::Sketch(b)) => {
-            sys::jaccard_compact_sketch(a, b)
+            sys::tuple_jaccard_compact_sketch(a, b)
         }
         (ArrayOfDoublesInputRef::Compact(a), ArrayOfDoublesInputRef::Compact(b)) => {
-            sys::jaccard_compact_compact(a, b)
+            sys::tuple_jaccard_compact_compact(a, b)
         }
     };
     Ok(ffi.into())

@@ -9,7 +9,7 @@ use apache_datasketches_sys::array_of_doubles_sketch::ffi as sys;
 /// same shape — the two sketch families are independently feature-gated and
 /// do not share types. (Deliberately not an intra-doc link: `theta` may not
 /// be compiled in.)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ResizeFactor {
     /// Grow by 1x (i.e. never resize past the initial allocation).
     X1,
@@ -18,13 +18,8 @@ pub enum ResizeFactor {
     /// Grow by 4x each time the hash table fills.
     X4,
     /// Grow by 8x each time the hash table fills. The default.
+    #[default]
     X8,
-}
-
-impl Default for ResizeFactor {
-    fn default() -> Self {
-        ResizeFactor::X8
-    }
 }
 
 impl From<ResizeFactor> for sys::TupleResizeFactor {

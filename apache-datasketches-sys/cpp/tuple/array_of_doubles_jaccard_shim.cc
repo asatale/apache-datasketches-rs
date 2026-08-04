@@ -29,19 +29,19 @@ TupleJaccardBoundsFfi to_ffi(const std::array<double, 3>& result) {
 
 } // namespace
 
-TupleJaccardBoundsFfi jaccard_sketch_sketch(const ArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b) {
+TupleJaccardBoundsFfi tuple_jaccard_sketch_sketch(const ArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b) {
   return to_ffi(aod_jaccard::jaccard(a.inner(), b.inner()));
 }
 
-TupleJaccardBoundsFfi jaccard_sketch_compact(const ArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b) {
+TupleJaccardBoundsFfi tuple_jaccard_sketch_compact(const ArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b) {
   return to_ffi(aod_jaccard::jaccard(a.inner(), b.inner()));
 }
 
-TupleJaccardBoundsFfi jaccard_compact_sketch(const CompactArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b) {
+TupleJaccardBoundsFfi tuple_jaccard_compact_sketch(const CompactArrayOfDoublesSketchShim& a, const ArrayOfDoublesSketchShim& b) {
   return to_ffi(aod_jaccard::jaccard(a.inner(), b.inner()));
 }
 
-TupleJaccardBoundsFfi jaccard_compact_compact(const CompactArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b) {
+TupleJaccardBoundsFfi tuple_jaccard_compact_compact(const CompactArrayOfDoublesSketchShim& a, const CompactArrayOfDoublesSketchShim& b) {
   return to_ffi(aod_jaccard::jaccard(a.inner(), b.inner()));
 }
 

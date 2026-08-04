@@ -3,7 +3,7 @@ use apache_datasketches_sys::theta_sketch::ffi as sys;
 /// Controls how aggressively a theta sketch's internal hash table grows.
 /// Mirrors upstream's `datasketches::resize_factor`. Default is `X8`,
 /// matching `theta_constants::DEFAULT_RESIZE_FACTOR`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ResizeFactor {
     /// Grow by 1x (i.e. never resize past the initial allocation).
     X1,
@@ -12,13 +12,8 @@ pub enum ResizeFactor {
     /// Grow by 4x each time the hash table fills.
     X4,
     /// Grow by 8x each time the hash table fills. The default.
+    #[default]
     X8,
-}
-
-impl Default for ResizeFactor {
-    fn default() -> Self {
-        ResizeFactor::X8
-    }
 }
 
 impl From<ResizeFactor> for sys::ResizeFactor {

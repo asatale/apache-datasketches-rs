@@ -1,4 +1,4 @@
-//! Ported 1:1 from upstream datasketches-cpp's
+//! Ported with documented deviations from upstream datasketches-cpp's
 //! `tuple/test/array_of_doubles_sketch_test.cpp`. Upstream covers the sketch,
 //! union, intersection, and a-not-b for this family from that single file
 //! (unlike Theta, which has one test file per class), so this file does too.
@@ -88,9 +88,8 @@ fn serialize_deserialize_estimation_mode() {
         assert_eq!(values.as_slice(), &[1.0, 2.0]);
     }
 
-    // Upstream also iterates the update sketch and the compact sketch
-    // together; the compact one is ordered, so compare against the update
-    // sketch's entries sorted by hash.
+    // Addition (not in upstream): also compare against the update sketch's
+    // own entries, sorted by hash since the compact one is ordered.
     let mut from_update: Vec<(u64, Vec<f64>)> = update_sketch.entries().collect();
     from_update.sort_by_key(|(hash, _)| *hash);
     assert_eq!(from_update, expected);

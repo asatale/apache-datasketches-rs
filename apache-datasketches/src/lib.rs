@@ -12,10 +12,14 @@
 //! - `cpc` (feature `cpc`) — Compressed Probabilistic Counting
 //!   cardinality estimation with a more compact serialized form (sketch +
 //!   union only; no set operations beyond union).
+//! - `tuple` (feature `tuple`) — ArrayOfDoubles Tuple sketches: cardinality
+//!   estimation where each distinct key also carries a fixed-width array of
+//!   `f64` values (summed on collision), plus the same set operations and
+//!   Jaccard similarity as `theta`.
 //!
 //! (Module-level docs for each feature are only linked above when built
-//! with that feature enabled — see `hll`/`theta`/`cpc` in the sidebar, or
-//! build with `--all-features` to see all three at once.)
+//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple` in the
+//! sidebar, or build with `--all-features` to see all four at once.)
 //!
 //! See each module's documentation for usage examples, or the crate's
 //! `examples/` directory for complete runnable demos.
