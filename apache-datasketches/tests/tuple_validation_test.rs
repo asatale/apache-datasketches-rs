@@ -48,6 +48,8 @@ fn update_with_empty_slice_is_invalid_config() {
         s.update_u64(1, &[]).unwrap_err(),
         SketchError::InvalidConfig(_)
     ));
+    // Nothing was added.
+    assert!(s.is_empty());
 }
 
 #[test]

@@ -67,14 +67,16 @@ fn serialize_deserialize_estimation_mode() {
     assert_eq!(deserialized.get_num_retained(), compact_sketch.get_num_retained());
     assert_eq!(deserialized.get_theta(), compact_sketch.get_theta());
     assert_eq!(deserialized.get_estimate(), compact_sketch.get_estimate());
-    assert_eq!(
-        deserialized.get_lower_bound(1).unwrap(),
-        compact_sketch.get_lower_bound(1).unwrap()
-    );
-    assert_eq!(
-        deserialized.get_upper_bound(1).unwrap(),
-        compact_sketch.get_upper_bound(1).unwrap()
-    );
+    for num_std_dev in 1..=3u8 {
+        assert_eq!(
+            deserialized.get_lower_bound(num_std_dev).unwrap(),
+            compact_sketch.get_lower_bound(num_std_dev).unwrap()
+        );
+        assert_eq!(
+            deserialized.get_upper_bound(num_std_dev).unwrap(),
+            compact_sketch.get_upper_bound(num_std_dev).unwrap()
+        );
+    }
 
     // Upstream compares the two sketches entry by entry via parallel
     // iteration, checking hash, value[0], and value[1].
@@ -112,7 +114,9 @@ fn union_half_overlap() {
     assert_eq!(u.get_result(true).get_estimate(), 1500.0);
 
     u.reset();
-    assert!(u.get_result(true).is_empty());
+    let result = u.get_result(true);
+    assert!(result.is_empty());
+    assert_eq!(result.get_num_retained(), 0);
 }
 
 /// Upstream: `TEST_CASE("aod intersection: half overlap")`. Upstream notes
