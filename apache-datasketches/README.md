@@ -179,12 +179,55 @@ sketch.update_u64(42, &[1.0, 2.50])?;
 println!("estimate: {}", sketch.get_estimate());
 ```
 
-Values from all entries that hashed to the same key are summed; read them
-back per-entry via `entries()`, scaling by `1.0 / get_theta()` to estimate
-population totals.
+- `ArrayOfDoublesSketch` / `ArrayOfDoublesSketchBuilder` — the updatable
+  sketch; build with `ArrayOfDoublesSketchBuilder::new().lg_k(..)
+  .resize_factor(..).p(..).num_values(..).build()`. Supports the full
+  upstream `update` overload set (`update_u64`/`update_i64`/`update_u32`/
+  `update_i32`/`update_u16`/`update_i16`/`update_u8`/`update_i8`/
+  `update_f64`/`update_str`/`update_bytes`), each taking a key plus the
+  entry's values, plus `trim`/`reset`, `get_num_values`, `entries`, and
+  `compact(ordered)`.
+- `CompactArrayOfDoublesSketch` — an immutable, serializable snapshot
+  produced by `ArrayOfDoublesSketch::compact` or by any set operation's
+  result; supports `serialize`/`CompactArrayOfDoublesSketch::deserialize`.
+  Unlike Theta there is one serialization format — upstream has no
+  compressed variant for this family.
+- `ArrayOfDoublesUnion` / `ArrayOfDoublesUnionBuilder` — merges multiple
+  sketches, summing values per index on collision; build with
+  `ArrayOfDoublesUnionBuilder::new().lg_k(..).num_values(..).build()`, feed
+  sketches via `update`, and read the result via `get_result(ordered)`.
+- `ArrayOfDoublesIntersection` — computes the intersection of sketches fed
+  via `update`, summing values per index. Built with
+  `ArrayOfDoublesIntersection::new(num_values)` rather than a builder;
+  `get_result(ordered)` returns `Err` if no sketch has been provided yet.
+- `ArrayOfDoublesAnotB` — computes the set difference (keys in `a` but not
+  `b`, preserving `a`'s values) via
+  `ArrayOfDoublesAnotB::new().compute(a, b, ordered)`.
+- `array_of_doubles_jaccard_similarity`/`JaccardBounds` — estimates the
+  Jaccard index (intersection-over-union) of two sketches, returning a
+  `{ lower_bound, estimate, upper_bound }` confidence interval. Only the
+  keys affect the result; per-entry values do not.
+
+`ArrayOfDoublesSketch` and `CompactArrayOfDoublesSketch` can both be passed
+interchangeably (via the sealed `ArrayOfDoublesInput` trait) to
+`ArrayOfDoublesUnion::update`, `ArrayOfDoublesIntersection::update`,
+`ArrayOfDoublesAnotB::compute`, and `array_of_doubles_jaccard_similarity`.
+
+Two things differ from the other families. `update` returns `Result`
+because `values.len()` must equal `num_values` — upstream indexes the
+supplied array without a bounds check of its own, so this is validated in
+Rust before crossing the FFI boundary. For the same reason, every set
+operation requires its operands to agree on `num_values` and returns
+`SketchError::InvalidConfig` if they don't.
+
+Repeated updates to the same key sum their values per index, as does
+merging a key present in more than one input. Read them back per entry via
+`entries()`, scaling by `1.0 / get_theta()` to estimate population totals.
 
 See `examples/tuple.rs` (`cargo run -p apache-datasketches --example tuple
---features tuple`) for a complete runnable demo.
+--features tuple`) for a complete runnable demo covering cardinality
+estimation, per-entry values, union, intersection, a-not-b, Jaccard
+similarity, and serialize/deserialize round-tripping.
 
 ## Sketch families
 
