@@ -24,6 +24,8 @@
 //!   fed via `update`, summing values per index.
 //! - [`ArrayOfDoublesAnotB`] — computes the set difference (keys in `a` but
 //!   not `b`), preserving `a`'s values.
+//! - [`array_of_doubles_jaccard_similarity`] / [`JaccardBounds`] — estimates
+//!   the Jaccard index (intersection-over-union) of two sketches.
 //!
 //! [`ArrayOfDoublesSketch`] and [`CompactArrayOfDoublesSketch`] can both be
 //! passed interchangeably (via the sealed [`ArrayOfDoublesInput`] trait) to
@@ -34,6 +36,7 @@ mod builder;
 mod compact;
 mod input;
 mod intersection;
+mod jaccard;
 mod sketch;
 mod union;
 
@@ -42,5 +45,6 @@ pub use builder::{ArrayOfDoublesSketchBuilder, ResizeFactor};
 pub use compact::CompactArrayOfDoublesSketch;
 pub use input::ArrayOfDoublesInput;
 pub use intersection::ArrayOfDoublesIntersection;
+pub use jaccard::{array_of_doubles_jaccard_similarity, JaccardBounds};
 pub use sketch::ArrayOfDoublesSketch;
 pub use union::{ArrayOfDoublesUnion, ArrayOfDoublesUnionBuilder};

@@ -35,3 +35,5 @@ pub mod array_of_doubles_union;
 pub mod array_of_doubles_intersection;
 #[cfg(feature = "tuple")]
 pub mod array_of_doubles_a_not_b;
+#[cfg(feature = "tuple")]
+pub mod array_of_doubles_jaccard;

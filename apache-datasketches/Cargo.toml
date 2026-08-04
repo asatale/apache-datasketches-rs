@@ -161,3 +161,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_a_not_b_smoke_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_jaccard_smoke_test"
+required-features = ["tuple"]
