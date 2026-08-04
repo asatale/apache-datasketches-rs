@@ -52,6 +52,8 @@ fn main() {
         }
     }
 
+    check_bridge_name_uniqueness(&bridges);
+
     if bridges.is_empty() {
         return;
     }
@@ -192,4 +194,169 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_a_not_b_shim.cc");
     println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_jaccard_shim.h");
     println!("cargo:rerun-if-changed=cpp/tuple/array_of_doubles_jaccard_shim.cc");
+}
+
+/// Guards against a collision class that has already caused a real crash on
+/// this codebase: cxx derives each generated `extern "C"` trampoline symbol
+/// (for free functions) and each generated C++ type definition (for shared
+/// `struct`/`enum`/opaque types) from the `#[cxx::bridge(namespace = ..)]`
+/// namespace plus the item's *name* alone — not from its parameter types and
+/// not from which bridge module declared it. Two bridges that happen to
+/// declare a free function or shared type with the same name therefore emit
+/// the identical C++ symbol; the linker silently picks one definition for
+/// both call sites, and callers of the "losing" declaration get the wrong
+/// shim type reinterpreted at runtime instead of a link error. This is
+/// exactly what happened when the theta and tuple jaccard shims both
+/// declared `jaccard_sketch_sketch` (and three siblings) in the
+/// `apache_datasketches_rs` namespace, producing a SIGBUS under
+/// `--all-features` (fixed by renaming the tuple side to `tuple_jaccard_*`).
+///
+/// Methods are *not* affected — the receiver type is part of a method's
+/// trampoline symbol — so this check only tracks free functions (a `fn`
+/// whose first parameter is not `self: ...`) and type *definitions*: a bare
+/// `type Name;` (opaque C++ type) or a `struct Name {`/`enum Name {` inside
+/// the bridge module. A cross-bridge alias of the form
+/// `type Name = crate::other_module::ffi::Name;` re-uses a type already
+/// defined by another bridge and emits no second C++ definition, so it must
+/// not be flagged as a duplicate — only the original bare declaration counts.
+///
+/// This is a deliberately simple line-oriented scan over the bridge source
+/// files that are actually being compiled in this build (the `bridges` list
+/// above, which already reflects the active feature set), not a full Rust
+/// parser. It is documented in `AGENTS.md`'s "cxx::bridge names must be
+/// globally unique" section.
+fn check_bridge_name_uniqueness(bridges: &[&str]) {
+    use std::collections::HashMap;
+
+    // name -> the first bridge file that defined it.
+    let mut type_defs: HashMap<String, String> = HashMap::new();
+    let mut fn_defs: HashMap<String, String> = HashMap::new();
+
+    for &path in bridges {
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            let trimmed = lines[i].trim();
+
+            if trimmed.starts_with("//") {
+                i += 1;
+                continue;
+            }
+
+            if let Some(name) = extract_struct_or_enum_name(trimmed) {
+                record_definition(&mut type_defs, name, path, "shared struct/enum");
+                i += 1;
+                continue;
+            }
+
+            if let Some(rest) = trimmed.strip_prefix("type ") {
+                let rest = rest.trim_end_matches(';').trim();
+                if !rest.contains('=') {
+                    // Bare `type Name;` — an opaque C++ type definition.
+                    // (A cross-bridge alias `type Name = crate::...;` reuses
+                    // another bridge's definition and is not a new one.)
+                    if !rest.is_empty() {
+                        record_definition(&mut type_defs, rest.to_string(), path, "opaque type");
+                    }
+                }
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with("fn ") {
+                // Free-function/method declarations can wrap across lines
+                // (see e.g. `tuple_jaccard_sketch_sketch` in
+                // src/array_of_doubles_jaccard.rs). Accumulate lines until
+                // the parentheses balance and the statement is terminated.
+                let mut stmt = String::new();
+                let mut depth = 0i32;
+                let mut seen_paren = false;
+                let mut j = i;
+                loop {
+                    let line = lines[j];
+                    stmt.push_str(line);
+                    stmt.push(' ');
+                    for c in line.chars() {
+                        match c {
+                            '(' => {
+                                depth += 1;
+                                seen_paren = true;
+                            }
+                            ')' => depth -= 1,
+                            _ => {}
+                        }
+                    }
+                    if seen_paren && depth == 0 && stmt.trim_end().ends_with(';') {
+                        break;
+                    }
+                    j += 1;
+                    if j >= lines.len() {
+                        break;
+                    }
+                }
+                i = j + 1;
+
+                if let (Some(fn_pos), Some(paren_pos)) = (stmt.find("fn "), stmt.find('(')) {
+                    if paren_pos > fn_pos {
+                        let name = stmt[fn_pos + 3..paren_pos].trim().to_string();
+                        let params = stmt[paren_pos + 1..].trim_start();
+                        let is_method = params.starts_with("self");
+                        if !is_method && !name.is_empty() {
+                            record_definition(&mut fn_defs, name, path, "free function");
+                        }
+                    }
+                }
+                continue;
+            }
+
+            i += 1;
+        }
+    }
+}
+
+fn extract_struct_or_enum_name(trimmed: &str) -> Option<String> {
+    let after_kw = trimmed
+        .strip_prefix("pub struct ")
+        .or_else(|| trimmed.strip_prefix("struct "))
+        .or_else(|| trimmed.strip_prefix("pub enum "))
+        .or_else(|| trimmed.strip_prefix("enum "))?;
+    let name: String = after_kw
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+fn record_definition(
+    map: &mut std::collections::HashMap<String, String>,
+    name: String,
+    path: &str,
+    kind: &str,
+) {
+    if let Some(existing) = map.get(&name) {
+        panic!(
+            "apache-datasketches-sys build.rs: duplicate {kind} name `{name}` is defined in both \
+             `{existing}` and `{path}`.\n\n\
+             cxx derives each generated extern \"C\" trampoline symbol (for free functions) and \
+             each generated C++ type definition (for shared struct/enum/opaque types) from the \
+             bridge namespace plus the item's name alone -- not from parameter types and not from \
+             which bridge module declared it. Two bridges declaring the same name therefore emit \
+             the identical C++ symbol, and the linker silently picks one definition for both call \
+             sites: callers of the \"losing\" declaration get the wrong shim type reinterpreted at \
+             runtime, which shows up as a crash or a wrong result, not a link error. This is \
+             exactly the bug class that previously caused a SIGBUS when the theta and tuple \
+             jaccard shims both declared `jaccard_sketch_sketch` under --all-features. Rename one \
+             of the two, typically by prefixing with its family name (e.g. `tuple_jaccard_*`, \
+             `TupleResizeFactor`)."
+        );
+    }
+    map.insert(name, path.to_string());
 }

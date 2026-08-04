@@ -181,3 +181,11 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_concurrency_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_builder_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "cross_family_all_features_test"
+required-features = ["theta", "tuple"]
