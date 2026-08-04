@@ -8,17 +8,27 @@ pub mod ffi {
 
         type ThetaSketchShim = crate::theta_sketch::ffi::ThetaSketchShim;
         type CompactThetaSketchShim = crate::theta_compact::ffi::CompactThetaSketchShim;
-        type WrappedCompactThetaSketchShim = crate::theta_wrapped::ffi::WrappedCompactThetaSketchShim;
+        type WrappedCompactThetaSketchShim =
+            crate::theta_wrapped::ffi::WrappedCompactThetaSketchShim;
 
         type ThetaIntersectionShim;
 
         fn new_theta_intersection() -> UniquePtr<ThetaIntersectionShim>;
 
         fn update_with_sketch(self: Pin<&mut ThetaIntersectionShim>, sketch: &ThetaSketchShim);
-        fn update_with_compact(self: Pin<&mut ThetaIntersectionShim>, sketch: &CompactThetaSketchShim);
-        fn update_with_wrapped(self: Pin<&mut ThetaIntersectionShim>, sketch: &WrappedCompactThetaSketchShim);
+        fn update_with_compact(
+            self: Pin<&mut ThetaIntersectionShim>,
+            sketch: &CompactThetaSketchShim,
+        );
+        fn update_with_wrapped(
+            self: Pin<&mut ThetaIntersectionShim>,
+            sketch: &WrappedCompactThetaSketchShim,
+        );
 
-        fn get_result(self: &ThetaIntersectionShim, ordered: bool) -> Result<UniquePtr<CompactThetaSketchShim>>;
+        fn get_result(
+            self: &ThetaIntersectionShim,
+            ordered: bool,
+        ) -> Result<UniquePtr<CompactThetaSketchShim>>;
         fn has_result(self: &ThetaIntersectionShim) -> bool;
     }
 }

@@ -22,7 +22,10 @@ fn all_types_are_send() {
 #[test]
 fn sketch_can_be_built_on_one_thread_and_used_on_another() {
     let handle = std::thread::spawn(|| {
-        let mut sketch = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+        let mut sketch = ArrayOfDoublesSketchBuilder::new()
+            .num_values(2)
+            .build()
+            .unwrap();
         for i in 0..1000u64 {
             sketch.update_u64(i, &[1.0, 2.0]).unwrap();
         }
@@ -30,7 +33,10 @@ fn sketch_can_be_built_on_one_thread_and_used_on_another() {
     });
     let compact = handle.join().unwrap();
 
-    let mut u = ArrayOfDoublesUnionBuilder::new().num_values(2).build().unwrap();
+    let mut u = ArrayOfDoublesUnionBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     u.update(&compact).unwrap();
     assert!((u.get_result(true).get_estimate() - 1000.0).abs() < 1.0);
 }

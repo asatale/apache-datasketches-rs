@@ -18,7 +18,10 @@ fn compact_via_free_function_and_method() {
     assert!(via_free_fn.is_ordered());
 
     let via_method = sketch.compact(true);
-    assert_eq!(via_method.get_num_retained(), via_free_fn.get_num_retained());
+    assert_eq!(
+        via_method.get_num_retained(),
+        via_free_fn.get_num_retained()
+    );
 }
 
 #[test]

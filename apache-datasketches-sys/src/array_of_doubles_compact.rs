@@ -4,12 +4,18 @@ pub mod ffi {
         include!("array_of_doubles_sketch_shim.h");
         include!("array_of_doubles_compact_shim.h");
 
-        type ArrayOfDoublesSketchShim = crate::array_of_doubles_sketch::ffi::ArrayOfDoublesSketchShim;
+        type ArrayOfDoublesSketchShim =
+            crate::array_of_doubles_sketch::ffi::ArrayOfDoublesSketchShim;
 
         type CompactArrayOfDoublesSketchShim;
 
-        fn array_of_doubles_sketch_compact(sketch: &ArrayOfDoublesSketchShim, ordered: bool) -> UniquePtr<CompactArrayOfDoublesSketchShim>;
-        fn compact_array_of_doubles_sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<CompactArrayOfDoublesSketchShim>>;
+        fn array_of_doubles_sketch_compact(
+            sketch: &ArrayOfDoublesSketchShim,
+            ordered: bool,
+        ) -> UniquePtr<CompactArrayOfDoublesSketchShim>;
+        fn compact_array_of_doubles_sketch_deserialize(
+            bytes: &[u8],
+        ) -> Result<UniquePtr<CompactArrayOfDoublesSketchShim>>;
 
         fn get_estimate(self: &CompactArrayOfDoublesSketchShim) -> f64;
         fn get_lower_bound(self: &CompactArrayOfDoublesSketchShim, num_std_dev: u8) -> Result<f64>;

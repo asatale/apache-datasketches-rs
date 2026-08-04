@@ -15,7 +15,11 @@ pub mod ffi {
         type ThetaSketchShim;
         type CompactThetaSketchShim = crate::theta_compact::ffi::CompactThetaSketchShim;
 
-        fn new_theta_sketch(lg_k: u8, rf: ResizeFactor, p: f32) -> Result<UniquePtr<ThetaSketchShim>>;
+        fn new_theta_sketch(
+            lg_k: u8,
+            rf: ResizeFactor,
+            p: f32,
+        ) -> Result<UniquePtr<ThetaSketchShim>>;
 
         fn update_u64(self: Pin<&mut ThetaSketchShim>, value: u64);
         fn update_i64(self: Pin<&mut ThetaSketchShim>, value: i64);

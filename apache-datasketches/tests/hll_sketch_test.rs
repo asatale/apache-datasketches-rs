@@ -84,7 +84,11 @@ fn hll_sketch_check_copy_as() {
         assert_eq!(src.get_estimate(), dst.get_estimate());
     }
 
-    let types = [TargetHllType::Hll4, TargetHllType::Hll6, TargetHllType::Hll8];
+    let types = [
+        TargetHllType::Hll4,
+        TargetHllType::Hll6,
+        TargetHllType::Hll8,
+    ];
     for &src_type in &types {
         for &dst_type in &types {
             copy_as(src_type, dst_type);
@@ -251,7 +255,11 @@ fn hll_sketch_check_compact_flag() {
     }
 
     let lg_k = 8;
-    for &tgt_type in &[TargetHllType::Hll4, TargetHllType::Hll6, TargetHllType::Hll8] {
+    for &tgt_type in &[
+        TargetHllType::Hll4,
+        TargetHllType::Hll6,
+        TargetHllType::Hll8,
+    ] {
         check_round_trip(lg_k, 7, tgt_type); // LIST mode
         check_round_trip(lg_k, 24, tgt_type); // SET mode
         check_round_trip(lg_k, 25, tgt_type); // HLL mode

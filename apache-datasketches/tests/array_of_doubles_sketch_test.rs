@@ -45,7 +45,10 @@ fn sketch_reset() {
 /// module comment).
 #[test]
 fn serialize_deserialize_estimation_mode() {
-    let mut update_sketch = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let mut update_sketch = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     for i in 0..8192i32 {
         update_sketch.update_i32(i, &[1.0, 2.0]).unwrap();
     }
@@ -57,14 +60,20 @@ fn serialize_deserialize_estimation_mode() {
     let bytes = compact_sketch.serialize();
     let deserialized = CompactArrayOfDoublesSketch::deserialize(&bytes).unwrap();
 
-    assert_eq!(deserialized.get_num_values(), compact_sketch.get_num_values());
+    assert_eq!(
+        deserialized.get_num_values(),
+        compact_sketch.get_num_values()
+    );
     assert_eq!(deserialized.is_empty(), compact_sketch.is_empty());
     assert_eq!(deserialized.is_ordered(), compact_sketch.is_ordered());
     assert_eq!(
         deserialized.is_estimation_mode(),
         compact_sketch.is_estimation_mode()
     );
-    assert_eq!(deserialized.get_num_retained(), compact_sketch.get_num_retained());
+    assert_eq!(
+        deserialized.get_num_retained(),
+        compact_sketch.get_num_retained()
+    );
     assert_eq!(deserialized.get_theta(), compact_sketch.get_theta());
     assert_eq!(deserialized.get_estimate(), compact_sketch.get_estimate());
     for num_std_dev in 1..=3u8 {
@@ -159,7 +168,10 @@ fn a_not_b_half_overlap() {
 /// serialized format handles via its IS_EMPTY flag byte.
 #[test]
 fn empty_sketch_round_trips() {
-    let sketch: ArrayOfDoublesSketch = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let sketch: ArrayOfDoublesSketch = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     let compact = sketch.compact(true);
     assert!(compact.is_empty());
     assert_eq!(compact.get_estimate(), 0.0);

@@ -18,7 +18,8 @@ fn union_half_overlap() {
     let a = sketch(0..1000);
     let b = sketch(500..1500);
     let mut u =
-        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 1).unwrap();
+        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 1)
+            .unwrap();
     u.pin_mut().update_with_sketch(&a);
     u.pin_mut().update_with_sketch(&b);
     let result = u.get_result(true);
@@ -31,7 +32,8 @@ fn union_accepts_compact_and_resets() {
     let a = sketch(0..100);
     let compact = a.compact(true);
     let mut u =
-        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 1).unwrap();
+        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 1)
+            .unwrap();
     u.pin_mut().update_with_compact(&compact);
     assert_eq!(u.get_result(true).get_estimate(), 100.0);
     u.pin_mut().reset();
@@ -50,7 +52,8 @@ fn union_sums_values_on_collision() {
     b.pin_mut().update_u64(1, &[2.0, 20.0]);
 
     let mut u =
-        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 2).unwrap();
+        union_ffi::new_array_of_doubles_union(12, sketch_ffi::TupleResizeFactor::X8, 1.0, 2)
+            .unwrap();
     u.pin_mut().update_with_sketch(&a);
     u.pin_mut().update_with_sketch(&b);
     let result = u.get_result(true);
@@ -62,6 +65,7 @@ fn union_sums_values_on_collision() {
 #[test]
 fn invalid_lg_k_returns_err() {
     assert!(
-        union_ffi::new_array_of_doubles_union(4, sketch_ffi::TupleResizeFactor::X8, 1.0, 1).is_err()
+        union_ffi::new_array_of_doubles_union(4, sketch_ffi::TupleResizeFactor::X8, 1.0, 1)
+            .is_err()
     );
 }

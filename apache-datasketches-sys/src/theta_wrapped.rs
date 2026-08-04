@@ -5,7 +5,9 @@ pub mod ffi {
 
         type WrappedCompactThetaSketchShim;
 
-        fn wrapped_compact_theta_sketch_wrap(bytes: &[u8]) -> Result<UniquePtr<WrappedCompactThetaSketchShim>>;
+        fn wrapped_compact_theta_sketch_wrap(
+            bytes: &[u8],
+        ) -> Result<UniquePtr<WrappedCompactThetaSketchShim>>;
 
         fn get_estimate(self: &WrappedCompactThetaSketchShim) -> f64;
         fn get_lower_bound(self: &WrappedCompactThetaSketchShim, num_std_dev: u8) -> Result<f64>;

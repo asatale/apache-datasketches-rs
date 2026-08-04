@@ -18,12 +18,18 @@ fn invalid_lg_k_is_err() {
 
 #[test]
 fn num_values_zero_is_err() {
-    assert!(ArrayOfDoublesSketchBuilder::new().num_values(0).build().is_err());
+    assert!(ArrayOfDoublesSketchBuilder::new()
+        .num_values(0)
+        .build()
+        .is_err());
 }
 
 #[test]
 fn wrong_length_values_is_err() {
-    let mut sketch = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let mut sketch = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     assert!(sketch.update_u64(1, &[1.0]).is_err());
     assert!(sketch.update_u64(1, &[1.0, 2.0, 3.0]).is_err());
     assert!(sketch.update_u64(1, &[1.0, 2.0]).is_ok());
@@ -31,7 +37,10 @@ fn wrong_length_values_is_err() {
 
 #[test]
 fn entries_yields_hash_and_values() {
-    let mut sketch = ArrayOfDoublesSketchBuilder::new().num_values(3).build().unwrap();
+    let mut sketch = ArrayOfDoublesSketchBuilder::new()
+        .num_values(3)
+        .build()
+        .unwrap();
     sketch.update_u64(7, &[1.0, 2.0, 3.0]).unwrap();
     sketch.update_u64(7, &[1.0, 2.0, 3.0]).unwrap();
     let entries: Vec<(u64, Vec<f64>)> = sketch.entries().collect();

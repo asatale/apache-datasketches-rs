@@ -33,11 +33,10 @@ fn union_accepts_all_nine_combinations() {
     for _ in 0..1 {
         // Exercise all 3 inputs as the *first* update, and all 3 as the
         // *second*, covering the 3x3 matrix across two calls per union.
-        let combos: [&dyn Fn(&mut apache_datasketches::theta::ThetaUnion); 3] = [
-            &|u| u.update(&sketch),
-            &|u| u.update(&compact),
-            &|u| u.update(&wrapped),
-        ];
+        let combos: [&dyn Fn(&mut apache_datasketches::theta::ThetaUnion); 3] =
+            [&|u| u.update(&sketch), &|u| u.update(&compact), &|u| {
+                u.update(&wrapped)
+            }];
         for first in &combos {
             for second in &combos {
                 let mut union_ = ThetaUnionBuilder::new().lg_k(12).build().unwrap();
@@ -55,11 +54,10 @@ fn intersection_accepts_all_nine_combinations() {
     let (sketch, compact, bytes) = fixture();
     let wrapped = WrappedCompactThetaSketch::wrap(&bytes).unwrap();
 
-    let combos: [&dyn Fn(&mut ThetaIntersection); 3] = [
-        &|u| u.update(&sketch),
-        &|u| u.update(&compact),
-        &|u| u.update(&wrapped),
-    ];
+    let combos: [&dyn Fn(&mut ThetaIntersection); 3] =
+        [&|u| u.update(&sketch), &|u| u.update(&compact), &|u| {
+            u.update(&wrapped)
+        }];
     for first in &combos {
         for second in &combos {
             let mut isect = ThetaIntersection::new();

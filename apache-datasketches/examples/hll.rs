@@ -33,7 +33,10 @@ fn main() {
     let bytes = sketch.serialize_compact();
     let restored = HllSketch::deserialize(&bytes).expect("valid sketch bytes");
     assert_eq!(sketch.get_estimate(), restored.get_estimate());
-    println!("serialized to {} bytes and restored successfully", bytes.len());
+    println!(
+        "serialized to {} bytes and restored successfully",
+        bytes.len()
+    );
 
     // HllUnion merges multiple sketches into one, e.g. combining
     // per-shard/per-day counts into a total distinct count.

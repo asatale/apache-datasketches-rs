@@ -10,18 +10,30 @@ fn main() {
     // memory regardless of how many items are added. `lg_k` (4..=26)
     // trades memory for accuracy: higher values are more accurate but use
     // more space.
-    let mut visitors_day1 = CpcSketchBuilder::new().lg_k(11).build().expect("valid lg_k");
+    let mut visitors_day1 = CpcSketchBuilder::new()
+        .lg_k(11)
+        .build()
+        .expect("valid lg_k");
     for id in 0..10_000u64 {
         visitors_day1.update_u64(id);
     }
 
-    let mut visitors_day2 = CpcSketchBuilder::new().lg_k(11).build().expect("valid lg_k");
+    let mut visitors_day2 = CpcSketchBuilder::new()
+        .lg_k(11)
+        .build()
+        .expect("valid lg_k");
     for id in 5_000..15_000u64 {
         visitors_day2.update_u64(id);
     }
 
-    println!("Day 1 unique visitors (estimate): {:.0}", visitors_day1.get_estimate());
-    println!("Day 2 unique visitors (estimate): {:.0}", visitors_day2.get_estimate());
+    println!(
+        "Day 1 unique visitors (estimate): {:.0}",
+        visitors_day1.get_estimate()
+    );
+    println!(
+        "Day 2 unique visitors (estimate): {:.0}",
+        visitors_day2.get_estimate()
+    );
     println!(
         "Day 1, 95% confidence interval: [{:.0}, {:.0}]",
         visitors_day1.get_lower_bound(2).unwrap(),

@@ -32,7 +32,9 @@
 //!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[5, 26]`, `p`
 //!     must be in `(0.0, 1.0]`), which upstream's `theta_sketch_test.cpp` does not exercise directly but
 //!     which is reachable and worth covering through this crate's public builder API.
-use apache_datasketches::theta::{CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch};
+use apache_datasketches::theta::{
+    CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch,
+};
 
 #[test]
 fn empty_sketch_is_empty() {
@@ -175,8 +177,14 @@ fn wrapped_compact_query_parity_with_source() {
     let wrapped = WrappedCompactThetaSketch::wrap(&bytes).unwrap();
 
     assert_eq!(wrapped.get_estimate(), compact.get_estimate());
-    assert_eq!(wrapped.get_lower_bound(1).unwrap(), compact.get_lower_bound(1).unwrap());
-    assert_eq!(wrapped.get_upper_bound(1).unwrap(), compact.get_upper_bound(1).unwrap());
+    assert_eq!(
+        wrapped.get_lower_bound(1).unwrap(),
+        compact.get_lower_bound(1).unwrap()
+    );
+    assert_eq!(
+        wrapped.get_upper_bound(1).unwrap(),
+        compact.get_upper_bound(1).unwrap()
+    );
     assert_eq!(wrapped.is_estimation_mode(), compact.is_estimation_mode());
     assert_eq!(wrapped.get_theta(), compact.get_theta());
     assert_eq!(wrapped.get_num_retained(), compact.get_num_retained());

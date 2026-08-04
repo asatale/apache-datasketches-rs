@@ -13,8 +13,14 @@ pub mod ffi {
 
         type HllSketchShim;
 
-        fn new_hll_sketch(lg_config_k: u8, tgt_type: TargetHllType) -> Result<UniquePtr<HllSketchShim>>;
-        fn hll_sketch_copy_as(sketch: &HllSketchShim, tgt_type: TargetHllType) -> UniquePtr<HllSketchShim>;
+        fn new_hll_sketch(
+            lg_config_k: u8,
+            tgt_type: TargetHllType,
+        ) -> Result<UniquePtr<HllSketchShim>>;
+        fn hll_sketch_copy_as(
+            sketch: &HllSketchShim,
+            tgt_type: TargetHllType,
+        ) -> UniquePtr<HllSketchShim>;
         fn hll_sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<HllSketchShim>>;
 
         fn update_u64(self: Pin<&mut HllSketchShim>, value: u64);

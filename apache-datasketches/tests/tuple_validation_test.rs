@@ -24,7 +24,10 @@ fn sketch(num_values: u8) -> ArrayOfDoublesSketch {
 
 #[test]
 fn update_with_too_few_values_is_invalid_config() {
-    let mut s = ArrayOfDoublesSketchBuilder::new().num_values(3).build().unwrap();
+    let mut s = ArrayOfDoublesSketchBuilder::new()
+        .num_values(3)
+        .build()
+        .unwrap();
     let err = s.update_u64(1, &[1.0, 2.0]).unwrap_err();
     assert!(matches!(err, SketchError::InvalidConfig(_)));
     // Nothing was added.
@@ -33,7 +36,10 @@ fn update_with_too_few_values_is_invalid_config() {
 
 #[test]
 fn update_with_too_many_values_is_invalid_config() {
-    let mut s = ArrayOfDoublesSketchBuilder::new().num_values(3).build().unwrap();
+    let mut s = ArrayOfDoublesSketchBuilder::new()
+        .num_values(3)
+        .build()
+        .unwrap();
     assert!(matches!(
         s.update_u64(1, &[1.0, 2.0, 3.0, 4.0]).unwrap_err(),
         SketchError::InvalidConfig(_)
@@ -43,7 +49,10 @@ fn update_with_too_many_values_is_invalid_config() {
 
 #[test]
 fn update_with_empty_slice_is_invalid_config() {
-    let mut s = ArrayOfDoublesSketchBuilder::new().num_values(1).build().unwrap();
+    let mut s = ArrayOfDoublesSketchBuilder::new()
+        .num_values(1)
+        .build()
+        .unwrap();
     assert!(matches!(
         s.update_u64(1, &[]).unwrap_err(),
         SketchError::InvalidConfig(_)
@@ -54,7 +63,10 @@ fn update_with_empty_slice_is_invalid_config() {
 
 #[test]
 fn every_update_key_type_validates_length() {
-    let mut s = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let mut s = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     let short: &[f64] = &[1.0];
     assert!(s.update_u64(1, short).is_err());
     assert!(s.update_i64(1, short).is_err());
@@ -87,7 +99,10 @@ fn every_update_key_type_validates_length() {
 
 #[test]
 fn union_rejects_mismatched_num_values() {
-    let mut u = ArrayOfDoublesUnionBuilder::new().num_values(2).build().unwrap();
+    let mut u = ArrayOfDoublesUnionBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     let wrong = sketch(3);
     assert!(matches!(
         u.update(&wrong).unwrap_err(),
@@ -148,7 +163,13 @@ fn jaccard_rejects_mismatched_num_values() {
 
 #[test]
 fn zero_num_values_is_rejected_everywhere() {
-    assert!(ArrayOfDoublesSketchBuilder::new().num_values(0).build().is_err());
-    assert!(ArrayOfDoublesUnionBuilder::new().num_values(0).build().is_err());
+    assert!(ArrayOfDoublesSketchBuilder::new()
+        .num_values(0)
+        .build()
+        .is_err());
+    assert!(ArrayOfDoublesUnionBuilder::new()
+        .num_values(0)
+        .build()
+        .is_err());
     assert!(ArrayOfDoublesIntersection::new(0).is_err());
 }

@@ -27,7 +27,12 @@ enum SkType {
     Degenerate,
 }
 
-const ALL_TYPES: [SkType; 4] = [SkType::Empty, SkType::Exact, SkType::Estimation, SkType::Degenerate];
+const ALL_TYPES: [SkType; 4] = [
+    SkType::Empty,
+    SkType::Exact,
+    SkType::Estimation,
+    SkType::Degenerate,
+];
 
 fn build_sketch(ty: SkType) -> ThetaSketch {
     match ty {
@@ -71,7 +76,11 @@ fn build_sketch(ty: SkType) -> ThetaSketch {
             // port did) is non-deterministic with respect to which values'
             // hashes fall above/below theta and does not reliably produce
             // zero retained entries.
-            let mut s = ThetaSketchBuilder::new().lg_k(LG_K).p(LOWP).build().unwrap();
+            let mut s = ThetaSketchBuilder::new()
+                .lg_k(LG_K)
+                .p(LOWP)
+                .build()
+                .unwrap();
             s.update_u64(GT_LOWP_V);
             s
         }
@@ -94,7 +103,11 @@ fn degenerate_sketch_is_actually_degenerate() {
     // report estimation mode and non-empty (an empty *set*, but not an
     // empty *sketch*, since theta < 1).
     let s = build_sketch(SkType::Degenerate);
-    assert!(s.get_theta() < 1.0, "expected theta < 1, got {}", s.get_theta());
+    assert!(
+        s.get_theta() < 1.0,
+        "expected theta < 1, got {}",
+        s.get_theta()
+    );
     assert_eq!(s.get_num_retained(), 0, "expected zero retained entries");
     assert!(s.is_estimation_mode());
     assert!(!s.is_empty());

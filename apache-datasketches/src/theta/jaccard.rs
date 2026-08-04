@@ -33,11 +33,19 @@ pub fn jaccard_similarity(a: &impl ThetaInput, b: &impl ThetaInput) -> JaccardBo
         (ThetaInputRef::Sketch(a), ThetaInputRef::Compact(b)) => sys::jaccard_sketch_compact(a, b),
         (ThetaInputRef::Sketch(a), ThetaInputRef::Wrapped(b)) => sys::jaccard_sketch_wrapped(a, b),
         (ThetaInputRef::Compact(a), ThetaInputRef::Sketch(b)) => sys::jaccard_compact_sketch(a, b),
-        (ThetaInputRef::Compact(a), ThetaInputRef::Compact(b)) => sys::jaccard_compact_compact(a, b),
-        (ThetaInputRef::Compact(a), ThetaInputRef::Wrapped(b)) => sys::jaccard_compact_wrapped(a, b),
+        (ThetaInputRef::Compact(a), ThetaInputRef::Compact(b)) => {
+            sys::jaccard_compact_compact(a, b)
+        }
+        (ThetaInputRef::Compact(a), ThetaInputRef::Wrapped(b)) => {
+            sys::jaccard_compact_wrapped(a, b)
+        }
         (ThetaInputRef::Wrapped(a), ThetaInputRef::Sketch(b)) => sys::jaccard_wrapped_sketch(a, b),
-        (ThetaInputRef::Wrapped(a), ThetaInputRef::Compact(b)) => sys::jaccard_wrapped_compact(a, b),
-        (ThetaInputRef::Wrapped(a), ThetaInputRef::Wrapped(b)) => sys::jaccard_wrapped_wrapped(a, b),
+        (ThetaInputRef::Wrapped(a), ThetaInputRef::Compact(b)) => {
+            sys::jaccard_wrapped_compact(a, b)
+        }
+        (ThetaInputRef::Wrapped(a), ThetaInputRef::Wrapped(b)) => {
+            sys::jaccard_wrapped_wrapped(a, b)
+        }
     };
     ffi.into()
 }

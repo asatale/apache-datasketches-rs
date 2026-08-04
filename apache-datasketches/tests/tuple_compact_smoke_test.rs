@@ -1,6 +1,9 @@
 use apache_datasketches::tuple::{ArrayOfDoublesSketchBuilder, CompactArrayOfDoublesSketch};
 
-fn build_sketch(num_values: u8, keys: std::ops::Range<u64>) -> apache_datasketches::tuple::ArrayOfDoublesSketch {
+fn build_sketch(
+    num_values: u8,
+    keys: std::ops::Range<u64>,
+) -> apache_datasketches::tuple::ArrayOfDoublesSketch {
     let mut sketch = ArrayOfDoublesSketchBuilder::new()
         .num_values(num_values)
         .build()

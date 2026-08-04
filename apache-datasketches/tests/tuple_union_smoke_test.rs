@@ -29,7 +29,10 @@ fn union_half_overlap() {
 fn union_accepts_both_input_types() {
     let a = sketch(2, 0..100);
     let b = sketch(2, 50..150).compact(true);
-    let mut u = ArrayOfDoublesUnionBuilder::new().num_values(2).build().unwrap();
+    let mut u = ArrayOfDoublesUnionBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     u.update(&a).unwrap();
     u.update(&b).unwrap();
     let result = u.get_result(true);
@@ -39,12 +42,21 @@ fn union_accepts_both_input_types() {
 
 #[test]
 fn union_sums_values_on_collision() {
-    let mut a = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let mut a = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     a.update_u64(1, &[1.0, 10.0]).unwrap();
-    let mut b = ArrayOfDoublesSketchBuilder::new().num_values(2).build().unwrap();
+    let mut b = ArrayOfDoublesSketchBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     b.update_u64(1, &[2.0, 20.0]).unwrap();
 
-    let mut u = ArrayOfDoublesUnionBuilder::new().num_values(2).build().unwrap();
+    let mut u = ArrayOfDoublesUnionBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     u.update(&a).unwrap();
     u.update(&b).unwrap();
     let entries: Vec<(u64, Vec<f64>)> = u.get_result(true).entries().collect();
@@ -65,7 +77,10 @@ fn union_reset_empties_result() {
 #[test]
 fn mismatched_num_values_is_err() {
     let a = sketch(3, 0..10);
-    let mut u = ArrayOfDoublesUnionBuilder::new().num_values(2).build().unwrap();
+    let mut u = ArrayOfDoublesUnionBuilder::new()
+        .num_values(2)
+        .build()
+        .unwrap();
     assert_eq!(u.get_num_values(), 2);
     assert!(u.update(&a).is_err());
     assert!(u.update(&a.compact(true)).is_err());
@@ -74,7 +89,10 @@ fn mismatched_num_values_is_err() {
 #[test]
 fn invalid_config_is_err() {
     assert!(ArrayOfDoublesUnionBuilder::new().lg_k(4).build().is_err());
-    assert!(ArrayOfDoublesUnionBuilder::new().num_values(0).build().is_err());
+    assert!(ArrayOfDoublesUnionBuilder::new()
+        .num_values(0)
+        .build()
+        .is_err());
 }
 
 #[test]

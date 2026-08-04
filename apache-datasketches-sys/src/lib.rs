@@ -2,21 +2,21 @@
 pub mod hll;
 
 #[cfg(feature = "theta")]
-pub mod theta_sketch;
+pub mod theta_a_not_b;
 #[cfg(feature = "theta")]
 pub mod theta_compact;
 #[cfg(feature = "theta")]
-pub mod theta_wrapped;
-#[cfg(feature = "theta")]
 pub mod theta_input;
-#[cfg(feature = "theta")]
-pub mod theta_union;
 #[cfg(feature = "theta")]
 pub mod theta_intersection;
 #[cfg(feature = "theta")]
-pub mod theta_a_not_b;
-#[cfg(feature = "theta")]
 pub mod theta_jaccard;
+#[cfg(feature = "theta")]
+pub mod theta_sketch;
+#[cfg(feature = "theta")]
+pub mod theta_union;
+#[cfg(feature = "theta")]
+pub mod theta_wrapped;
 
 #[cfg(feature = "cpc")]
 pub mod cpc_sketch;
@@ -24,16 +24,16 @@ pub mod cpc_sketch;
 pub mod cpc_union;
 
 #[cfg(feature = "tuple")]
-pub mod array_of_doubles_sketch;
+pub mod array_of_doubles_a_not_b;
 #[cfg(feature = "tuple")]
 pub mod array_of_doubles_compact;
 #[cfg(feature = "tuple")]
 pub mod array_of_doubles_input;
 #[cfg(feature = "tuple")]
-pub mod array_of_doubles_union;
-#[cfg(feature = "tuple")]
 pub mod array_of_doubles_intersection;
 #[cfg(feature = "tuple")]
-pub mod array_of_doubles_a_not_b;
-#[cfg(feature = "tuple")]
 pub mod array_of_doubles_jaccard;
+#[cfg(feature = "tuple")]
+pub mod array_of_doubles_sketch;
+#[cfg(feature = "tuple")]
+pub mod array_of_doubles_union;

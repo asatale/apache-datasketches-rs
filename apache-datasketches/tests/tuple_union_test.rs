@@ -110,24 +110,15 @@ fn union_estimation_mode_large_overlapping_sets_within_tolerance() {
 
 #[test]
 fn union_uses_builders_own_lg_k() {
-    let mut sketch1 = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(14)
-        .build()
-        .unwrap();
+    let mut sketch1 = ArrayOfDoublesSketchBuilder::new().lg_k(14).build().unwrap();
     for i in 0..16_384u64 {
         sketch1.update_u64(i, &[1.0]).unwrap();
     }
-    let mut sketch2 = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(14)
-        .build()
-        .unwrap();
+    let mut sketch2 = ArrayOfDoublesSketchBuilder::new().lg_k(14).build().unwrap();
     for i in 0..26_384u64 {
         sketch2.update_u64(i, &[1.0]).unwrap();
     }
-    let mut sketch3 = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(14)
-        .build()
-        .unwrap();
+    let mut sketch3 = ArrayOfDoublesSketchBuilder::new().lg_k(14).build().unwrap();
     for i in 0..86_384u64 {
         sketch3.update_u64(i, &[1.0]).unwrap();
     }

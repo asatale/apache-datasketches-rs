@@ -24,7 +24,9 @@
 //! confidence-interval bounds are correctly ordered
 //! (`lower_bound <= estimate <= upper_bound`) in a regime where the interval
 //! is genuinely non-degenerate.
-use apache_datasketches::tuple::{array_of_doubles_jaccard_similarity, ArrayOfDoublesSketch, ArrayOfDoublesSketchBuilder};
+use apache_datasketches::tuple::{
+    array_of_doubles_jaccard_similarity, ArrayOfDoublesSketch, ArrayOfDoublesSketchBuilder,
+};
 
 fn sketch(num_values: u8, keys: std::ops::Range<u64>, values: &[f64]) -> ArrayOfDoublesSketch {
     let mut s = ArrayOfDoublesSketchBuilder::new()
@@ -94,14 +96,8 @@ fn exact_mode_identical() {
 
 #[test]
 fn estimation_mode_similar_sketches() {
-    let mut a = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(12)
-        .build()
-        .unwrap();
-    let mut b = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(12)
-        .build()
-        .unwrap();
+    let mut a = ArrayOfDoublesSketchBuilder::new().lg_k(12).build().unwrap();
+    let mut b = ArrayOfDoublesSketchBuilder::new().lg_k(12).build().unwrap();
     for i in 0..10_000u64 {
         a.update_u64(i, &[1.0]).unwrap();
     }
@@ -116,14 +112,8 @@ fn estimation_mode_similar_sketches() {
 
 #[test]
 fn estimation_mode_half_overlap() {
-    let mut a = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(12)
-        .build()
-        .unwrap();
-    let mut b = ArrayOfDoublesSketchBuilder::new()
-        .lg_k(12)
-        .build()
-        .unwrap();
+    let mut a = ArrayOfDoublesSketchBuilder::new().lg_k(12).build().unwrap();
+    let mut b = ArrayOfDoublesSketchBuilder::new().lg_k(12).build().unwrap();
     for i in 0..10_000u64 {
         a.update_u64(i, &[1.0]).unwrap();
     }

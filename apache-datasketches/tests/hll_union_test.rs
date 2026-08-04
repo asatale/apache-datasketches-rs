@@ -390,7 +390,11 @@ fn check_union_round_trip(lg_k: u8, n: u64, tgt_type: TargetHllType, compact: bo
 
 #[test]
 fn hll_union_check_serialize_compact_and_updatable() {
-    for &tgt_type in &[TargetHllType::Hll4, TargetHllType::Hll6, TargetHllType::Hll8] {
+    for &tgt_type in &[
+        TargetHllType::Hll4,
+        TargetHllType::Hll6,
+        TargetHllType::Hll8,
+    ] {
         check_union_round_trip(8, 5, tgt_type, true); // LIST mode
         check_union_round_trip(8, 5, tgt_type, false);
         check_union_round_trip(8, 100, tgt_type, true); // SET mode

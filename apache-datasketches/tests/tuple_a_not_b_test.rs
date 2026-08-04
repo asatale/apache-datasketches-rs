@@ -33,7 +33,9 @@
 //! family adds over Theta: that a-not-b's result preserves `a`'s per-entry
 //! values unchanged (not summed or zeroed) even in estimation mode where
 //! entries get evicted, and `get_num_values()` preservation on the result.
-use apache_datasketches::tuple::{ArrayOfDoublesAnotB, ArrayOfDoublesSketch, ArrayOfDoublesSketchBuilder};
+use apache_datasketches::tuple::{
+    ArrayOfDoublesAnotB, ArrayOfDoublesSketch, ArrayOfDoublesSketchBuilder,
+};
 
 fn sketch(num_values: u8, keys: std::ops::Range<u64>, values: &[f64]) -> ArrayOfDoublesSketch {
     let mut s = ArrayOfDoublesSketchBuilder::new()

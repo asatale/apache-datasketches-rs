@@ -8,8 +8,13 @@ pub mod ffi {
 
         type CompactThetaSketchShim;
 
-        fn theta_sketch_compact(sketch: &ThetaSketchShim, ordered: bool) -> UniquePtr<CompactThetaSketchShim>;
-        fn compact_theta_sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<CompactThetaSketchShim>>;
+        fn theta_sketch_compact(
+            sketch: &ThetaSketchShim,
+            ordered: bool,
+        ) -> UniquePtr<CompactThetaSketchShim>;
+        fn compact_theta_sketch_deserialize(
+            bytes: &[u8],
+        ) -> Result<UniquePtr<CompactThetaSketchShim>>;
 
         fn get_estimate(self: &CompactThetaSketchShim) -> f64;
         fn get_lower_bound(self: &CompactThetaSketchShim, num_std_dev: u8) -> Result<f64>;

@@ -27,7 +27,12 @@ fn identical_sketches_are_fully_similar() {
 fn disjoint_sketches_are_dissimilar() {
     let a = sketch(1, 0..1000, &[1.0]);
     let b = sketch(1, 2000..3000, &[1.0]);
-    assert_eq!(array_of_doubles_jaccard_similarity(&a, &b).unwrap().estimate, 0.0);
+    assert_eq!(
+        array_of_doubles_jaccard_similarity(&a, &b)
+            .unwrap()
+            .estimate,
+        0.0
+    );
 }
 
 #[test]
