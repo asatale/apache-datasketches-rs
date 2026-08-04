@@ -1,3 +1,25 @@
+/// Panics if `path` does not exist on disk.
+///
+/// The bridge and shim file lists in `main` below are expected to be
+/// exhaustive for each completed sketch family: every file named there
+/// should actually exist, and every file that exists should be named
+/// there. A missing file at this point means either a typo in one of
+/// those lists, or a file that was renamed/moved/deleted without
+/// updating the list to match -- both are bugs we want to catch as a
+/// clear build failure here, not as a confusing link error or missing
+/// symbol surfacing later.
+fn require_exists(path: &str) {
+    if !std::path::Path::new(path).exists() {
+        panic!(
+            "apache-datasketches-sys build.rs: expected file `{path}` does not exist.\n\n\
+             This file is listed in build.rs as part of a completed sketch family's bridge/shim \
+             file set, which is expected to be exhaustive. A missing file here means either a typo \
+             in the file list in build.rs, or the file was renamed, moved, or deleted without \
+             updating that list. Fix the list or restore the file."
+        );
+    }
+}
+
 fn main() {
     let mut bridges: Vec<&str> = Vec::new();
 
@@ -14,28 +36,17 @@ fn main() {
             "src/theta_a_not_b.rs",
             "src/theta_jaccard.rs",
         ] {
-            if std::path::Path::new(path).exists() {
-                bridges.push(path);
-            }
+            require_exists(path);
+            bridges.push(path);
         }
     }
     if cfg!(feature = "cpc") {
-        // Same incremental-availability rationale as theta above: these
-        // bridge modules are added incrementally by the CPC sketch
-        // family plan's tasks; only reference the ones that exist so far
-        // so that `--features cpc` keeps building at every intermediate
-        // task.
         for path in ["src/cpc_sketch.rs", "src/cpc_union.rs"] {
-            if std::path::Path::new(path).exists() {
-                bridges.push(path);
-            }
+            require_exists(path);
+            bridges.push(path);
         }
     }
     if cfg!(feature = "tuple") {
-        // Same incremental-availability rationale as theta and cpc above:
-        // these bridge modules are added one per task by the
-        // ArrayOfDoubles (Tuple) plan, so only reference the ones that
-        // exist so far and keep `--features tuple` building throughout.
         // Note: src/array_of_doubles_input.rs is deliberately absent — it
         // is a plain Rust module, not a cxx bridge.
         for path in [
@@ -46,9 +57,8 @@ fn main() {
             "src/array_of_doubles_a_not_b.rs",
             "src/array_of_doubles_jaccard.rs",
         ] {
-            if std::path::Path::new(path).exists() {
-                bridges.push(path);
-            }
+            require_exists(path);
+            bridges.push(path);
         }
     }
 
@@ -114,16 +124,14 @@ fn main() {
             "cpp/theta/theta_a_not_b_shim.cc",
             "cpp/theta/theta_jaccard_shim.cc",
         ] {
-            if std::path::Path::new(path).exists() {
-                build.file(path);
-            }
+            require_exists(path);
+            build.file(path);
         }
     }
     if cfg!(feature = "cpc") {
         for path in ["cpp/cpc/cpc_sketch_shim.cc", "cpp/cpc/cpc_union_shim.cc"] {
-            if std::path::Path::new(path).exists() {
-                build.file(path);
-            }
+            require_exists(path);
+            build.file(path);
         }
     }
     if cfg!(feature = "tuple") {
@@ -135,9 +143,8 @@ fn main() {
             "cpp/tuple/array_of_doubles_a_not_b_shim.cc",
             "cpp/tuple/array_of_doubles_jaccard_shim.cc",
         ] {
-            if std::path::Path::new(path).exists() {
-                build.file(path);
-            }
+            require_exists(path);
+            build.file(path);
         }
     }
 

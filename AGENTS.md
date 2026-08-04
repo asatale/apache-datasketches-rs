@@ -105,11 +105,13 @@ on a duplicate definition — see the comment there for what it does and does no
 
 ### `build.rs` conditional compilation
 
-`apache-datasketches-sys/build.rs` only adds a bridge file to `cxx_build::bridges(...)` and its
-corresponding shim `.cc` to the C++ build if both the feature is enabled *and* the file exists on disk
-(`Path::new(path).exists()`). This lets a sketch family's bindings be built up incrementally across
-multiple tasks/commits without breaking `--features <family>` at intermediate states — don't remove
-these existence checks when adding new files unless the whole family is already complete.
+`apache-datasketches-sys/build.rs` adds a bridge file to `cxx_build::bridges(...)` and its
+corresponding shim `.cc` to the C++ build based on the feature flag alone; each per-family file list
+is asserted exhaustive via `require_exists(path)`, which panics with a clear message if a listed file
+is missing (typo, or a file moved/deleted without updating the list). A family under active
+construction across multiple tasks/commits may temporarily replace a `require_exists` call with the
+old skip-if-absent check so `--features <family>` keeps building at intermediate states — but the
+commit that completes the family must restore the hard assertion before landing.
 
 ### Rustdoc coverage is enforced
 
