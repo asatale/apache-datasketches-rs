@@ -131,9 +131,12 @@ impl ArrayOfDoublesSketch {
         Ok(())
     }
 
-    /// Compacts the internal hash table down to its target size, discarding
-    /// entries above the current theta threshold. Does not change the
-    /// sketch's estimate.
+    /// Removes retained entries in excess of the nominal size `k`, lowering
+    /// the theta threshold to do so.
+    ///
+    /// Note that this *does* shift [`Self::get_estimate`] — trimming lowers
+    /// theta, and the estimate is derived from the retained count and theta
+    /// together. Upstream only guarantees the excess entries are dropped.
     pub fn trim(&mut self) {
         self.inner.pin_mut().trim();
     }
