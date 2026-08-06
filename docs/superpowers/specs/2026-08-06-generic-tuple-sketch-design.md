@@ -125,17 +125,59 @@ across the boundary as a second erased type. This design avoids that.
 `sketch.update_u64(key, &value)` proceeds as:
 
 1. Rust computes `S::create(&value)` — an owned `S`, on the stack
-2. Rust passes a **borrowed** reference to C++
-3. C++ hashes, finds the slot, and either placement-news a clone into it
-   (new key) or calls the combine trampoline against the existing entry
+2. Rust wraps it and passes a **borrowed** reference to C++
+3. C++ hashes, finds the slot, and either clones the borrowed summary into a
+   new entry (new key) or calls the combine trampoline against the existing
+   entry
 
 `Self::Update` therefore stays purely Rust-side, and an allocation occurs only
-on a genuine insert rather than on every update.
+on a genuine insert rather than on every update. The C++ instantiation is
+`update_tuple_sketch<DynSummary, DynSummary, DynUpdatePolicy>` — the sketch's
+`Update` type is `DynSummary` itself, which is what removes the need for a
+second erased type.
 
-This collapses the policy to `create` plus two combines, which is sound
-because `create`-then-`update` and `create`-then-`combine` are equivalent for
-any policy expressible as either. Summing, first-wins, last-wins, and
-counting policies all satisfy this.
+### `DynSummary` needs an empty state, and why
+
+Upstream's update path is fixed (`tuple/include/tuple_sketch_impl.hpp:213-224`):
+
+```cpp
+auto result = map_.find(hash);
+if (!result.second) {
+  S summary = policy_.create();                 // no arguments
+  policy_.update(summary, std::forward<UU>(value));
+  map_.insert(result.first, Entry(hash, std::move(summary)));
+} else {
+  policy_.update((*result.first).second, std::forward<UU>(value));
+}
+```
+
+`create()` takes **no arguments** and must return an `S`. There is no
+universal identity element for an arbitrary user-defined summary — `min` has
+no finite one, "first wins" has none at all — so `create()` cannot construct
+a meaningful summary and the trait must not be made to supply one.
+
+`DynSummary` therefore holds `std::optional<rust::Box<RustSummary>>` and is
+default-constructible to a disengaged state. `DynUpdatePolicy::update` reads:
+
+- target disengaged → clone the incoming summary into it (the insert path)
+- target engaged → call the `union_combine` trampoline
+
+The disengaged state is **transient and never stored**: it exists only
+between the `create()` and `update()` calls on consecutive lines above, and
+the result is immediately moved into the table. Every entry the table holds
+is engaged. `DynSummary`'s copy constructor propagates disengagement rather
+than asserting, so a copy is always well-defined.
+
+Allocation behaviour is unchanged by this: `create()` allocates nothing, the
+clone on insert allocates once, and the move into the table allocates
+nothing. Updating an existing key still allocates zero.
+
+**Union and intersection need no `create()` at all**, which is worth noting
+because it constrains their policies less. Union inserts the incoming entry
+directly on a new key and invokes `policy_(Summary&, const Summary&)` only on
+collision (`theta/include/theta_union_base_impl.hpp:50-52`); intersection
+invokes it only on a match (`theta_intersection_base_impl.hpp:70-72`). Both
+policies are plain two-summary combines against always-engaged operands.
 
 A consequence worth stating plainly: a panic in `create` is an **ordinary
 Rust panic**, because it runs entirely Rust-side before any C++ call. It
