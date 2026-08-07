@@ -37,3 +37,5 @@ pub mod array_of_doubles_jaccard;
 pub mod array_of_doubles_sketch;
 #[cfg(feature = "tuple")]
 pub mod array_of_doubles_union;
+#[cfg(feature = "tuple")]
+pub mod tuple_generic;
