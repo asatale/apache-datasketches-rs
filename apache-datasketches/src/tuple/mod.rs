@@ -26,6 +26,8 @@
 //!   not `b`), preserving `a`'s values.
 //! - [`array_of_doubles_jaccard_similarity`] / [`JaccardBounds`] — estimates
 //!   the Jaccard index (intersection-over-union) of two sketches.
+//! - [`generic`] — Tuple sketches over a summary type you define yourself,
+//!   for cases the fixed `f64`-array shape above does not cover.
 //!
 //! [`ArrayOfDoublesSketch`] and [`CompactArrayOfDoublesSketch`] can both be
 //! passed interchangeably (via the sealed [`ArrayOfDoublesInput`] trait) to
@@ -34,6 +36,7 @@
 mod a_not_b;
 mod builder;
 mod compact;
+pub mod generic;
 mod input;
 mod intersection;
 mod jaccard;

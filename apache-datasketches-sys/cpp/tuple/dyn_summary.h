@@ -94,12 +94,15 @@ public:
 
   // Accessing a disengaged DynSummary is a programming error, not a runtime
   // condition -- but it must be diagnosable rather than undefined. A throw is
-  // preferred to assert() for two reasons: assert() vanishes under NDEBUG,
-  // exactly where a silent null dereference is hardest to diagnose; and every
-  // caller of get() sits behind the cxx shim boundary, which converts a C++
-  // exception into a Rust Result::Err, so the failure is recoverable and
-  // visible in release builds. The branch is negligible next to the Rust-side
-  // allocation these paths already perform.
+  // preferred to assert() because assert() vanishes under NDEBUG, exactly
+  // where a silent null dereference is hardest to diagnose. Whether a caller
+  // actually gets a recoverable Rust Result::Err depends on how it crosses
+  // the cxx boundary: only shims declared to return `Result<..>` get that
+  // conversion. The update_* shims in tuple_generic_sketch_shim.cc are
+  // deliberately not declared that way, so a throw reaching them becomes a
+  // deterministic abort, not an Err -- see the note on DynUpdatePolicy below.
+  // The branch itself is negligible next to the Rust-side allocation these
+  // paths already perform.
   //
   // No noexcept member of this header calls get(): the move operations and
   // engaged() do not, and the copy operations dereference inner_ directly
@@ -138,10 +141,15 @@ private:
 //
 // None of these policies is noexcept, and none checks engaged() beyond what it
 // needs semantically: DynSummary::get() enforces the precondition itself and
-// throws std::logic_error on a disengaged summary, which the cxx boundary turns
-// into a Rust Result::Err. So a disengaged summary reaching any of them --
-// including the `value` argument of update(), which has no semantic reason to
-// be disengaged -- is a diagnosable error rather than a null dereference.
+// throws std::logic_error on a disengaged summary. That throw only becomes a
+// Rust Result::Err for callers that cross the cxx boundary through a shim
+// declared `-> Result<..>`; DynUpdatePolicy::update() is reached from
+// TupleGenericSketchShim::update_*(), which are declared to return plain
+// `void` (not Result) for ergonomics, so a throw there is a deterministic
+// abort, not a recoverable Err. Either way, a disengaged summary reaching any
+// of these -- including the `value` argument of update(), which has no
+// semantic reason to be disengaged -- is diagnosable rather than a silent
+// null dereference.
 
 struct DynUpdatePolicy {
   DynSummary create() const { return DynSummary(); }

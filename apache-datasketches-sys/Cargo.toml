@@ -94,3 +94,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_summary_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_sketch_link_test"
+required-features = ["tuple"]

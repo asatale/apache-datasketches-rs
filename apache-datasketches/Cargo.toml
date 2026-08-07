@@ -205,3 +205,7 @@ required-features = ["tuple"]
 [[test]]
 name = "cross_family_all_features_test"
 required-features = ["theta", "tuple"]
+
+[[test]]
+name = "tuple_generic_sketch_smoke_test"
+required-features = ["tuple"]

@@ -11,8 +11,8 @@
 //! Union, intersection, a-not-b, and Jaccard pass only shim types and get
 //! their own bridge files.
 //!
-//! Later tasks add the `extern "C++"` blocks below; this task creates only
-//! the `extern "Rust"` one.
+//! The sketch shim's `extern "C++"` block lives here now; the compact shim's
+//! follows in a later task.
 
 use std::any::Any;
 
@@ -97,9 +97,7 @@ fn rust_summary_clone(summary: &RustSummary) -> Box<RustSummary> {
 }
 
 fn rust_summary_union_combine(target: &mut RustSummary, other: &RustSummary) {
-    abort_on_panic("union_combine", || {
-        target.ops.union_combine(&*other.ops)
-    })
+    abort_on_panic("union_combine", || target.ops.union_combine(&*other.ops))
 }
 
 fn rust_summary_intersection_combine(target: &mut RustSummary, other: &RustSummary) {
@@ -134,5 +132,41 @@ pub mod ffi {
         fn rust_summary_clone(summary: &RustSummary) -> Box<RustSummary>;
         fn rust_summary_union_combine(target: &mut RustSummary, other: &RustSummary);
         fn rust_summary_intersection_combine(target: &mut RustSummary, other: &RustSummary);
+    }
+
+    unsafe extern "C++" {
+        include!("tuple_generic_sketch_shim.h");
+
+        type TupleGenericSketchShim;
+
+        fn new_tuple_generic_sketch(
+            lg_k: u8,
+            rf: u8,
+            p: f32,
+        ) -> Result<UniquePtr<TupleGenericSketchShim>>;
+
+        fn update_u64(self: Pin<&mut TupleGenericSketchShim>, key: u64, value: &RustSummary);
+        fn update_i64(self: Pin<&mut TupleGenericSketchShim>, key: i64, value: &RustSummary);
+        fn update_u32(self: Pin<&mut TupleGenericSketchShim>, key: u32, value: &RustSummary);
+        fn update_i32(self: Pin<&mut TupleGenericSketchShim>, key: i32, value: &RustSummary);
+        fn update_u16(self: Pin<&mut TupleGenericSketchShim>, key: u16, value: &RustSummary);
+        fn update_i16(self: Pin<&mut TupleGenericSketchShim>, key: i16, value: &RustSummary);
+        fn update_u8(self: Pin<&mut TupleGenericSketchShim>, key: u8, value: &RustSummary);
+        fn update_i8(self: Pin<&mut TupleGenericSketchShim>, key: i8, value: &RustSummary);
+        fn update_f64(self: Pin<&mut TupleGenericSketchShim>, key: f64, value: &RustSummary);
+        fn update_str(self: Pin<&mut TupleGenericSketchShim>, key: &str, value: &RustSummary);
+        fn update_bytes(self: Pin<&mut TupleGenericSketchShim>, key: &[u8], value: &RustSummary);
+
+        fn trim(self: Pin<&mut TupleGenericSketchShim>);
+        fn reset(self: Pin<&mut TupleGenericSketchShim>);
+
+        fn get_estimate(self: &TupleGenericSketchShim) -> f64;
+        fn get_lower_bound(self: &TupleGenericSketchShim, num_std_dev: u8) -> Result<f64>;
+        fn get_upper_bound(self: &TupleGenericSketchShim, num_std_dev: u8) -> Result<f64>;
+        fn is_empty(self: &TupleGenericSketchShim) -> bool;
+        fn is_estimation_mode(self: &TupleGenericSketchShim) -> bool;
+        fn is_ordered(self: &TupleGenericSketchShim) -> bool;
+        fn get_theta(self: &TupleGenericSketchShim) -> f64;
+        fn get_num_retained(self: &TupleGenericSketchShim) -> u32;
     }
 }
