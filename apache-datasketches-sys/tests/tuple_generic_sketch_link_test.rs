@@ -134,7 +134,15 @@ fn rehash_and_resize_preserve_summaries() {
     // correctness are the value checks below.
     assert!((sketch.get_estimate() - 500.0).abs() / 500.0 < 0.2);
     let retained_before_reupdate = sketch.get_num_retained();
-    assert!(retained_before_reupdate > 0);
+    // Pinned, not just `> 0`: the combine-count assertion below compares
+    // against this same reading, so a rehash that silently *dropped* entries
+    // would lower both sides and still pass. `p = 1.0` plus a fixed key set
+    // and seed make this exactly 32 every run.
+    assert_eq!(
+        retained_before_reupdate, 32,
+        "lg_k=5 with 500 keys retains exactly 32 entries; a change here means \
+         entries were lost or the resize path changed"
+    );
     assert!(!sketch.is_empty());
 
     // Re-update every key that was inserted before the resizes. This is a
