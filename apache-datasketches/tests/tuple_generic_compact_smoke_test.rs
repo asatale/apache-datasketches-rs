@@ -28,11 +28,31 @@ fn sketch(keys: std::ops::Range<u64>, value: i64) -> TupleSketch<Sum> {
 
 #[test]
 fn compact_preserves_estimate_and_summaries() {
-    let compact = sketch(0..500, 3).compact(true);
+    // Each key gets a distinct summary value (key * 7), not a shared
+    // constant: compaction is the first thing that exercises DynSummary's
+    // copy constructor and the clone trampoline, so a summary getting
+    // shuffled onto the wrong entry is exactly the new risk this task
+    // introduces, and a constant value across every entry cannot detect it.
+    let mut s: TupleSketch<Sum> = TupleSketchBuilder::new().build().unwrap();
+    for key in 0..500u64 {
+        s.update_u64(key, &(key as i64 * 7));
+    }
+    let compact = s.compact(true);
     assert!((compact.get_estimate() - 500.0).abs() < 1.0);
     assert_eq!(compact.get_num_retained(), 500);
     assert!(compact.is_ordered());
-    assert!(compact.entries().all(|(_, s)| s == Sum(3)));
+
+    // Hash order (murmur3) does not let us recover which key produced which
+    // hash, but the *multiset* of summary values must survive compaction
+    // unchanged. `got.len()` also pins `entries()`'s yield count against
+    // `get_num_retained()`, an independently-computed reading, so neither
+    // can silently under/over-report alone.
+    let mut got: Vec<Sum> = compact.entries().map(|(_, s)| s).collect();
+    assert_eq!(got.len(), compact.get_num_retained() as usize);
+    got.sort_by_key(|s| s.0);
+    let mut expected: Vec<Sum> = (0..500u64).map(|key| Sum(key as i64 * 7)).collect();
+    expected.sort_by_key(|s| s.0);
+    assert_eq!(got, expected);
 }
 
 #[test]

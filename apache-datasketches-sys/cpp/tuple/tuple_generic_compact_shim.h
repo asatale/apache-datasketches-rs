@@ -35,6 +35,14 @@ private:
   const std::vector<dyn_compact_sketch::Entry>& entries() const;
 
   dyn_compact_sketch sketch_;
+
+  // `mutable` because entries() lazily populates this from const methods.
+  // That is only sound because nothing on the Rust side ever grants
+  // concurrent `&`-access to the same CompactTupleSketch<S>: the wrapper in
+  // apache-datasketches/src/tuple/generic/compact.rs is `Send` but
+  // deliberately NOT `Sync`. Do not add a `Sync` impl there, and do not
+  // reach these members through any path that could run concurrently with
+  // another call on the same instance.
   mutable std::vector<dyn_compact_sketch::Entry> entries_;
   mutable bool entries_built_ = false;
 };

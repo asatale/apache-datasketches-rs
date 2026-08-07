@@ -15,9 +15,24 @@ pub struct CompactTupleSketch<S: TupleSummary> {
     pub(crate) _marker: PhantomData<fn() -> S>,
 }
 
+// Sound because `S: Send` is a supertrait of `TupleSummary` and the erased
+// box is `Box<dyn RawSummaryOps + Send>`. Deliberately NOT `Sync`: the C++
+// shim lazily populates a `mutable` entry cache (`entries_`/`entries_built_`
+// in `tuple_generic_compact_shim.h`) from otherwise-`const` methods, which is
+// only safe without concurrent `&`-access to the same instance. Do not add a
+// `Sync` impl, and do not wrap the shim in a `Sync` newtype.
 unsafe impl<S: TupleSummary> Send for CompactTupleSketch<S> {}
 
 impl<S: TupleSummary> CompactTupleSketch<S> {
+    /// Wraps a shim produced by [`TupleSketch::compact`](super::TupleSketch::compact)
+    /// or a set operation.
+    ///
+    /// The caller must guarantee every summary reachable from `inner` is a
+    /// `Adapter<S>` for this same `S` — that is, `inner` must have
+    /// originated from a sketch or operation typed over `S`.
+    /// [`Self::entries`] calls `unerase` on every summary it reads back, and
+    /// a mismatched `S` turns `unerase`'s "impossible" invariant panic into a
+    /// reachable one.
     pub(crate) fn from_shim(inner: UniquePtr<sys::CompactTupleGenericSketchShim>) -> Self {
         Self {
             inner,

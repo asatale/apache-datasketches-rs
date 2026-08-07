@@ -32,18 +32,47 @@ fn value_of(s: &RustSummary) -> i64 {
 #[test]
 fn compact_preserves_estimate_and_entries() {
     let mut sketch = ffi::new_tuple_generic_sketch(12, 8, 1.0).unwrap();
+    // Each key gets a distinct summary value (key * 7), not a shared
+    // constant: compaction is the first thing that exercises DynSummary's
+    // copy constructor and the clone trampoline, so a summary getting
+    // shuffled onto the wrong hash is exactly the new risk this shim
+    // introduces. A constant value across every entry cannot detect that.
     for i in 0..500u64 {
-        sketch.pin_mut().update_u64(i, &summary(3));
+        sketch.pin_mut().update_u64(i, &summary(i as i64 * 7));
     }
     let compact = ffi::tuple_generic_sketch_compact(&sketch, true);
     assert!((compact.get_estimate() - 500.0).abs() < 1.0);
     assert_eq!(compact.entry_count(), 500);
+    // entry_count() and get_num_retained() are independently-computed
+    // readings (entries().size() vs. the underlying sketch's own counter);
+    // pin them against each other so neither can silently under/over-report
+    // alone.
+    assert_eq!(compact.entry_count(), compact.get_num_retained());
     assert!(compact.is_ordered());
 
-    // Every entry carries the summary that was inserted.
-    for i in 0..compact.entry_count() {
-        assert_eq!(value_of(&compact.entry_summary(i).unwrap()), 3);
-    }
+    // Hash order is murmur3, so which hash a given key landed on can't be
+    // recovered here -- but the *multiset* of summary values must be
+    // unchanged by compaction. This still catches a value corrupted or
+    // duplicated in the clone/shuffle path even without per-entry pairing.
+    let mut got: Vec<i64> = (0..compact.entry_count())
+        .map(|i| value_of(&compact.entry_summary(i).unwrap()))
+        .collect();
+    got.sort_unstable();
+    let mut expected: Vec<i64> = (0..500u64).map(|i| i as i64 * 7).collect();
+    expected.sort_unstable();
+    assert_eq!(got, expected);
+}
+
+#[test]
+fn entry_access_out_of_range_is_err() {
+    let mut sketch = ffi::new_tuple_generic_sketch(12, 8, 1.0).unwrap();
+    sketch.pin_mut().update_u64(1, &summary(1));
+    let compact = ffi::tuple_generic_sketch_compact(&sketch, true);
+    // entries().at(index) throws std::out_of_range, which cxx turns into
+    // Result::Err because entry_hash/entry_summary are declared to return
+    // Result -- prove that really happens rather than a deterministic abort.
+    assert!(compact.entry_hash(compact.entry_count()).is_err());
+    assert!(compact.entry_summary(compact.entry_count()).is_err());
 }
 
 #[test]

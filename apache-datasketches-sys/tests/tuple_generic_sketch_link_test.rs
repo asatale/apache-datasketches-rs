@@ -118,9 +118,13 @@ fn observing_summary(v: i64) -> RustSummary {
 /// that the move compiles, but that each summary's *value* survives the moves
 /// correctly, which is verified by re-updating every key afterward and
 /// reading back what `union_combine` saw as the pre-existing value.
+/// The nominal size this test's sketch is built with; the entry table trims
+/// down to `1 << LG_K` retained entries.
+const LG_K: u8 = 5;
+
 #[test]
 fn rehash_and_resize_preserve_summaries() {
-    let mut sketch = ffi::new_tuple_generic_sketch(5, 2, 1.0).unwrap();
+    let mut sketch = ffi::new_tuple_generic_sketch(LG_K, 2, 1.0).unwrap();
     for i in 0..500u64 {
         sketch.pin_mut().update_u64(i, &observing_summary(1));
     }
@@ -137,11 +141,12 @@ fn rehash_and_resize_preserve_summaries() {
     // Pinned, not just `> 0`: the combine-count assertion below compares
     // against this same reading, so a rehash that silently *dropped* entries
     // would lower both sides and still pass. `p = 1.0` plus a fixed key set
-    // and seed make this exactly 32 every run.
+    // and seed make this exactly `1 << LG_K` every run.
     assert_eq!(
-        retained_before_reupdate, 32,
-        "lg_k=5 with 500 keys retains exactly 32 entries; a change here means \
-         entries were lost or the resize path changed"
+        retained_before_reupdate,
+        1u32 << LG_K,
+        "lg_k={LG_K} with 500 keys retains exactly 1 << lg_k entries; a change here \
+         means entries were lost or the resize path changed"
     );
     assert!(!sketch.is_empty());
 
