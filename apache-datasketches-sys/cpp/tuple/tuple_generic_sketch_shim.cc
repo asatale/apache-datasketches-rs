@@ -27,8 +27,17 @@ dyn_update_sketch build_sketch(uint8_t lg_k, uint8_t rf, float p) {
 }
 
 // The sketch's Update type is DynSummary, so every update wraps the borrowed
-// RustSummary in a DynSummary that clones it only if the policy actually
-// inserts. Constructing this wrapper allocates nothing.
+// RustSummary in a DynSummary. assign_clone_of() below clones unconditionally
+// -- one Box allocation on every update() call, whether or not the key
+// already exists -- and on the insert path there is a *second* clone,
+// because DynUpdatePolicy::create() returns a disengaged DynSummary and
+// DynUpdatePolicy::update() then calls assign_clone_of() again to populate
+// it (tuple_sketch_impl.hpp:218-219). This is a deliberate correctness-first
+// simplification, not the intended end state: the optimization, not
+// attempted here, is a DynSummary variant that holds a non-owning
+// `const RustSummary*` for the update-value slot instead of an owned Box, so
+// this wrapper allocates only when the policy actually clones into a new or
+// existing entry.
 DynSummary borrow_as_update(const RustSummary& value) {
   DynSummary wrapper;
   wrapper.assign_clone_of(value);

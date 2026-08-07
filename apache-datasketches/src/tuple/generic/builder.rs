@@ -7,13 +7,37 @@ use std::marker::PhantomData;
 /// `update_tuple_sketch::builder`. `lg_k` defaults to `12`, `resize_factor`
 /// to [`ResizeFactor::X8`], and `p` to `1.0` (no sampling). The seed is never
 /// exposed.
-#[derive(Debug, Clone, Copy)]
 pub struct TupleSketchBuilder<S: TupleSummary> {
     lg_k: u8,
     resize_factor: ResizeFactor,
     p: f32,
     _marker: PhantomData<fn() -> S>,
 }
+
+// Hand-written rather than `#[derive(..)]`: deriving `Debug`/`Clone`/`Copy`
+// on a generic struct adds an `S: Debug`/`S: Clone`/`S: Copy` bound to the
+// impl, even though every field here (`u8`, `ResizeFactor`, `f32`,
+// `PhantomData<fn() -> S>`) is unconditionally `Debug + Clone + Copy`
+// regardless of `S`. A derive would make this builder undocumentedly
+// unusable for any `S` that isn't itself `Copy` -- which most summaries,
+// like this crate's own smoke-test `Sum`, are not.
+impl<S: TupleSummary> std::fmt::Debug for TupleSketchBuilder<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TupleSketchBuilder")
+            .field("lg_k", &self.lg_k)
+            .field("resize_factor", &self.resize_factor)
+            .field("p", &self.p)
+            .finish()
+    }
+}
+
+impl<S: TupleSummary> Clone for TupleSketchBuilder<S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S: TupleSummary> Copy for TupleSketchBuilder<S> {}
 
 impl<S: TupleSummary> Default for TupleSketchBuilder<S> {
     fn default() -> Self {

@@ -46,19 +46,21 @@ pub trait TupleSummary: Clone + Send + 'static {
 /// `extern "Rust"` type to live in the crate that declares the bridge, so the
 /// ergonomic trait here has to be adapted to the minimal trait there.
 pub(crate) struct Adapter<S: TupleSummary> {
-    pub(crate) value: S,
+    value: S,
 }
 
 impl<S: TupleSummary> Adapter<S> {
-    pub(crate) fn new(value: S) -> Self {
+    fn new(value: S) -> Self {
         Self { value }
     }
 
     /// Recovers `&S` from an erased operand.
     ///
-    /// The typed façade makes a mismatch unreachable — a `TupleUnion<S>`
-    /// accepts only `TupleSketch<S>` — so a failure here means an internal
-    /// invariant broke, not user error.
+    /// The typed façade makes a mismatch unreachable: `TupleSketch<S>` (via
+    /// [`erase`]) is the only producer of erased summaries in this crate, so
+    /// every operand a combine callback sees was wrapped as `Adapter<S>` for
+    /// the same `S`. A failure here means an internal invariant broke, not
+    /// user error.
     fn downcast(other: &dyn RawSummaryOps) -> &S {
         match other.as_any().downcast_ref::<Adapter<S>>() {
             Some(adapter) => &adapter.value,
