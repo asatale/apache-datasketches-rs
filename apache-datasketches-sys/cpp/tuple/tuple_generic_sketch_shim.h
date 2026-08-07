@@ -8,6 +8,8 @@
 
 namespace apache_datasketches_rs {
 
+class CompactTupleGenericSketchShim;
+
 // The resize factor crosses as its literal multiplier (1, 2, 4, or 8) rather
 // than as a shared cxx enum, so this bridge needs no cross-bridge type
 // sharing. Throws std::invalid_argument on any other value, which cxx turns
@@ -41,6 +43,8 @@ public:
   bool is_ordered() const;
   double get_theta() const;
   uint32_t get_num_retained() const;
+
+  std::unique_ptr<CompactTupleGenericSketchShim> compact(bool ordered) const;
 
   const dyn_update_sketch& inner() const { return sketch_; }
 

@@ -11,8 +11,8 @@
 //! Union, intersection, a-not-b, and Jaccard pass only shim types and get
 //! their own bridge files.
 //!
-//! The sketch shim's `extern "C++"` block lives here now; the compact shim's
-//! follows in a later task.
+//! The sketch shim's and the compact shim's `extern "C++"` blocks both live
+//! here.
 
 use std::any::Any;
 
@@ -168,5 +168,34 @@ pub mod ffi {
         fn is_ordered(self: &TupleGenericSketchShim) -> bool;
         fn get_theta(self: &TupleGenericSketchShim) -> f64;
         fn get_num_retained(self: &TupleGenericSketchShim) -> u32;
+
+        include!("tuple_generic_compact_shim.h");
+
+        type CompactTupleGenericSketchShim;
+
+        fn tuple_generic_sketch_compact(
+            sketch: &TupleGenericSketchShim,
+            ordered: bool,
+        ) -> UniquePtr<CompactTupleGenericSketchShim>;
+        fn compact(
+            self: &TupleGenericSketchShim,
+            ordered: bool,
+        ) -> UniquePtr<CompactTupleGenericSketchShim>;
+
+        fn get_estimate(self: &CompactTupleGenericSketchShim) -> f64;
+        fn get_lower_bound(self: &CompactTupleGenericSketchShim, num_std_dev: u8) -> Result<f64>;
+        fn get_upper_bound(self: &CompactTupleGenericSketchShim, num_std_dev: u8) -> Result<f64>;
+        fn is_empty(self: &CompactTupleGenericSketchShim) -> bool;
+        fn is_estimation_mode(self: &CompactTupleGenericSketchShim) -> bool;
+        fn is_ordered(self: &CompactTupleGenericSketchShim) -> bool;
+        fn get_theta(self: &CompactTupleGenericSketchShim) -> f64;
+        fn get_num_retained(self: &CompactTupleGenericSketchShim) -> u32;
+
+        fn entry_count(self: &CompactTupleGenericSketchShim) -> u32;
+        fn entry_hash(self: &CompactTupleGenericSketchShim, index: u32) -> Result<u64>;
+        fn entry_summary(
+            self: &CompactTupleGenericSketchShim,
+            index: u32,
+        ) -> Result<Box<RustSummary>>;
     }
 }

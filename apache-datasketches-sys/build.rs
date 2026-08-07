@@ -145,6 +145,7 @@ fn main() {
             "cpp/tuple/array_of_doubles_jaccard_shim.cc",
             "cpp/tuple/dyn_summary.cc",
             "cpp/tuple/tuple_generic_sketch_shim.cc",
+            "cpp/tuple/tuple_generic_compact_shim.cc",
         ] {
             require_exists(path);
             build.file(path);
@@ -209,6 +210,8 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/tuple/dyn_summary.cc");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_sketch_shim.h");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_sketch_shim.cc");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_compact_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_compact_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on

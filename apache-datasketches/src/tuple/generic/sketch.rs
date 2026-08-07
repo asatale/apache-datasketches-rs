@@ -152,4 +152,10 @@ impl<S: TupleSummary> TupleSketch<S> {
     pub fn get_num_retained(&self) -> u32 {
         self.inner.get_num_retained()
     }
+
+    /// Produces an immutable [`CompactTupleSketch`](super::CompactTupleSketch) snapshot. If `ordered` is
+    /// `true`, its entries are sorted by hash value.
+    pub fn compact(&self, ordered: bool) -> super::CompactTupleSketch<S> {
+        super::CompactTupleSketch::from_shim(self.inner.compact(ordered))
+    }
 }

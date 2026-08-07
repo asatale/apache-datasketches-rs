@@ -31,9 +31,11 @@
 //! ```
 
 mod builder;
+mod compact;
 mod sketch;
 mod summary;
 
 pub use builder::TupleSketchBuilder;
+pub use compact::CompactTupleSketch;
 pub use sketch::TupleSketch;
 pub use summary::TupleSummary;

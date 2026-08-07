@@ -1,4 +1,5 @@
 #include "tuple_generic_sketch_shim.h"
+#include "tuple_generic_compact_shim.h"
 #include "tuple_generic.rs.h"
 
 namespace apache_datasketches_rs {
@@ -98,6 +99,10 @@ bool TupleGenericSketchShim::is_estimation_mode() const { return sketch_.is_esti
 bool TupleGenericSketchShim::is_ordered() const { return sketch_.is_ordered(); }
 double TupleGenericSketchShim::get_theta() const { return sketch_.get_theta(); }
 uint32_t TupleGenericSketchShim::get_num_retained() const { return sketch_.get_num_retained(); }
+
+std::unique_ptr<CompactTupleGenericSketchShim> TupleGenericSketchShim::compact(bool ordered) const {
+  return tuple_generic_sketch_compact(*this, ordered);
+}
 
 std::unique_ptr<TupleGenericSketchShim> new_tuple_generic_sketch(uint8_t lg_k, uint8_t rf, float p) {
   return std::make_unique<TupleGenericSketchShim>(lg_k, rf, p);

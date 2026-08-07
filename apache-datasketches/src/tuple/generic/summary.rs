@@ -97,3 +97,19 @@ impl<S: TupleSummary> RawSummaryOps for Adapter<S> {
 pub(crate) fn erase<S: TupleSummary>(value: S) -> RustSummary {
     RustSummary::new(Box::new(Adapter::new(value)))
 }
+
+/// Recovers an owned `S` from a summary that crossed back from C++.
+///
+/// [`erase`] is the sole producer of erased summaries, and it is only ever
+/// called with `Adapter<S>` for the `S` of the calling sketch, so a mismatch
+/// here means an internal invariant broke, not user error.
+pub(crate) fn unerase<S: TupleSummary>(summary: &RustSummary) -> S {
+    match summary.ops().as_any().downcast_ref::<Adapter<S>>() {
+        Some(adapter) => adapter.value.clone(),
+        None => panic!(
+            "apache-datasketches internal invariant violated: a generic Tuple summary \
+             of a different concrete type was returned from the sketch. This should be \
+             impossible through the public API; please report it."
+        ),
+    }
+}
