@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include "rust/cxx.h"
@@ -42,14 +43,39 @@ void rust_summary_intersection_combine(RustSummary& target, RustSummary const& o
 // therefore returns a disengaged DynSummary and the update policy clones into
 // it. The disengaged state is transient: it exists only between those two
 // calls (tuple_sketch_impl.hpp:218-220) and is never stored in the table.
+//
+// Class invariant: engaged() is true if and only if get() is valid. Everything
+// below exists to keep that biconditional true on every path, because
+// engaged() is the validity predicate the update policy branches on.
 class DynSummary {
 public:
   DynSummary() = default;
 
   explicit DynSummary(rust::Box<RustSummary> inner) : inner_(std::move(inner)) {}
 
-  DynSummary(DynSummary&&) noexcept = default;
-  DynSummary& operator=(DynSummary&&) noexcept = default;
+  // Move must leave the source *disengaged*, so it cannot be defaulted.
+  // std::optional's move leaves the source engaged, and rust::Box's own move
+  // constructor nulls the moved-from pointer -- so a defaulted move would
+  // leave the source reporting engaged() == true while holding a null Box,
+  // making get() a null dereference and breaking the invariant above.
+  //
+  // Both stay noexcept: upstream's entry table move-constructs every entry on
+  // rehash and resize, and DynSummary must remain nothrow-move-constructible
+  // for that (pinned by a static_assert in dyn_summary.cc). Nothing here can
+  // throw -- rust::Box's move constructor, move assignment, and destructor are
+  // all noexcept, and its destructor tolerates a null pointer.
+  DynSummary(DynSummary&& other) noexcept : inner_(std::move(other.inner_)) {
+    other.inner_.reset();
+  }
+
+  DynSummary& operator=(DynSummary&& other) noexcept {
+    if (this != &other) {
+      inner_ = std::move(other.inner_);
+      other.inner_.reset();
+    }
+    return *this;
+  }
+
   ~DynSummary() = default;
 
   DynSummary(const DynSummary& other) {
@@ -66,14 +92,42 @@ public:
 
   bool engaged() const { return inner_.has_value(); }
 
-  RustSummary& get() { return **inner_; }
-  const RustSummary& get() const { return **inner_; }
+  // Accessing a disengaged DynSummary is a programming error, not a runtime
+  // condition -- but it must be diagnosable rather than undefined. A throw is
+  // preferred to assert() for two reasons: assert() vanishes under NDEBUG,
+  // exactly where a silent null dereference is hardest to diagnose; and every
+  // caller of get() sits behind the cxx shim boundary, which converts a C++
+  // exception into a Rust Result::Err, so the failure is recoverable and
+  // visible in release builds. The branch is negligible next to the Rust-side
+  // allocation these paths already perform.
+  //
+  // No noexcept member of this header calls get(): the move operations and
+  // engaged() do not, and the copy operations dereference inner_ directly
+  // after checking it and are not noexcept. The policies below are not
+  // noexcept either.
+  RustSummary& get() {
+    if (!inner_) throw_disengaged();
+    return **inner_;
+  }
+
+  const RustSummary& get() const {
+    if (!inner_) throw_disengaged();
+    return **inner_;
+  }
 
   void assign_clone_of(const RustSummary& other) {
     inner_.emplace(rust_summary_clone(other));
   }
 
 private:
+  [[noreturn]] static void throw_disengaged() {
+    throw std::logic_error(
+        "apache_datasketches_rs::DynSummary::get() called on a disengaged summary. "
+        "DynSummary's invariant is that engaged() is true if and only if get() is "
+        "valid; a disengaged summary holds no Rust summary, so there is nothing to "
+        "return. Check engaged() first, or assign_clone_of() a summary into it.");
+  }
+
   std::optional<rust::Box<RustSummary>> inner_;
 };
 
@@ -81,6 +135,13 @@ private:
 // scratch union and intersection policies internally, so a policy that carried
 // configuration would silently misbehave there. These carry nothing -- they
 // dispatch through the summary object itself.
+//
+// None of these policies is noexcept, and none checks engaged() beyond what it
+// needs semantically: DynSummary::get() enforces the precondition itself and
+// throws std::logic_error on a disengaged summary, which the cxx boundary turns
+// into a Rust Result::Err. So a disengaged summary reaching any of them --
+// including the `value` argument of update(), which has no semantic reason to
+// be disengaged -- is a diagnosable error rather than a null dereference.
 
 struct DynUpdatePolicy {
   DynSummary create() const { return DynSummary(); }

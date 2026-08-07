@@ -18,6 +18,13 @@ namespace {
 static_assert(std::is_move_constructible<DynSummary>::value,
               "DynSummary must be move-constructible: the entry table "
               "move-constructs on every rehash and resize");
+static_assert(std::is_nothrow_move_constructible<DynSummary>::value,
+              "DynSummary must be NOTHROW-move-constructible: upstream's entry "
+              "table move-constructs every entry on rehash and resize, and the "
+              "explicit move constructor (which disengages the source to keep "
+              "engaged() == get()-is-valid) must not weaken that");
+static_assert(std::is_nothrow_move_assignable<DynSummary>::value,
+              "DynSummary must be nothrow-move-assignable for the same reason");
 static_assert(std::is_copy_constructible<DynSummary>::value,
               "DynSummary must be copy-constructible: the entry table "
               "copy-constructs when a whole sketch is copied");

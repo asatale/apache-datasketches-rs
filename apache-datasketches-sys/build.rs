@@ -255,21 +255,35 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
         // Tracks whether the scan is currently inside the `#[cxx::bridge]`
         // module body (the mod opened right after such an attribute).
         //
-        // This matters for `extern "Rust"` bridges: the Rust type backing an
-        // opaque `type Name;` declaration is a plain `struct Name { .. }`
-        // defined elsewhere in the same file, outside the bridge module (see
-        // `RustSummary` in src/tuple_generic.rs). That plain struct is not a
-        // second C++-visible type definition -- it's the one and only
-        // implementation behind the single opaque declaration -- so struct
-        // and bare-`type` matches occurring outside the bridge module must
-        // not be recorded.
+        // Everything this guard cares about -- shared struct/enum
+        // definitions, bare opaque `type Name;` declarations, and free
+        // function declarations -- exists only *inside* a bridge module, so
+        // the whole scan is gated on being inside one. That gate is also what
+        // keeps two `extern "Rust"` shapes from producing false positives:
+        //
+        //  * The Rust type backing an opaque `type Name;` declaration is a
+        //    plain `struct Name { .. }` defined elsewhere in the same file,
+        //    outside the bridge module (see `RustSummary` in
+        //    src/tuple_generic.rs). That plain struct is not a second
+        //    C++-visible type definition -- it's the one and only
+        //    implementation behind the single opaque declaration.
+        //  * A trampoline is declared once inside the `extern "Rust"` block
+        //    and implemented once as a plain `fn` of the same name outside
+        //    the bridge module (see `rust_summary_clone` and siblings). Only
+        //    the in-bridge declaration is a name cxx turns into a symbol, so
+        //    ignoring `fn` definitions outside the bridge both avoids a false
+        //    self-collision and removes any need to skip function bodies.
+        //
+        // Because the gate fails *closed* only if bridge entry is detected
+        // correctly, entry detection must not depend on where rustfmt put the
+        // opening brace: `saw_bridge_attr` stays set until a `{` is actually
+        // seen, which may be on the `mod` line or on a following line.
         let mut brace_balance: i32 = 0;
         let mut saw_bridge_attr = false;
         let mut bridge_entry_depth: Option<i32> = None;
 
         while i < lines.len() {
             let trimmed = lines[i].trim();
-            let in_bridge_mod = bridge_entry_depth.is_some();
 
             if trimmed.starts_with("//") {
                 i += 1;
@@ -282,65 +296,54 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
                 continue;
             }
 
-            if in_bridge_mod || (saw_bridge_attr && trimmed.contains("mod ")) {
-                if saw_bridge_attr && bridge_entry_depth.is_none() && trimmed.contains("mod ") {
+            // Brace bookkeeping, which only runs from the bridge attribute
+            // onwards. `bridge_entry_depth` records the brace balance
+            // *outside* the bridge body; the bridge is exited when the
+            // balance returns to it.
+            if saw_bridge_attr || bridge_entry_depth.is_some() {
+                let opens = trimmed.matches('{').count() as i32;
+                let closes = trimmed.matches('}').count() as i32;
+                if saw_bridge_attr && opens > 0 {
                     bridge_entry_depth = Some(brace_balance);
                     saw_bridge_attr = false;
                 }
-                brace_balance +=
-                    trimmed.matches('{').count() as i32 - trimmed.matches('}').count() as i32;
+                brace_balance += opens - closes;
                 if bridge_entry_depth == Some(brace_balance) {
                     bridge_entry_depth = None;
                 }
             }
-            let in_bridge_mod = bridge_entry_depth.is_some();
 
-            if in_bridge_mod {
-                if let Some(name) = extract_struct_or_enum_name(trimmed) {
-                    record_definition(&mut type_defs, name, path, "shared struct/enum");
-                    i += 1;
-                    continue;
-                }
+            if bridge_entry_depth.is_none() {
+                i += 1;
+                continue;
+            }
 
-                if let Some(rest) = trimmed.strip_prefix("type ") {
-                    let rest = rest.trim_end_matches(';').trim();
-                    if !rest.contains('=') {
-                        // Bare `type Name;` — an opaque C++ type definition.
-                        // (A cross-bridge alias `type Name = crate::...;`
-                        // reuses another bridge's definition and is not a
-                        // new one.)
-                        if !rest.is_empty() {
-                            record_definition(
-                                &mut type_defs,
-                                rest.to_string(),
-                                path,
-                                "opaque type",
-                            );
-                        }
+            if let Some(name) = extract_struct_or_enum_name(trimmed) {
+                record_definition(&mut type_defs, name, path, "shared struct/enum");
+                i += 1;
+                continue;
+            }
+
+            if let Some(rest) = trimmed.strip_prefix("type ") {
+                let rest = rest.trim_end_matches(';').trim();
+                if !rest.contains('=') {
+                    // Bare `type Name;` — an opaque C++ type definition.
+                    // (A cross-bridge alias `type Name = crate::...;`
+                    // reuses another bridge's definition and is not a
+                    // new one.)
+                    if !rest.is_empty() {
+                        record_definition(&mut type_defs, rest.to_string(), path, "opaque type");
                     }
-                    i += 1;
-                    continue;
                 }
+                i += 1;
+                continue;
             }
 
             if trimmed.starts_with("fn ") {
-                // Free-function/method declarations can wrap across lines
+                // Declarations inside an `extern` block can wrap across lines
                 // (see e.g. `tuple_jaccard_sketch_sketch` in
                 // src/array_of_doubles_jaccard.rs). Accumulate lines until
-                // the parentheses balance, then look at how the statement
-                // ends: `;` means a bridge declaration (inside an `extern`
-                // block), `{` means a plain Rust fn definition with a body.
-                //
-                // The `{` case matters because of `extern "Rust"` bridges:
-                // their trampoline is declared once (ending in `;`, inside
-                // the `extern "Rust"` block) AND implemented once as a plain
-                // fn of the same name elsewhere in the same file (see
-                // src/tuple_generic.rs). Without distinguishing the two,
-                // this scan would see two "fn rust_summary_clone" statements
-                // in one file and report a false self-collision. A
-                // definition's body is skipped by brace-counting so its
-                // contents (which may themselves contain `fn `, `(`, `;`)
-                // don't confuse the rest of the scan.
+                // the parentheses balance and the statement terminates.
                 let mut stmt = String::new();
                 let mut paren_depth = 0i32;
                 let mut seen_paren = false;
@@ -361,7 +364,7 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
                     }
                     if seen_paren && paren_depth == 0 {
                         let end = stmt.trim_end();
-                        if end.ends_with(';') || end.ends_with('{') {
+                        if end.ends_with(';') || end.ends_with('{') || end.ends_with('}') {
                             break;
                         }
                     }
@@ -371,32 +374,25 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
                     }
                 }
 
-                let trimmed_stmt = stmt.trim_end();
-                let is_declaration = trimmed_stmt.ends_with(';');
-                let is_definition = trimmed_stmt.ends_with('{');
-
-                if is_definition {
-                    // Skip the function body: keep a running brace balance
-                    // (seeded from the `{` already consumed above) until it
-                    // returns to zero.
-                    let mut brace_depth = stmt.matches('{').count() as i32
-                        - stmt.matches('}').count() as i32;
-                    let mut k = j + 1;
-                    while brace_depth > 0 && k < lines.len() {
-                        let line = lines[k];
-                        brace_depth += line.matches('{').count() as i32;
-                        brace_depth -= line.matches('}').count() as i32;
-                        k += 1;
+                // Any braces on the continuation lines still have to be
+                // accounted for, or the bridge-exit detection would drift.
+                // (A bridge `fn` declaration has none in practice; this only
+                // keeps the bookkeeping honest.)
+                if j > i {
+                    for line in &lines[i + 1..=j.min(lines.len() - 1)] {
+                        brace_balance += line.matches('{').count() as i32;
+                        brace_balance -= line.matches('}').count() as i32;
                     }
-                    i = k;
-                    continue;
+                    if bridge_entry_depth == Some(brace_balance) {
+                        bridge_entry_depth = None;
+                    }
                 }
 
                 i = j + 1;
 
-                if is_declaration {
-                    if let (Some(fn_pos), Some(paren_pos)) = (stmt.find("fn "), stmt.find('('))
-                    {
+                // Only a `;`-terminated statement is a bridge declaration.
+                if stmt.trim_end().ends_with(';') {
+                    if let (Some(fn_pos), Some(paren_pos)) = (stmt.find("fn "), stmt.find('(')) {
                         if paren_pos > fn_pos {
                             let name = stmt[fn_pos + 3..paren_pos].trim().to_string();
                             let params = stmt[paren_pos + 1..].trim_start();
