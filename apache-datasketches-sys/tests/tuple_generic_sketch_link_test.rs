@@ -110,6 +110,10 @@ fn observing_summary(v: i64) -> RustSummary {
     RustSummary::new(Box::new(ObservingSum(v)))
 }
 
+/// The nominal size this test's sketch is built with; the entry table trims
+/// down to `1 << LG_K` retained entries.
+const LG_K: u8 = 5;
+
 /// At `lg_k = 5` the table starts small (32 slots) and 500 distinct keys force
 /// several resize/rehash cycles well past the initial capacity. Every rehash
 /// move-constructs each retained `DynSummary`, so this exercises the invariant
@@ -118,10 +122,6 @@ fn observing_summary(v: i64) -> RustSummary {
 /// that the move compiles, but that each summary's *value* survives the moves
 /// correctly, which is verified by re-updating every key afterward and
 /// reading back what `union_combine` saw as the pre-existing value.
-/// The nominal size this test's sketch is built with; the entry table trims
-/// down to `1 << LG_K` retained entries.
-const LG_K: u8 = 5;
-
 #[test]
 fn rehash_and_resize_preserve_summaries() {
     let mut sketch = ffi::new_tuple_generic_sketch(LG_K, 2, 1.0).unwrap();

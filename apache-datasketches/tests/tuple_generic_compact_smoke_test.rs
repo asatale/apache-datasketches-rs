@@ -85,3 +85,62 @@ fn compact_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<CompactTupleSketch<Sum>>();
 }
+
+/// Probe carrier for the `Sync`-detection trick below. `PhantomData<T>` keeps
+/// it constructible for any `T`, including non-`Sync` ones.
+struct SyncProbe<T>(std::marker::PhantomData<T>);
+
+/// Specialised arm: only applicable when `T: Sync`.
+trait ProbeViaSync {
+    fn is_sync(&self) -> bool;
+}
+impl<T: Sync> ProbeViaSync for &SyncProbe<T> {
+    fn is_sync(&self) -> bool {
+        true
+    }
+}
+
+/// Fallback arm: applicable for every `T`, but one autoref step further away,
+/// so the compiler only reaches it when the specialised arm does not apply.
+trait ProbeViaFallback {
+    fn is_sync(&self) -> bool;
+}
+impl<T> ProbeViaFallback for SyncProbe<T> {
+    fn is_sync(&self) -> bool {
+        false
+    }
+}
+
+/// `CompactTupleSketch<S>` must NOT be `Sync`: the C++ shim lazily populates a
+/// `mutable` entry cache (`entries_`/`entries_built_` in
+/// `tuple_generic_compact_shim.h`) from otherwise-`const` methods, so
+/// concurrent `&`-access to one instance would be a data race. A plain
+/// `fn assert_sync<T: Sync>()` cannot express the negative, so this uses
+/// autoref specialization: method resolution on `&&SyncProbe<T>` picks
+/// `ProbeViaSync` (returning `true`) when `T: Sync` holds, and only falls
+/// through to `ProbeViaFallback` (returning `false`) when it does not. Adding
+/// `unsafe impl Sync for CompactTupleSketch` makes this test fail.
+#[test]
+fn compact_is_not_sync() {
+    let probe = SyncProbe::<CompactTupleSketch<Sum>>(std::marker::PhantomData);
+    // The double borrow is load-bearing: it is the extra autoref step that
+    // makes the `T: Sync` arm win when it applies. Do not simplify it.
+    #[allow(clippy::needless_borrow)]
+    let is_sync = (&&probe).is_sync();
+    assert!(
+        !is_sync,
+        "CompactTupleSketch must not be Sync -- the shim's lazily built entry \
+         cache makes concurrent &-access a data race"
+    );
+
+    // Sanity check that the probe reports `true` for a type that really is
+    // `Sync`; without this, a probe that always answered `false` would pass
+    // the assertion above vacuously.
+    let sync_probe = SyncProbe::<u64>(std::marker::PhantomData);
+    #[allow(clippy::needless_borrow)]
+    let u64_is_sync = (&&sync_probe).is_sync();
+    assert!(
+        u64_is_sync,
+        "probe is broken: it does not detect Sync at all"
+    );
+}

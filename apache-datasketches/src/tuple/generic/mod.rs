@@ -24,8 +24,25 @@
 //! }
 //!
 //! let mut sketch: TupleSketch<Count> = TupleSketchBuilder::new().build()?;
+//! for key in 0..100u64 {
+//!     sketch.update_u64(key, &());
+//! }
+//! // Updating a key that is already present combines the new summary into
+//! // the retained one with `union_combine`, so key 42 ends up at 2.
 //! sketch.update_u64(42, &());
 //! println!("estimate: {}", sketch.get_estimate());
+//!
+//! // `compact` freezes the sketch into an immutable snapshot; `entries`
+//! // hands back each retained `(hash, summary)` pair, with the summary
+//! // cloned back out of C++ as an owned `Count`.
+//! let compact = sketch.compact(true);
+//! assert_eq!(compact.get_num_retained(), 100);
+//! assert!(compact.is_ordered());
+//!
+//! let entries: Vec<(u64, Count)> = compact.entries().collect();
+//! assert_eq!(entries.len(), 100);
+//! // 99 keys were seen once and key 42 was seen twice.
+//! assert_eq!(entries.iter().map(|(_, c)| c.0).sum::<u64>(), 101);
 //! # Ok(())
 //! # }
 //! ```
