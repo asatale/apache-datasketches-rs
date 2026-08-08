@@ -40,7 +40,7 @@ private:
   // walking the sketch's iterator on every call.
   const std::vector<const dyn_compact_sketch::Entry*>& entries() const;
 
-  dyn_compact_sketch sketch_;
+  const dyn_compact_sketch sketch_;
 
   // `mutable` because entries() lazily populates this from const methods.
   // That is only sound because nothing on the Rust side ever grants
@@ -53,8 +53,9 @@ private:
   // Non-owning pointers into sketch_'s own entry vector (compact_tuple_sketch
   // stores its entries in a std::vector<Entry> member and its const_iterator
   // yields `const Entry&` into it). sketch_ outlives this cache -- both are
-  // members of the same object -- and is never mutated after construction,
-  // so the pointers stay valid. Caching by value instead would clone every
+  // members of the same object -- and sketch_ is `const`, so the compiler
+  // enforces that it is never mutated after construction and the pointers
+  // stay valid. Caching by value instead would clone every
   // summary through the rust_summary_clone trampoline, doubling the sketch's
   // summary memory and making entry_summary cost two clones per call.
   mutable std::vector<const dyn_compact_sketch::Entry*> entries_;

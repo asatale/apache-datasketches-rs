@@ -27,12 +27,16 @@ impl<S: TupleSummary> CompactTupleSketch<S> {
     /// Wraps a shim produced by [`TupleSketch::compact`](super::TupleSketch::compact)
     /// or a set operation.
     ///
-    /// The caller must guarantee every summary reachable from `inner` is a
-    /// `Adapter<S>` for this same `S` — that is, `inner` must have
-    /// originated from a sketch or operation typed over `S`.
-    /// [`Self::entries`] calls `unerase` on every summary it reads back, and
-    /// a mismatched `S` turns `unerase`'s "impossible" invariant panic into a
-    /// reachable one.
+    /// `inner` should have every summary reachable from it be an `Adapter<S>`
+    /// for this same `S` — that is, it should have originated from a sketch
+    /// or operation typed over `S`.
+    ///
+    /// # Panics
+    ///
+    /// [`Self::entries`] calls `unerase` on every summary it reads back.
+    /// `unerase`'s invariant panic is otherwise unreachable, but passing a
+    /// shim whose summaries were erased for a different `S` makes it
+    /// reachable, and the panic fires there instead of here.
     pub(crate) fn from_shim(inner: UniquePtr<sys::CompactTupleGenericSketchShim>) -> Self {
         Self {
             inner,
