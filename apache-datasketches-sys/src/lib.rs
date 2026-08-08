@@ -39,3 +39,7 @@ pub mod array_of_doubles_sketch;
 pub mod array_of_doubles_union;
 #[cfg(feature = "tuple")]
 pub mod tuple_generic;
+#[cfg(feature = "tuple")]
+pub mod tuple_generic_input;
+#[cfg(feature = "tuple")]
+pub mod tuple_generic_union;

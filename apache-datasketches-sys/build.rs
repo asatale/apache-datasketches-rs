@@ -47,8 +47,9 @@ fn main() {
         }
     }
     if cfg!(feature = "tuple") {
-        // Note: src/array_of_doubles_input.rs is deliberately absent — it
-        // is a plain Rust module, not a cxx bridge.
+        // Note: src/array_of_doubles_input.rs and src/tuple_generic_input.rs
+        // are deliberately absent — they are plain Rust modules, not cxx
+        // bridges.
         for path in [
             "src/array_of_doubles_sketch.rs",
             "src/array_of_doubles_compact.rs",
@@ -57,6 +58,7 @@ fn main() {
             "src/array_of_doubles_a_not_b.rs",
             "src/array_of_doubles_jaccard.rs",
             "src/tuple_generic.rs",
+            "src/tuple_generic_union.rs",
         ] {
             require_exists(path);
             bridges.push(path);
@@ -146,6 +148,7 @@ fn main() {
             "cpp/tuple/dyn_summary.cc",
             "cpp/tuple/tuple_generic_sketch_shim.cc",
             "cpp/tuple/tuple_generic_compact_shim.cc",
+            "cpp/tuple/tuple_generic_union_shim.cc",
         ] {
             require_exists(path);
             build.file(path);
@@ -212,6 +215,10 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_sketch_shim.cc");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_compact_shim.h");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_compact_shim.cc");
+    println!("cargo:rerun-if-changed=src/tuple_generic_input.rs");
+    println!("cargo:rerun-if-changed=src/tuple_generic_union.rs");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_union_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_union_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on

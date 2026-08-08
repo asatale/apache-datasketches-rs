@@ -102,3 +102,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_compact_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_union_link_test"
+required-features = ["tuple"]
