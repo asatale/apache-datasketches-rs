@@ -1,6 +1,7 @@
 use apache_datasketches::tuple::generic::{
     TupleSketch, TupleSketchBuilder, TupleSummary, TupleUnion, TupleUnionBuilder,
 };
+use apache_datasketches::tuple::ResizeFactor;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Sum(i64);
@@ -73,4 +74,60 @@ fn invalid_config_is_err() {
 fn union_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<TupleUnion<Sum>>();
+}
+
+// `DynUnionPolicy::operator()` hands the stored summary to the trampoline as
+// `RustSummary&` and the incoming one as `const RustSummary&`. If those ever
+// aliased the same underlying `rust::Box` (e.g. a shallow-copying
+// `DynSummary` copy constructor), unioning a sketch into itself would create
+// a `&mut` and a `&` to one Rust value: undefined behaviour. `DynSummary`
+// deep-copies today, so this must be sound, and every key's summary must be
+// the union-combine of its value with itself (doubled, for `Sum`).
+#[test]
+fn union_self_union_deep_copies_summaries() {
+    let a = sketch(0..4, 7);
+    let mut u: TupleUnion<Sum> = TupleUnionBuilder::new().lg_k(12).build().unwrap();
+    u.update(&a);
+    u.update(&a);
+    let mut entries: Vec<(u64, Sum)> = u.get_result(true).entries().collect();
+    entries.sort_by_key(|(k, _)| *k);
+    assert_eq!(entries.len(), 4);
+    for (_, summary) in entries {
+        assert_eq!(summary, Sum(14));
+    }
+}
+
+#[test]
+fn union_empty_get_result_is_empty() {
+    let u: TupleUnion<Sum> = TupleUnionBuilder::new().lg_k(12).build().unwrap();
+    let result = u.get_result(true);
+    assert!(result.is_empty());
+    assert_eq!(result.get_num_retained(), 0);
+    assert_eq!(result.get_estimate(), 0.0);
+}
+
+#[test]
+fn union_get_result_unordered_matches_ordered() {
+    let mut u: TupleUnion<Sum> = TupleUnionBuilder::new().lg_k(12).build().unwrap();
+    u.update(&sketch(0..100, 1));
+    u.update(&sketch(50..150, 1));
+
+    let ordered = u.get_result(true);
+    let unordered = u.get_result(false);
+
+    assert_eq!(ordered.get_num_retained(), unordered.get_num_retained());
+    assert!(ordered.is_ordered());
+    assert!(!unordered.is_ordered());
+}
+
+#[test]
+fn union_resize_factor_is_honored_in_a_real_union() {
+    let mut u: TupleUnion<Sum> = TupleUnionBuilder::new()
+        .lg_k(12)
+        .resize_factor(ResizeFactor::X1)
+        .build()
+        .unwrap();
+    u.update(&sketch(0..1000, 1));
+    u.update(&sketch(500..1500, 1));
+    assert_eq!(u.get_result(true).get_estimate(), 1500.0);
 }
