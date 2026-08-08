@@ -59,6 +59,7 @@ fn main() {
             "src/array_of_doubles_jaccard.rs",
             "src/tuple_generic.rs",
             "src/tuple_generic_union.rs",
+            "src/tuple_generic_intersection.rs",
         ] {
             require_exists(path);
             bridges.push(path);
@@ -149,6 +150,7 @@ fn main() {
             "cpp/tuple/tuple_generic_sketch_shim.cc",
             "cpp/tuple/tuple_generic_compact_shim.cc",
             "cpp/tuple/tuple_generic_union_shim.cc",
+            "cpp/tuple/tuple_generic_intersection_shim.cc",
         ] {
             require_exists(path);
             build.file(path);
@@ -219,6 +221,9 @@ fn main() {
     println!("cargo:rerun-if-changed=src/tuple_generic_union.rs");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_union_shim.h");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_union_shim.cc");
+    println!("cargo:rerun-if-changed=src/tuple_generic_intersection.rs");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_intersection_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_intersection_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on

@@ -217,3 +217,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_union_smoke_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_intersection_smoke_test"
+required-features = ["tuple"]

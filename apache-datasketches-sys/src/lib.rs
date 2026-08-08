@@ -42,4 +42,6 @@ pub mod tuple_generic;
 #[cfg(feature = "tuple")]
 pub mod tuple_generic_input;
 #[cfg(feature = "tuple")]
+pub mod tuple_generic_intersection;
+#[cfg(feature = "tuple")]
 pub mod tuple_generic_union;

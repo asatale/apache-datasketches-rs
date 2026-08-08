@@ -50,6 +50,7 @@
 mod builder;
 mod compact;
 mod input;
+mod intersection;
 mod sketch;
 mod summary;
 mod union;
@@ -57,6 +58,7 @@ mod union;
 pub use builder::TupleSketchBuilder;
 pub use compact::CompactTupleSketch;
 pub use input::TupleInput;
+pub use intersection::TupleIntersection;
 pub use sketch::TupleSketch;
 pub use summary::TupleSummary;
 pub use union::{TupleUnion, TupleUnionBuilder};
