@@ -1,5 +1,7 @@
 # apache-datasketches-rs
 
+[![CI](https://github.com/asatale/apache-datasketches-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/asatale/apache-datasketches-rs/actions/workflows/ci.yml)
+
 Rust bindings for [Apache DataSketches](https://github.com/apache/datasketches-cpp),
 built via the `cxx` crate over a pinned git submodule.
 

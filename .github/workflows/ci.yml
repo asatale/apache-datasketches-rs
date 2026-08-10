@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes the in-flight run obsolete. Do not
+# cancel on main, where each run is the record for a distinct commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Deliberately NOT setting `RUSTFLAGS: -D warnings` here: RUSTFLAGS applies
+  # to dependencies too, so one warning in a future cxx release would redden
+  # CI for something this repo cannot fix. Warnings in our own code are gated
+  # by the clippy step (which covers every target) and by RUSTDOCFLAGS below.
+
+jobs:
+  # The main gate. Linux matters most: development happens on macOS, so the
+  # GCC/libstdc++ side of the C++ build is otherwise never exercised.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      # submodules: recursive is load-bearing. Without it vendor/datasketches-cpp
+      # is empty, and vendor_drift_test SKIPS rather than fails -- a green run
+      # that checked nothing.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Fail loudly if the submodule did not materialise, rather than letting
+      # the drift test skip. A check that skips is not a check that passed.
+      - name: Verify submodule checkout
+        run: test -d vendor/datasketches-cpp/common/include
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
+      - name: Docs
+        run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  # Each family has its own branch in build.rs and its own set of C++ shims,
+  # so a combination that nobody builds locally can break on its own.
+  features:
+    name: features (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - "--no-default-features --features hll"
+          - "--no-default-features --features theta"
+          - "--no-default-features --features cpc"
+          - "--no-default-features --features tuple"
+          - "" # default: all four
+          - "--all-features"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build -p apache-datasketches ${{ matrix.features }}
+
+  # An inverted assertion: disabling every family must FAIL, with the guard's
+  # message. A plain build job cannot express "this must not compile".
+  no-family-guard:
+    name: no-family build is rejected
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Building with no sketch family must fail with the guard message
+        run: |
+          if cargo build -p apache-datasketches --no-default-features 2>err.log; then
+            echo "::error::Building with no family enabled succeeded; the compile_error guard is gone."
+            exit 1
+          fi
+          if ! grep -q "no sketch family is enabled" err.log; then
+            echo "::error::Build failed, but not via the guard. Actual output:"
+            cat err.log
+            exit 1
+          fi
+          echo "Guard fired as expected."
+
+  # cargo package's own verify step builds DEFAULT features. The sys crate
+  # defaults to none, so its verify compiles no C++ at all and passes in about
+  # a second -- which is exactly what happened when 0.2.0 shipped. Extract the
+  # tarball and build it with every feature to check what users actually get.
+  #
+  # Only the sys crate: packaging apache-datasketches resolves its sys
+  # dependency from crates.io, so it cannot be packaged between a version bump
+  # and that version being published.
+  package:
+    name: packaged sys crate builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Package
+        run: cargo package -p apache-datasketches-sys --no-verify
+      - name: Build the packaged crate with all features
+        run: |
+          version=$(cargo metadata --format-version 1 --no-deps \
+            | python3 -c "import sys,json;print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='apache-datasketches-sys'))")
+          workdir=$(mktemp -d)
+          tar xzf "target/package/apache-datasketches-sys-${version}.crate" -C "$workdir"
+          cd "$workdir/apache-datasketches-sys-${version}"
+          cargo build --all-features
