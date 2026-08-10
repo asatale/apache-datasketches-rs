@@ -12,10 +12,11 @@
 //! - `cpc` (feature `cpc`) — Compressed Probabilistic Counting
 //!   cardinality estimation with a more compact serialized form (sketch +
 //!   union only; no set operations beyond union).
-//! - `tuple` (feature `tuple`) — ArrayOfDoubles Tuple sketches: cardinality
-//!   estimation where each distinct key also carries a fixed-width array of
-//!   `f64` values (summed on collision), plus the same set operations and
-//!   Jaccard similarity as `theta`.
+//! - `tuple` (feature `tuple`) — Tuple sketches, in two shapes. The
+//!   ArrayOfDoubles form carries a fixed-width array of `f64` per distinct
+//!   key (summed on collision); the generic form in `tuple::generic` carries
+//!   a summary type you define in Rust. Both support union, intersection,
+//!   a-not-b, and Jaccard similarity.
 //!
 //! (Module-level docs for each feature are only linked above when built
 //! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple` in the

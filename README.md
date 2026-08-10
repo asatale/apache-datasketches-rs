@@ -82,6 +82,7 @@ cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
 cargo run -p apache-datasketches --example tuple --features tuple
+cargo run -p apache-datasketches --example tuple_generic --features tuple
 ```
 
 ## Sketch families
@@ -95,10 +96,11 @@ opt-in features:
 - [x] `cpc` (Compressed Probabilistic Counting) — cardinality estimation
   with a more compact serialized form (sketch + union; no set operations
   beyond union).
-- [x] `tuple` (ArrayOfDoubles) — cardinality estimation where each distinct
-  key also carries a fixed-width array of `f64` values, summed on
-  collision, plus set operations: union, intersection, a-not-b, and
-  Jaccard similarity.
+- [x] `tuple` — cardinality estimation where each distinct key also carries
+  a per-key summary, either a fixed-width array of `f64` values summed on
+  collision (ArrayOfDoubles) or a summary type you define in Rust
+  (`tuple::generic`), plus set operations: union, intersection, a-not-b,
+  and Jaccard similarity.
 
 ## Vendored C++ version
 

@@ -42,6 +42,10 @@ required-features = ["cpc"]
 name = "tuple"
 required-features = ["tuple"]
 
+[[example]]
+name = "tuple_generic"
+required-features = ["tuple"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

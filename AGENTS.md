@@ -76,6 +76,19 @@ When adding a new sketch operation, expect to touch all three layers in parallel
 register the new bridge module/`.cc` file under the right feature) and the family's `mod.rs` (to
 re-export the new public type).
 
+The `tuple` feature holds a second family alongside ArrayOfDoubles: the type-erased generic sketches
+(`apache-datasketches/src/tuple/generic/`), whose C++ layer calls *back* into Rust to clone and combine
+summaries via the `extern "Rust"` opaque type `RustSummary`. That inverts two of the layering habits
+above. First, cxx allows an `extern "Rust"` opaque type to be declared in exactly one bridge module per
+crate and offers no alias for it, so every bridge fn whose signature mentions `RustSummary` — the
+sketch shim's `update_*` and the compact shim's `entry_summary` — must share the single bridge
+`apache-datasketches-sys/src/tuple_generic.rs`, rather than getting one bridge file per shim. (Union,
+intersection, a-not-b and Jaccard never name `RustSummary`, so they keep their own bridge files; the
+global name-uniqueness rule below still applies to all of them.) Second, the shim headers must *not*
+include the cxx-generated header — that is a real include cycle — so they forward-declare the
+trampolines and `#include` the generated header only from the `.cc`; forward declarations have to match
+cxx's emitted signatures exactly, `noexcept` included.
+
 ### `cxx::bridge` names must be globally unique across the sys crate
 
 Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique

@@ -229,6 +229,48 @@ See `examples/tuple.rs` (`cargo run -p apache-datasketches --example tuple
 estimation, per-entry values, union, intersection, a-not-b, Jaccard
 similarity, and serialize/deserialize round-tripping.
 
+### Generic summaries
+
+When a fixed array of `f64` is the wrong shape, implement `TupleSummary` on
+your own type and use `tuple::generic::TupleSketch<S>`:
+
+```rust
+use apache_datasketches::tuple::generic::{TupleSketch, TupleSketchBuilder, TupleSummary};
+
+#[derive(Clone)]
+struct Count(u64);
+
+impl TupleSummary for Count {
+    type Update = ();
+    fn create(_: &()) -> Self { Count(1) }
+    fn union_combine(&mut self, other: &Self) { self.0 += other.0; }
+    fn intersection_combine(&mut self, other: &Self) { self.0 += other.0; }
+}
+
+let mut sketch: TupleSketch<Count> = TupleSketchBuilder::new().build()?;
+sketch.update_u64(42, &());
+```
+
+`TupleUnion<S>`, `TupleIntersection<S>`, `TupleAnotB<S>`, and
+`tuple_jaccard_similarity` mirror their ArrayOfDoubles counterparts, and
+`CompactTupleSketch<S>::entries()` yields `(hash, S)` pairs.
+
+C++ calls back into Rust to clone and combine summaries. A panic in
+`union_combine`, `intersection_combine`, or `Clone::clone` aborts the process
+— panics cannot cross the FFI boundary — so make those total. A panic in
+`create` is an ordinary Rust panic, because it runs Rust-side before anything
+crosses the boundary. The callbacks are not confined to the obvious places:
+`tuple_jaccard_similarity` clones essentially every retained summary and runs
+both combine callbacks on scratch copies, even though summary values do not
+affect the ratio it returns. A-not-b is the one operation that invokes neither
+combine callback — its C++ template takes no policy at all — but it still clones
+each summary it copies out of `a`, and leaves `a` intact.
+Serialization of generic sketches is not supported yet; use
+`ArrayOfDoublesSketch` if you need to persist a sketch.
+
+See `examples/tuple_generic.rs` (`cargo run -p apache-datasketches --example
+tuple_generic --features tuple`) for a complete runnable demo.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
