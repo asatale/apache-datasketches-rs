@@ -28,6 +28,11 @@ cxx = "1"
 cxx-build = "1"
 
 [[test]]
+name = "vendor_drift_test"
+# Deliberately no required-features: this compares header trees on disk and
+# must run in every configuration, including the default no-feature build.
+
+[[test]]
 name = "hll_sketch_link_test"
 required-features = ["hll"]
 
