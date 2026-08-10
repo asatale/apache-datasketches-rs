@@ -48,9 +48,15 @@ cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
 cargo run -p apache-datasketches --example tuple --features tuple
+cargo run -p apache-datasketches --example tuple_generic --features tuple
 
 # Lint (missing_docs is enforced — see below)
 cargo clippy --workspace --all-features
+
+# Format a single file — `cargo fmt -- <file>` does NOT scope to that path in
+# this repo (cargo fmt reformats the whole workspace regardless), so use
+# rustfmt directly:
+rustfmt --edition 2021 <file>
 ```
 
 ## Architecture

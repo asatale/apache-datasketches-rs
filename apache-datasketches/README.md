@@ -265,7 +265,7 @@ both combine callbacks on scratch copies, even though summary values do not
 affect the ratio it returns. A-not-b is the one operation that invokes neither
 combine callback — its C++ template takes no policy at all — but it still clones
 each summary it copies out of `a`, and leaves `a` intact.
-Serialization of generic sketches is not supported yet; use
+Serialization of generic sketches is not supported; use
 `ArrayOfDoublesSketch` if you need to persist a sketch.
 
 See `examples/tuple_generic.rs` (`cargo run -p apache-datasketches --example
@@ -278,9 +278,9 @@ tuple_generic --features tuple`) for a complete runnable demo.
   Jaccard similarity).
 - [x] CPC (Compressed Probabilistic Counting) — `cpc` feature (sketch +
   union).
-- [x] Tuple (ArrayOfDoubles) — `tuple` feature (sketch with per-key `f64`
-  arrays summed on collision, union, intersection, a-not-b, Jaccard
-  similarity).
+- [x] Tuple — `tuple` feature (per-key summaries: fixed-width `f64` arrays
+  summed on collision (ArrayOfDoubles), or a summary type you define in Rust
+  (`tuple::generic`); union, intersection, a-not-b, Jaccard similarity).
 
 ## License
 

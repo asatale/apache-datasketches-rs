@@ -29,7 +29,8 @@ struct Event<'a> {
 impl TupleSummary for Activity {
     // `Update` is a plain associated type with no lifetime parameter, so an
     // impl cannot name a borrowed lifetime here: `Event<'static>` is how an
-    // update type holds a borrowed field.
+    // update type holds a borrowed field, so borrowed fields must be
+    // `'static`; use an owned `String` for data that isn't.
     type Update = Event<'static>;
 
     fn create(event: &Event<'static>) -> Self {
@@ -119,7 +120,18 @@ fn main() {
     intersection.update(&january);
     intersection.update(&february);
     match intersection.get_result(true) {
-        Ok(returning) => println!("Returning users: {:.0}", returning.get_estimate()),
+        Ok(returning) => {
+            println!("Returning users: {:.0}", returning.get_estimate());
+            // `intersection_combine`'s `min` semantics at work: a returning
+            // user's sessions/countries reflect only what showed up in BOTH
+            // months, not the union of the two.
+            if let Some((_, activity)) = returning.entries().next() {
+                println!(
+                    "  e.g. one returning user: {} session(s), countries seen in both months: {:?}",
+                    activity.sessions, activity.countries
+                );
+            }
+        }
         Err(e) => println!("No intersection result: {e}"),
     }
 
