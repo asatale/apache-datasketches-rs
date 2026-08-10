@@ -15,8 +15,10 @@ pub mod ffi {
         include!("array_of_doubles_compact_shim.h");
         include!("array_of_doubles_jaccard_shim.h");
 
-        type ArrayOfDoublesSketchShim = crate::array_of_doubles_sketch::ffi::ArrayOfDoublesSketchShim;
-        type CompactArrayOfDoublesSketchShim = crate::array_of_doubles_compact::ffi::CompactArrayOfDoublesSketchShim;
+        type ArrayOfDoublesSketchShim =
+            crate::array_of_doubles_sketch::ffi::ArrayOfDoublesSketchShim;
+        type CompactArrayOfDoublesSketchShim =
+            crate::array_of_doubles_compact::ffi::CompactArrayOfDoublesSketchShim;
 
         // Named `tuple_jaccard_*` rather than `jaccard_*` because cxx derives
         // each function's extern "C" trampoline symbol from just the C++
