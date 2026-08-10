@@ -1,6 +1,7 @@
 use apache_datasketches::tuple::generic::{
     CompactTupleSketch, TupleSketch, TupleSketchBuilder, TupleSummary,
 };
+use apache_datasketches::SketchError;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Sum(i64);
@@ -78,6 +79,87 @@ fn empty_sketch_compacts_to_empty() {
     let compact = s.compact(true);
     assert!(compact.is_empty());
     assert_eq!(compact.entries().count(), 0);
+}
+
+/// `CompactTupleSketch`'s bound methods are a SECOND copy of the repeated
+/// block `TupleSketch` carries (`generic/compact.rs:54,62` vs
+/// `generic/sketch.rs:117,125`), so they need their own coverage: a
+/// transposed delegation in one is invisible from the other.
+///
+/// ESTIMATION mode is required for the ordering to have any signal at all —
+/// `base_theta_sketch::get_lower_bound`/`get_upper_bound`
+/// (`theta/include/theta_sketch_impl.hpp:52,58`) short-circuit with
+/// `if (!is_estimation_mode()) return get_num_retained();`, so in exact mode
+/// `lower == estimate == upper` and a transposed pair still compares equal.
+/// Hence the strict inequalities and the monotonicity checks.
+#[test]
+fn compact_bounds_bracket_the_estimate_in_estimation_mode() {
+    let compact = sketch(0..100_000, 1).compact(true);
+    assert!(compact.is_estimation_mode(), "pre-condition");
+    let estimate = compact.get_estimate();
+
+    for n in 1..=3u8 {
+        let lower = compact.get_lower_bound(n).unwrap();
+        let upper = compact.get_upper_bound(n).unwrap();
+        assert!(
+            lower < estimate,
+            "num_std_dev={n}: lower bound {lower} must be strictly below the \
+             estimate {estimate}"
+        );
+        assert!(
+            estimate < upper,
+            "num_std_dev={n}: upper bound {upper} must be strictly above the \
+             estimate {estimate}"
+        );
+    }
+
+    let lowers: Vec<f64> = (1..=3)
+        .map(|n| compact.get_lower_bound(n).unwrap())
+        .collect();
+    let uppers: Vec<f64> = (1..=3)
+        .map(|n| compact.get_upper_bound(n).unwrap())
+        .collect();
+    assert!(
+        lowers[2] < lowers[1] && lowers[1] < lowers[0],
+        "lower bounds must decrease as num_std_dev grows; got {lowers:?}"
+    );
+    assert!(
+        uppers[0] < uppers[1] && uppers[1] < uppers[2],
+        "upper bounds must increase as num_std_dev grows; got {uppers:?}"
+    );
+}
+
+/// The `SketchError::InvalidConfig` `Err` path on the compact type. Same
+/// early-return caveat as above: only an estimation-mode sketch reaches
+/// `binomial_bounds::check_num_std_devs`, which is what the exact-mode `Ok`
+/// readings pin.
+#[test]
+fn compact_bounds_reject_out_of_range_num_std_dev() {
+    let exact = sketch(0..1, 1).compact(true);
+    assert!(!exact.is_estimation_mode());
+    assert_eq!(exact.get_lower_bound(0).unwrap(), 1.0);
+    assert_eq!(exact.get_upper_bound(0).unwrap(), 1.0);
+
+    let compact = sketch(0..100_000, 1).compact(true);
+    assert!(compact.is_estimation_mode(), "pre-condition");
+    for n in [0u8, 4, 255] {
+        assert!(
+            matches!(
+                compact.get_lower_bound(n),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "get_lower_bound({n}) must be an InvalidConfig error"
+        );
+        assert!(
+            matches!(
+                compact.get_upper_bound(n),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "get_upper_bound({n}) must be an InvalidConfig error"
+        );
+    }
+    assert!(compact.get_lower_bound(1).is_ok());
+    assert!(compact.get_upper_bound(3).is_ok());
 }
 
 #[test]

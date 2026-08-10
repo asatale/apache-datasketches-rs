@@ -117,12 +117,29 @@ fn intersection_combine_chains_across_three_operands() {
     assert_eq!(entries[0].1, Trace(10203));
 }
 
+// The COMPACT operand is second and carries the smaller value, matching
+// `intersection_uses_intersection_semantics_not_union` above: with 32 seeding
+// the table and 10 arriving from the compact operand, the three outcomes are
+// distinct -- Sum(10) correct, Sum(32) no combine ran, Sum(42) union
+// semantics leaked in. Equal values on both sides (as this test used to have)
+// would make "correct" and "never ran" the same reading, so a value assertion
+// alone would not have fixed it.
 #[test]
 fn intersection_accepts_both_input_types() {
     let mut i: TupleIntersection<Sum> = TupleIntersection::new();
-    i.update(&sketch(0..100, 1));
-    i.update(&sketch(50..150, 1).compact(true));
-    assert_eq!(i.get_result(true).unwrap().get_estimate(), 50.0);
+    i.update(&sketch(0..100, 32));
+    i.update(&sketch(50..150, 10).compact(true));
+    let result = i.get_result(true).unwrap();
+    assert_eq!(result.get_estimate(), 50.0);
+
+    let values: Vec<Sum> = result.entries().map(|(_, s)| s).collect();
+    assert_eq!(values.len(), 50);
+    assert!(
+        values.iter().all(|s| *s == Sum(10)),
+        "every retained summary must be min(32, 10) = 10; Sum(32) would mean \
+         no combine ran on the compact-operand path and Sum(42) that union \
+         semantics leaked in; saw {values:?}"
+    );
 }
 
 // Keys present in only one operand contribute nothing at all: upstream invokes

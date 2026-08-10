@@ -26,18 +26,36 @@ fn sketch(keys: std::ops::Range<u64>, v: i64) -> TupleSketch<Sum> {
     s
 }
 
+// The operands are asymmetric on purpose (a - b = 500, b - a = 0), so a
+// transposed overload changes an asserted estimate. They also carry DISTINCT
+// summary values so each forward result can be checked by VALUE: a-not-b
+// copies operand a's summaries through `DynSummary`'s copy constructor and
+// the clone trampoline, and every retained entry must therefore read Sum(17),
+// never b's Sum(3). Two of the four forward calls have a COMPACT operand a,
+// which is a distinct upstream iteration path.
 #[test]
 fn all_four_combinations_preserve_operand_order() {
-    let a = sketch(0..1000, 1);
-    let b = sketch(0..500, 1);
+    let a = sketch(0..1000, 17);
+    let b = sketch(0..500, 3);
     let ca = a.compact(true);
     let cb = b.compact(true);
     let calc: TupleAnotB<Sum> = TupleAnotB::new();
 
-    assert_eq!(calc.compute(&a, &b, true).get_estimate(), 500.0);
-    assert_eq!(calc.compute(&a, &cb, true).get_estimate(), 500.0);
-    assert_eq!(calc.compute(&ca, &b, true).get_estimate(), 500.0);
-    assert_eq!(calc.compute(&ca, &cb, true).get_estimate(), 500.0);
+    for (label, result) in [
+        ("sketch/sketch", calc.compute(&a, &b, true)),
+        ("sketch/compact", calc.compute(&a, &cb, true)),
+        ("compact/sketch", calc.compute(&ca, &b, true)),
+        ("compact/compact", calc.compute(&ca, &cb, true)),
+    ] {
+        assert_eq!(result.get_estimate(), 500.0, "{label}");
+        let values: Vec<Sum> = result.entries().map(|(_, s)| s).collect();
+        assert_eq!(values.len(), 500, "{label}");
+        assert!(
+            values.iter().all(|s| *s == Sum(17)),
+            "{label}: every retained summary must be a copy of operand a's \
+             Sum(17); saw {values:?}"
+        );
+    }
 
     assert_eq!(calc.compute(&b, &a, true).get_estimate(), 0.0);
     assert_eq!(calc.compute(&b, &ca, true).get_estimate(), 0.0);

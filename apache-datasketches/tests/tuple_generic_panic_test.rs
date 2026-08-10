@@ -130,21 +130,20 @@ fn panicking_clone_aborts_with_a_diagnostic() {
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // NOTE: this asserts the string `abort_on_panic("clone", ...)` actually
-    // emits TODAY (apache-datasketches-sys/src/tuple_generic.rs:91-97), not
-    // a corrected one. `TupleSummary::clone` does not name a resolvable
-    // method -- `TupleSummary` has no `clone` method of its own; cloning
-    // comes from the `Clone` supertrait -- so the emitted path is wrong.
-    // That is an open, tracked naming defect in library code
-    // (`abort_on_panic("clone", ...)`), out of scope for this test-only
-    // fix pass and left for the whole-branch review; this assertion is
-    // deliberately pinned to the current (defective) output so it does not
-    // paper over the defect.
+    // The emitted path must be one the reader can resolve. Cloning reaches
+    // the trampoline through `TupleSummary`'s `Clone` supertrait, not through
+    // a `TupleSummary::clone` method (there is none), so the message names
+    // `Clone::clone`.
+    //
+    // The surrounding words are load-bearing: `ExplodesOnClone::clone`'s own
+    // panic payload is "deliberate panic from Clone::clone", which the child
+    // also prints, so a bare `contains("Clone::clone")` would pass even if
+    // `abort_on_panic` named the operation wrongly.
     assert!(
-        stderr.contains("TupleSummary::clone"),
-        "abort message should name the panicking method (per the open \
-         naming defect, this is the unresolvable `TupleSummary::clone`, not \
-         a corrected path); stderr was:\n{stderr}"
+        stderr.contains("a Clone::clone implementation panicked"),
+        "abort message should name the panicking method as the resolvable \
+         path `Clone::clone`, not a `TupleSummary::clone` that does not \
+         exist; stderr was:\n{stderr}"
     );
 }
 

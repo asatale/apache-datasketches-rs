@@ -50,30 +50,38 @@ fn values(c: &sketch_ffi::CompactTupleGenericSketchShim) -> Vec<i64> {
 
 /// Asymmetric on purpose: a - b estimates 500, b - a estimates 0, so a
 /// transposed mixed-type overload changes an asserted value.
+///
+/// The operands also carry DISTINCT summary values (17 and 3) so each forward
+/// result is asserted by VALUE, not only by cardinality. Retained entries are
+/// copy-constructed out of `a` through `DynSummary`'s copy ctor and hence
+/// `rust_summary_clone`, so every one must read 17 and never b's 3. Two of
+/// the four forward overloads take a COMPACT operand `a`, which iterates a
+/// vector rather than a hash table upstream.
 #[test]
 fn all_four_overloads_preserve_operand_order() {
-    let a = sketch(0..1000, 1);
-    let b = sketch(0..500, 1);
+    let a = sketch(0..1000, 17);
+    let b = sketch(0..500, 3);
     let ca = a.compact(true);
     let cb = b.compact(true);
     let calc = anb_ffi::new_tuple_generic_a_not_b();
 
-    assert_eq!(
-        calc.compute_sketch_sketch(&a, &b, true).get_estimate(),
-        500.0
-    );
-    assert_eq!(
-        calc.compute_sketch_compact(&a, &cb, true).get_estimate(),
-        500.0
-    );
-    assert_eq!(
-        calc.compute_compact_sketch(&ca, &b, true).get_estimate(),
-        500.0
-    );
-    assert_eq!(
-        calc.compute_compact_compact(&ca, &cb, true).get_estimate(),
-        500.0
-    );
+    for (label, result) in [
+        ("sketch/sketch", calc.compute_sketch_sketch(&a, &b, true)),
+        ("sketch/compact", calc.compute_sketch_compact(&a, &cb, true)),
+        ("compact/sketch", calc.compute_compact_sketch(&ca, &b, true)),
+        (
+            "compact/compact",
+            calc.compute_compact_compact(&ca, &cb, true),
+        ),
+    ] {
+        assert_eq!(result.get_estimate(), 500.0, "{label}");
+        let got = values(&result);
+        assert_eq!(got.len(), 500, "{label}");
+        assert!(
+            got.iter().all(|&v| v == 17),
+            "{label}: every retained summary must be a copy of operand a's 17; saw {got:?}"
+        );
+    }
 
     // Reversed: every combination must now be empty.
     assert_eq!(calc.compute_sketch_sketch(&b, &a, true).get_estimate(), 0.0);

@@ -71,6 +71,12 @@ impl RustSummary {
 /// actionable message. Upstream's combine policy returns `void`, so there is
 /// no way to report failure to C++ and have it unwind the insert; continuing
 /// would leave the sketch logically undefined, which is worse than stopping.
+///
+/// `what` is the FULL path of the method that panicked, not a bare method
+/// name: cloning comes from `TupleSummary`'s `Clone` supertrait, so writing
+/// `TupleSummary::clone` would send a reader grepping their `TupleSummary`
+/// impl for a method that lives in `impl Clone for ..` instead. Every value
+/// passed here must be a path the user can actually resolve.
 fn abort_on_panic<F, R>(what: &str, f: F) -> R
 where
     F: FnOnce() -> R,
@@ -79,7 +85,7 @@ where
         Ok(value) => value,
         Err(_) => {
             eprintln!(
-                "apache-datasketches: a TupleSummary::{what} implementation panicked \
+                "apache-datasketches: a {what} implementation panicked \
                  while called from C++. Panics cannot cross the FFI boundary, and the \
                  sketch cannot be left in a consistent state, so the process is aborting."
             );
@@ -89,7 +95,7 @@ where
 }
 
 fn rust_summary_clone(summary: &RustSummary) -> Box<RustSummary> {
-    abort_on_panic("clone", || {
+    abort_on_panic("Clone::clone", || {
         Box::new(RustSummary {
             ops: summary.ops.clone_boxed(),
         })
@@ -97,11 +103,13 @@ fn rust_summary_clone(summary: &RustSummary) -> Box<RustSummary> {
 }
 
 fn rust_summary_union_combine(target: &mut RustSummary, other: &RustSummary) {
-    abort_on_panic("union_combine", || target.ops.union_combine(&*other.ops))
+    abort_on_panic("TupleSummary::union_combine", || {
+        target.ops.union_combine(&*other.ops)
+    })
 }
 
 fn rust_summary_intersection_combine(target: &mut RustSummary, other: &RustSummary) {
-    abort_on_panic("intersection_combine", || {
+    abort_on_panic("TupleSummary::intersection_combine", || {
         target.ops.intersection_combine(&*other.ops)
     })
 }

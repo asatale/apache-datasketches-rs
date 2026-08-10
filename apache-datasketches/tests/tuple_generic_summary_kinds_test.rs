@@ -163,16 +163,27 @@ fn union_and_intersection_use_different_trampolines() {
     u.update(&a);
     u.update(&b);
     let unioned: Vec<(u64, SumOrMin)> = u.get_result(true).entries().collect();
+    assert_eq!(unioned.len(), 1);
     assert_eq!(unioned[0].1, SumOrMin(42), "union must sum");
 
+    // Operand ORDER is load-bearing here, for the same reason spelled out at
+    // length in `intersection_in_estimation_mode` below: upstream seeds the
+    // intersection's table from the FIRST operand and calls
+    // `intersection_combine(&mut base, &incoming)` on the second. Feeding 32
+    // first and 10 second makes all three outcomes distinct --
+    //   correct min  = 10, no-op (base survives) = 32, cross-wired sum = 42
+    // -- whereas 10-then-32 would collapse "correct" onto "never ran", so a
+    // dead `intersection_combine` would pass.
     let mut i = TupleIntersection::<SumOrMin>::new();
-    i.update(&a);
     i.update(&b);
+    i.update(&a);
     let intersected: Vec<(u64, SumOrMin)> = i.get_result(true).unwrap().entries().collect();
+    assert_eq!(intersected.len(), 1);
     assert_eq!(
         intersected[0].1,
         SumOrMin(10),
-        "intersection must take the min"
+        "intersection must take the min; SumOrMin(32) would mean no combine \
+         ran and SumOrMin(42) that union semantics leaked in"
     );
 }
 

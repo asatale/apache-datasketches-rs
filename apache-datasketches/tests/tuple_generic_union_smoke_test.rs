@@ -35,14 +35,38 @@ fn union_half_overlap() {
     assert_eq!(u.get_result(true).get_estimate(), 1500.0);
 }
 
+// The two operands carry DISTINCT values so the compact operand's summaries
+// are observable, not just its keys. Hash order does not let a key be mapped
+// back from an entry, so the assertion is on the multiset of values:
+//
+//   50 x Sum(42) -- the overlap, union_combine(10, 32)
+//   50 x Sum(10) -- keys 0..50, only in the sketch operand
+//   50 x Sum(32) -- keys 100..150, only in the COMPACT operand
+//
+// The 32-group is the part that proves the compact operand's summaries
+// crossed the boundary at all. Honest limitation: on the overlap, a dead
+// combine and a cross-wire to `Sum::intersection_combine` (min) both read 10,
+// so this catches both but does not distinguish them.
 #[test]
 fn union_accepts_both_input_types() {
-    let a = sketch(0..100, 1);
-    let b = sketch(50..150, 1).compact(true);
+    let a = sketch(0..100, 10);
+    let b = sketch(50..150, 32).compact(true);
     let mut u: TupleUnion<Sum> = TupleUnionBuilder::new().build().unwrap();
     u.update(&a);
     u.update(&b);
-    assert_eq!(u.get_result(true).get_estimate(), 150.0);
+    let result = u.get_result(true);
+    assert_eq!(result.get_estimate(), 150.0);
+
+    let mut got: Vec<i64> = result.entries().map(|(_, s)| s.0).collect();
+    assert_eq!(got.len(), 150);
+    got.sort_unstable();
+    let mut expected: Vec<i64> = [vec![10i64; 50], vec![32; 50], vec![42; 50]].concat();
+    expected.sort_unstable();
+    assert_eq!(
+        got, expected,
+        "expected 50 untouched sketch-operand summaries (10), 50 untouched \
+         compact-operand summaries (32) and 50 union-combined ones (42)"
+    );
 }
 
 #[test]

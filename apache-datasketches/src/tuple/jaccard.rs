@@ -3,9 +3,11 @@ use crate::error::SketchError;
 use apache_datasketches_sys::array_of_doubles_input::ArrayOfDoublesInputRef;
 use apache_datasketches_sys::array_of_doubles_jaccard::ffi as sys;
 
-/// The result of [`array_of_doubles_jaccard_similarity`]: a confidence
-/// interval around the estimated Jaccard index of two ArrayOfDoubles
-/// sketches, in `[0.0, 1.0]`.
+/// The result of a Tuple Jaccard similarity computation — returned by both
+/// [`array_of_doubles_jaccard_similarity`] and
+/// [`tuple_jaccard_similarity`](crate::tuple::generic::tuple_jaccard_similarity):
+/// a confidence interval around the estimated Jaccard index of two sketches,
+/// in `[0.0, 1.0]`.
 ///
 /// This is a distinct type from the theta module's `JaccardBounds` with the
 /// same shape — the two sketch families are independently feature-gated and

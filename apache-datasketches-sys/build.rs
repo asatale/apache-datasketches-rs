@@ -279,6 +279,7 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
         };
         let lines: Vec<&str> = content.lines().collect();
         let mut i = 0;
+        let recorded_before = type_defs.len() + fn_defs.len();
 
         // Tracks whether the scan is currently inside the `#[cxx::bridge]`
         // module body (the mod opened right after such an attribute).
@@ -436,6 +437,30 @@ fn check_bridge_name_uniqueness(bridges: &[&str]) {
 
             i += 1;
         }
+
+        // Fail CLOSED on a file the scan learned nothing from. Every bridge
+        // file declares at least one bare opaque `type Name;` or shared
+        // `struct`/`enum`, and all but a couple also declare free functions,
+        // so a zero here never means "this bridge genuinely has no names" —
+        // it means the scan lost the bridge body. Both known fail-open modes
+        // (brace bookkeeping thrown off by a brace inside a block comment or
+        // string literal, and a bridge whose `mod` line was reformatted so
+        // entry detection missed it) present exactly this way, so this single
+        // assertion closes both without teaching the line scanner about Rust
+        // comments and literals.
+        assert!(
+            type_defs.len() + fn_defs.len() > recorded_before,
+            "apache-datasketches-sys build.rs: the bridge-name scanner recorded no type \
+             or free function from `{path}`.\n\n\
+             Every `#[cxx::bridge]` file declares at least one opaque type, shared \
+             struct/enum, or free function, so this means the scan failed to find or \
+             follow the bridge module in that file -- most likely the brace bookkeeping \
+             in check_bridge_name_uniqueness was thrown off (a brace inside a block \
+             comment or string literal), or the `#[cxx::bridge]`/`mod` shape changed. \
+             The cross-bridge name-collision check is therefore NOT covering this file, \
+             which previously caused a SIGBUS. Fix the scanner (or the file) rather than \
+             removing this assertion."
+        );
     }
 }
 

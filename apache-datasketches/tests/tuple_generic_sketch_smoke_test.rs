@@ -1,4 +1,5 @@
 use apache_datasketches::tuple::generic::{TupleSketch, TupleSketchBuilder, TupleSummary};
+use apache_datasketches::SketchError;
 use std::sync::{Mutex, OnceLock};
 
 /// Sums on union, takes the minimum on intersection. This shape alone does
@@ -166,4 +167,138 @@ fn every_update_key_type_works() {
 fn sketch_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<TupleSketch<Sum>>();
+}
+
+/// `trim()` must actually do something: drop retained entries down to the
+/// nominal `k` and lower theta to match.
+///
+/// The PRE-condition assertions are the point. `trim()` is a no-op whenever
+/// the sketch is already at or below `k` — measured, e.g. `lg_k=5` with 500
+/// keys sits at exactly 32 retained and `trim()` changes nothing there — so a
+/// test that only checked the post-state would pass against an empty `trim()`
+/// body. `lg_k=12` with 5000 distinct keys is still in exact mode (theta ==
+/// 1.0) and holds all 5000, comfortably above `k == 4096`.
+#[test]
+fn trim_drops_excess_entries_and_lowers_theta() {
+    let mut sketch: TupleSketch<Sum> = TupleSketchBuilder::new().lg_k(12).build().unwrap();
+    for i in 0..5000u64 {
+        sketch.update_u64(i, &1);
+    }
+
+    let retained_before = sketch.get_num_retained();
+    let theta_before = sketch.get_theta();
+    assert!(
+        retained_before > 4096,
+        "pre-condition: the sketch must hold more than k=4096 entries for \
+         trim() to have anything to do; it held {retained_before}"
+    );
+    assert_eq!(theta_before, 1.0, "pre-condition: still in exact mode");
+
+    sketch.trim();
+
+    assert_eq!(
+        sketch.get_num_retained(),
+        4096,
+        "trim() must drop retained entries down to k"
+    );
+    assert!(
+        sketch.get_theta() < theta_before,
+        "trim() lowers theta to drop those entries; theta went \
+         {theta_before} -> {}",
+        sketch.get_theta()
+    );
+}
+
+/// `get_lower_bound`/`get_upper_bound` are per-`num_std_dev` repeated blocks
+/// wired through three layers, and the defect that shape invites is a
+/// transposed delegation (`get_lower_bound` reaching the shim's
+/// `get_upper_bound`). Only ESTIMATION mode can catch that: in exact mode
+/// upstream returns `lower == estimate == upper`, so an ordering assertion
+/// there passes even fully transposed.
+///
+/// Hence: assert estimation mode first, then STRICT inequalities, plus the
+/// monotonicity in `num_std_dev` that a wider interval must have.
+#[test]
+fn bounds_bracket_the_estimate_in_estimation_mode() {
+    let mut sketch: TupleSketch<Sum> = TupleSketchBuilder::new().lg_k(12).build().unwrap();
+    for i in 0..100_000u64 {
+        sketch.update_u64(i, &1);
+    }
+    assert!(sketch.is_estimation_mode(), "pre-condition");
+    let estimate = sketch.get_estimate();
+
+    for n in 1..=3u8 {
+        let lower = sketch.get_lower_bound(n).unwrap();
+        let upper = sketch.get_upper_bound(n).unwrap();
+        assert!(
+            lower < estimate,
+            "num_std_dev={n}: lower bound {lower} must be strictly below the \
+             estimate {estimate}"
+        );
+        assert!(
+            estimate < upper,
+            "num_std_dev={n}: upper bound {upper} must be strictly above the \
+             estimate {estimate}"
+        );
+    }
+
+    // Wider confidence => wider interval, in both directions.
+    let lowers: Vec<f64> = (1..=3)
+        .map(|n| sketch.get_lower_bound(n).unwrap())
+        .collect();
+    let uppers: Vec<f64> = (1..=3)
+        .map(|n| sketch.get_upper_bound(n).unwrap())
+        .collect();
+    assert!(
+        lowers[2] < lowers[1] && lowers[1] < lowers[0],
+        "lower bounds must decrease as num_std_dev grows; got {lowers:?}"
+    );
+    assert!(
+        uppers[0] < uppers[1] && uppers[1] < uppers[2],
+        "upper bounds must increase as num_std_dev grows; got {uppers:?}"
+    );
+}
+
+/// The `SketchError::InvalidConfig` `Err` path of all four bound methods.
+///
+/// ESTIMATION mode is required, and that is not incidental:
+/// `base_theta_sketch::get_lower_bound`/`get_upper_bound`
+/// (`theta/include/theta_sketch_impl.hpp:52,58`) short-circuit with
+/// `if (!is_estimation_mode()) return get_num_retained();` BEFORE reaching
+/// `binomial_bounds::check_num_std_devs`, so an exact-mode sketch answers
+/// `Ok` for every `num_std_dev`, including 0. The exact-mode `Ok(0)`
+/// readings below pin that early return so the choice of fixture is not
+/// mistaken for an arbitrary one.
+#[test]
+fn bounds_reject_out_of_range_num_std_dev() {
+    let mut exact: TupleSketch<Sum> = TupleSketchBuilder::new().lg_k(12).build().unwrap();
+    exact.update_u64(1, &1);
+    assert!(!exact.is_estimation_mode());
+    assert_eq!(exact.get_lower_bound(0).unwrap(), 1.0);
+    assert_eq!(exact.get_upper_bound(0).unwrap(), 1.0);
+
+    let mut sketch: TupleSketch<Sum> = TupleSketchBuilder::new().lg_k(12).build().unwrap();
+    for i in 0..100_000u64 {
+        sketch.update_u64(i, &1);
+    }
+    assert!(sketch.is_estimation_mode(), "pre-condition");
+
+    for n in [0u8, 4, 255] {
+        assert!(
+            matches!(
+                sketch.get_lower_bound(n),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "get_lower_bound({n}) must be an InvalidConfig error"
+        );
+        assert!(
+            matches!(
+                sketch.get_upper_bound(n),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "get_upper_bound({n}) must be an InvalidConfig error"
+        );
+    }
+    assert!(sketch.get_lower_bound(1).is_ok());
+    assert!(sketch.get_upper_bound(3).is_ok());
 }
