@@ -3,13 +3,22 @@
 Rust bindings for [Apache DataSketches](https://github.com/apache/datasketches-cpp),
 built via the `cxx` crate over a pinned git submodule.
 
-`default = []` for both crates — no sketch family is compiled in unless
-you opt in explicitly via Cargo features:
+All four sketch families are enabled by default:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
+apache-datasketches = "0.2"
 ```
+
+To compile only some of them, opt out and name the ones you want:
+
+```toml
+[dependencies]
+apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+```
+
+(The `apache-datasketches-sys` crate keeps `default = []`; it is not meant to
+be depended on directly.)
 
 ## Crates
 

@@ -4,37 +4,34 @@ Safe, idiomatic Rust bindings for [Apache DataSketches](https://github.com/apach
 built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
-`default = []` — no sketch family is enabled unless you opt in explicitly.
-Add the `hll`, `theta`, `cpc`, and/or `tuple` feature to your `Cargo.toml`:
+All four sketch families — `hll`, `theta`, `cpc` and `tuple` — are enabled by
+default:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["hll"] }
+apache-datasketches = "0.2"
 ```
+
+To compile only what you need, disable default features and name the families:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", features = ["theta"] }
+apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
 ```
 
-```toml
-[dependencies]
-apache-datasketches = { version = "0.2", features = ["cpc"] }
-```
+Unused families cost nothing at runtime — the linker drops what you do not
+call — so opting out buys C++ compile time, not a smaller binary. Cold debug
+builds of the FFI layer run about 4.5s with no families and about 20s with all
+four; `theta` and `tuple` account for nearly all of the difference.
 
-```toml
-[dependencies]
-apache-datasketches = { version = "0.2", features = ["tuple"] }
-```
+Disabling default features without naming at least one family is a compile
+error rather than a crate that silently exposes nothing.
 
-```toml
-[dependencies]
-apache-datasketches = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
-```
-
-> **Breaking change in 0.2.0:** prior versions defaulted to `features = ["hll"]`.
-> As of 0.2.0, `default = []` — existing consumers upgrading from 0.1.x must
-> add `features = ["hll"]` explicitly to keep HLL support enabled.
+> **Feature defaults changed in 0.2.1:** 0.2.0 shipped `default = []`, which
+> compiled cleanly and exposed nothing. 0.2.1 enables all four families by
+> default. This only adds APIs, so upgrading cannot break existing code; if you
+> were relying on the minimal build, add `default-features = false` and list the
+> families you want.
 
 ## Usage
 

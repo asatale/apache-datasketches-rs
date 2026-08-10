@@ -2,8 +2,17 @@
 //! built via the `cxx` crate over the raw
 //! [`apache-datasketches-sys`](https://docs.rs/apache-datasketches-sys) bridge.
 //!
-//! `default = []` — no sketch family is compiled in unless you opt into its
-//! Cargo feature explicitly:
+//! All four sketch families are enabled by default. To compile only the ones
+//! you need, disable default features and name them:
+//!
+//! ```toml
+//! apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+//! ```
+//!
+//! Unused families cost nothing at runtime — the linker drops what you do not
+//! call — so opting out buys C++ compile time, not a smaller binary.
+//!
+//! The families:
 //!
 //! - `hll` (feature `hll`) — HyperLogLog cardinality estimation (sketch +
 //!   union).
@@ -20,12 +29,21 @@
 //!
 //! (Module-level docs for each feature are only linked above when built
 //! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple` in the
-//! sidebar, or build with `--all-features` to see all four at once.)
+//! sidebar.)
 //!
 //! See each module's documentation for usage examples, or the crate's
 //! `examples/` directory for complete runnable demos.
 
 #![warn(missing_docs)]
+
+// Disabling default features without naming a family leaves nothing behind
+// but `SketchError`. That used to compile silently; say so instead.
+#[cfg(not(any(feature = "hll", feature = "theta", feature = "cpc", feature = "tuple")))]
+compile_error!(
+    "apache-datasketches: no sketch family is enabled, so this crate exposes nothing. \
+     Enable at least one of the `hll`, `theta`, `cpc`, or `tuple` features, or drop \
+     `default-features = false`."
+);
 
 pub mod error;
 

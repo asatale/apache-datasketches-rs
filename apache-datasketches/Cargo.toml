@@ -1,6 +1,6 @@
 [package]
 name = "apache-datasketches"
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,15 +10,22 @@ keywords = ["datasketches", "hyperloglog", "sketch", "cardinality"]
 categories = ["data-structures", "algorithms"]
 
 [features]
-default = []
+# Every sketch family is on by default: an empty default set produced a crate
+# that compiled cleanly and exposed nothing, with no diagnostic. The cost is
+# C++ compile time (~15s cold, debug, once) -- unused families cost nothing at
+# runtime, since the linker drops what you do not call. Opt out with
+# `default-features = false` plus the families you want. Note that Cargo
+# unifies features across a dependency graph, so opting out only holds if no
+# other crate in the graph pulls this one with default features.
+default = ["hll", "theta", "cpc", "tuple"]
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 cpc = ["apache-datasketches-sys/cpc"]
 tuple = ["apache-datasketches-sys/tuple"]
 
 [package.metadata.docs.rs]
-# default = [] means docs.rs's default build would show an empty crate;
-# build with every sketch family enabled instead.
+# Explicit rather than implicit: docs.rs should keep building every family
+# even if the default set changes again.
 features = ["hll", "theta", "cpc", "tuple"]
 
 [dependencies]
