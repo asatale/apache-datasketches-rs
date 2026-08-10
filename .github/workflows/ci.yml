@@ -20,6 +20,19 @@ env:
   # by the clippy step (which covers every target) and by RUSTDOCFLAGS below.
 
 jobs:
+  # Cheap and fast, so it runs on its own rather than behind the C++ build.
+  # Enforceable only as of the commit that rustfmt'd the four bridge files
+  # that had been dirty since they were written.
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
   # The main gate. Linux matters most: development happens on macOS, so the
   # GCC/libstdc++ side of the C++ build is otherwise never exercised.
   test:
