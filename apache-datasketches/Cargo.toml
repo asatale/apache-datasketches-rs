@@ -229,3 +229,23 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_jaccard_smoke_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_conformance_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_ownership_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_summary_kinds_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_panic_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_concurrency_test"
+required-features = ["tuple"]
