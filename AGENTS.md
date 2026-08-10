@@ -143,3 +143,23 @@ methods, modules) needs a `///`/`//!` doc comment. Keep this clean when adding p
 Feature work is planned under `docs/superpowers/`: `specs/` holds design docs
 (`YYYY-MM-DD-<feature>-design.md`), `plans/` holds implementation plans (`YYYY-MM-DD-<feature>.md`).
 Check these before starting on a new sketch family for prior design decisions and rationale.
+
+### CI and branch protection
+
+`.github/workflows/ci.yml` runs on every push and pull request: rustfmt, then
+build/test/clippy/docs on Linux and macOS, the per-family feature matrix, an
+inverted check that a build with no family enabled is rejected, and a check
+that the packaged sys crate builds with all features. The `CI success` job
+aggregates the rest and is the only status check branch protection requires —
+matrix leg names embed their parameters, so requiring them directly would need
+protection edited whenever the matrix changes.
+
+`main` is protected: a pull request is required to merge (zero approvals, so a
+solo maintainer is not blocked), `CI success` must pass, the branch must be up
+to date, and force pushes and deletions are refused. Admin enforcement is off,
+so a repository admin can still push directly when needed — prefer a PR.
+
+Note the workflow deliberately does not set `RUSTFLAGS: -D warnings` globally:
+that applies to dependencies too, so one warning in a future release of `cxx`
+would fail CI for something this repo cannot fix. Warnings in our own code are
+caught by the clippy step across every target, and by `RUSTDOCFLAGS` for docs.
