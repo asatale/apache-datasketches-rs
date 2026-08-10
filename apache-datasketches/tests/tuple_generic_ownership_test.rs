@@ -8,6 +8,14 @@
 //! The counters are process-global, so these tests must not run concurrently
 //! with each other -- they are serialised through a mutex rather than split
 //! across test binaries.
+//!
+//! Two of the counters double as path discriminators, not just balance
+//! checks: `CREATED` is the positive control that proves a body actually
+//! created summaries at all (a balance of zero is otherwise ambiguous between
+//! "everything was dropped" and "nothing was ever created"), and `CLONES` is
+//! what `self_jaccard_short_circuits_before_cloning_any_summary` uses to tell
+//! the pointer-identity early return apart from the ordinary scratch-copy
+//! path, since both produce identical `{1,1,1}` bounds.
 
 use apache_datasketches::tuple::generic::{
     tuple_jaccard_similarity, TupleAnotB, TupleIntersection, TupleSketch, TupleSketchBuilder,
@@ -21,6 +29,11 @@ static LIVE: AtomicI64 = AtomicI64::new(0);
 /// Counts only `Clone::clone`, which is what the C++ side reaches through the
 /// `rust_summary_clone` trampoline. `create` does not bump it.
 static CLONES: AtomicI64 = AtomicI64::new(0);
+/// Bumped by every `Counted::new` call (both direct `create`s and the ones
+/// `Clone::clone` makes). The positive control for `assert_balanced`: a
+/// balance of zero is consistent both with "everything was dropped" and with
+/// "nothing was ever created", and only this counter tells the two apart.
+static CREATED: AtomicI64 = AtomicI64::new(0);
 
 fn lock() -> MutexGuard<'static, ()> {
     static M: OnceLock<Mutex<()>> = OnceLock::new();
@@ -38,6 +51,7 @@ struct Counted(i64);
 impl Counted {
     fn new(v: i64) -> Self {
         LIVE.fetch_add(1, Ordering::SeqCst);
+        CREATED.fetch_add(1, Ordering::SeqCst);
         Counted(v)
     }
 }
@@ -77,14 +91,28 @@ fn sketch(keys: std::ops::Range<u64>) -> TupleSketch<Counted> {
 }
 
 /// Runs `body`, then asserts every summary it created has been dropped.
+///
+/// Also asserts `CREATED > 0` as a positive control: without it, a body that
+/// creates zero summaries (because `update_u64` silently no-ops, the builder
+/// drops every update, or the clone trampoline is never reached at all) would
+/// still pass the balance assertion below with `LIVE == 0`, since "everything
+/// was dropped" and "nothing was ever created" are indistinguishable from
+/// `LIVE` alone.
 fn assert_balanced(body: impl FnOnce()) {
     let _guard = lock();
     LIVE.store(0, Ordering::SeqCst);
+    CREATED.store(0, Ordering::SeqCst);
     body();
+    let live = LIVE.load(Ordering::SeqCst);
     assert_eq!(
-        LIVE.load(Ordering::SeqCst),
-        0,
-        "summaries created but never dropped (negative means double-drop)"
+        live, 0,
+        "summaries created but never dropped (negative means double-drop): {live}"
+    );
+    let created = CREATED.load(Ordering::SeqCst);
+    assert!(
+        created > 0,
+        "no summaries were ever created -- the balance assertion above is \
+         vacuous without this control; created = {created}"
     );
 }
 

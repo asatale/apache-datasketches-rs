@@ -124,15 +124,20 @@ fn heap_owning_summary_survives_round_trip() {
     s.update_u64(1, "alpha");
     s.update_u64(1, "beta");
     s.update_u64(2, "gamma");
-    let mut entries: Vec<(u64, Tags)> = s.compact(true).entries().collect();
-    entries.sort_by_key(|(_, t)| t.0.len());
+    let entries: Vec<(u64, Tags)> = s.compact(true).entries().collect();
     assert_eq!(entries.len(), 2);
-    assert!(entries
-        .iter()
-        .any(|(_, t)| t.0 == vec!["alpha".to_string(), "beta".to_string()]));
-    assert!(entries
-        .iter()
-        .any(|(_, t)| t.0 == vec!["gamma".to_string()]));
+    assert!(
+        entries
+            .iter()
+            .any(|(_, t)| t.0 == vec!["alpha".to_string(), "beta".to_string()]),
+        "expected an entry with [\"alpha\", \"beta\"]; got {entries:?}"
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|(_, t)| t.0 == vec!["gamma".to_string()]),
+        "expected an entry with [\"gamma\"]; got {entries:?}"
+    );
 }
 
 #[test]
@@ -141,6 +146,11 @@ fn unsized_update_type_works() {
     s.update_u64(1, "ab");
     s.update_u64(1, "xy");
     let entries: Vec<(u64, LenHistogram)> = s.compact(true).entries().collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "expected exactly one retained entry (both updates hit the same key); got {entries:?}"
+    );
     assert_eq!(entries[0].1, LenHistogram([0, 0, 2, 0]));
 }
 
@@ -173,7 +183,26 @@ fn union_in_estimation_mode() {
     u.update(&sum_or_min(15_000..45_000, 1));
     let result = u.get_result(true);
     assert!(result.is_estimation_mode());
-    assert!((result.get_estimate() - 45_000.0).abs() < 45_000.0 * 0.03);
+    let estimate = result.get_estimate();
+    assert!(
+        (estimate - 45_000.0).abs() < 45_000.0 * 0.03,
+        "union estimate out of tolerance: {estimate}"
+    );
+
+    // Summary VALUES, not just cardinality: overlapping keys must carry the
+    // combined SumOrMin(2), non-overlapping keys the untouched SumOrMin(1).
+    // A cardinality-only assertion would pass even if union_combine never
+    // fired, since the 15_000-key overlap changes no key.
+    let values: Vec<i64> = result.entries().map(|(_, s)| s.0).collect();
+    assert!(
+        values.iter().all(|v| *v == 1 || *v == 2),
+        "union must only ever produce 1 (no overlap) or 2 (combined); saw {values:?}"
+    );
+    assert!(
+        values.contains(&2),
+        "no overlapping key was retained with a combined value of 2 -- \
+         union_combine may never have fired; values were {values:?}"
+    );
 }
 
 #[test]
@@ -183,7 +212,24 @@ fn intersection_in_estimation_mode() {
     i.update(&sum_or_min(15_000..45_000, 1));
     let result = i.get_result(true).unwrap();
     assert!(result.is_estimation_mode());
-    assert!((result.get_estimate() - 15_000.0).abs() < 15_000.0 * 0.05);
+    let estimate = result.get_estimate();
+    assert!(
+        (estimate - 15_000.0).abs() < 15_000.0 * 0.05,
+        "intersection estimate out of tolerance: {estimate}"
+    );
+
+    // Both operands use value 1, so min(1, 1) = 1 but sum(1, 1) = 2: a
+    // trampoline cross-wired to union_combine (or made a no-op that keeps
+    // the create()d value of 1 -- so this specifically needs the sum case)
+    // is directly visible in the retained values. Estimation-mode
+    // intersection values are otherwise unchecked anywhere in this suite.
+    let values: Vec<i64> = result.entries().map(|(_, s)| s.0).collect();
+    assert!(!values.is_empty(), "intersection retained no entries");
+    assert!(
+        values.iter().all(|v| *v == 1),
+        "intersection must take the min (1), not the sum (2); saw {values:?} -- \
+         a cross-wired trampoline would produce 2 here"
+    );
 }
 
 #[test]
@@ -195,16 +241,37 @@ fn a_not_b_in_estimation_mode() {
         true,
     );
     assert!(result.is_estimation_mode());
-    assert!((result.get_estimate() - 15_000.0).abs() < 15_000.0 * 0.05);
+    let estimate = result.get_estimate();
+    assert!(
+        (estimate - 15_000.0).abs() < 15_000.0 * 0.05,
+        "a-not-b estimate out of tolerance: {estimate}"
+    );
+
+    // a-not-b invokes no summary policy at all (per shared context): it
+    // copies operand a's summaries unchanged. Asserting the retained values
+    // still closes the "summary reachable but unchecked" gap the review
+    // flagged, even though there is no combine callback to catch here.
+    let values: Vec<i64> = result.entries().map(|(_, s)| s.0).collect();
+    assert!(!values.is_empty(), "a-not-b retained no entries");
+    assert!(
+        values.iter().all(|v| *v == 1),
+        "a-not-b copies operand a's summaries unchanged; saw {values:?}"
+    );
 }
 
 #[test]
 fn jaccard_in_estimation_mode() {
     let bounds =
         tuple_jaccard_similarity(&sum_or_min(0..30_000, 1), &sum_or_min(15_000..45_000, 1));
-    assert!((bounds.estimate - 1.0 / 3.0).abs() < 0.05);
+    assert!(
+        (bounds.estimate - 1.0 / 3.0).abs() < 0.05,
+        "jaccard estimate out of tolerance: {bounds:?}"
+    );
     // Non-degenerate interval: this holds only in estimation mode.
-    assert!(bounds.lower_bound < bounds.upper_bound);
+    assert!(
+        bounds.lower_bound < bounds.upper_bound,
+        "expected a non-degenerate interval in estimation mode: {bounds:?}"
+    );
 }
 
 /// Both of jaccard's scratch objects deep-copy each summary, so a
@@ -221,11 +288,17 @@ fn jaccard_leaves_both_operands_intact() {
 
     let ea: Vec<(u64, Tags)> = a.compact(true).entries().collect();
     assert_eq!(ea.len(), 500);
-    assert!(ea.iter().all(|(_, t)| t.0 == vec!["alpha".to_string()]));
+    assert!(
+        ea.iter().all(|(_, t)| t.0 == vec!["alpha".to_string()]),
+        "operand a's summaries were not left intact: {ea:?}"
+    );
 
     let eb: Vec<(u64, Tags)> = b.compact(true).entries().collect();
     assert_eq!(eb.len(), 500);
-    assert!(eb.iter().all(|(_, t)| t.0 == vec!["beta".to_string()]));
+    assert!(
+        eb.iter().all(|(_, t)| t.0 == vec!["beta".to_string()]),
+        "operand b's summaries were not left intact: {eb:?}"
+    );
 }
 
 /// Upstream's `sketch_a.is_empty() && sketch_b.is_empty()` early exit.
