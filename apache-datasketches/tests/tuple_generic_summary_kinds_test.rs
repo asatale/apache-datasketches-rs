@@ -208,7 +208,21 @@ fn union_in_estimation_mode() {
 #[test]
 fn intersection_in_estimation_mode() {
     let mut i = TupleIntersection::<SumOrMin>::new();
-    i.update(&sum_or_min(0..30_000, 1));
+    // Distinct operand values, and in this specific order, are required for
+    // the retained values to distinguish all three possible outcomes.
+    // `theta_intersection_base::update` (theta_intersection_base_impl.hpp:49-59,
+    // 61-72) seeds its running table from the FIRST `update()` call and, on
+    // the second, invokes `policy_(base_entry, incoming_entry)` only on a
+    // match -- i.e. `intersection_combine(&mut base, &incoming)`. So the base
+    // is `a` (value 5, updated first) and the incoming operand is `b` (value
+    // 1, updated second):
+    //   - correct combine: min(5, 1)  = 1
+    //   - cross-wired to union:  sum(5, 1)  = 6
+    //   - no-op (base survives untouched): 5
+    // All three are distinct, so unlike using the same value on both sides
+    // (where a no-op is indistinguishable from a correct min), every outcome
+    // is directly visible in the retained values.
+    i.update(&sum_or_min(0..30_000, 5));
     i.update(&sum_or_min(15_000..45_000, 1));
     let result = i.get_result(true).unwrap();
     assert!(result.is_estimation_mode());
@@ -218,17 +232,12 @@ fn intersection_in_estimation_mode() {
         "intersection estimate out of tolerance: {estimate}"
     );
 
-    // Both operands use value 1, so min(1, 1) = 1 but sum(1, 1) = 2: a
-    // trampoline cross-wired to union_combine (or made a no-op that keeps
-    // the create()d value of 1 -- so this specifically needs the sum case)
-    // is directly visible in the retained values. Estimation-mode
-    // intersection values are otherwise unchecked anywhere in this suite.
     let values: Vec<i64> = result.entries().map(|(_, s)| s.0).collect();
     assert!(!values.is_empty(), "intersection retained no entries");
     assert!(
         values.iter().all(|v| *v == 1),
-        "intersection must take the min (1), not the sum (2); saw {values:?} -- \
-         a cross-wired trampoline would produce 2 here"
+        "intersection must take the min (1), not the sum (6) or a no-op \
+         survivor (5); saw {values:?}"
     );
 }
 

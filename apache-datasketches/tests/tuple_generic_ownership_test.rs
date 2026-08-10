@@ -9,13 +9,28 @@
 //! with each other -- they are serialised through a mutex rather than split
 //! across test binaries.
 //!
-//! Two of the counters double as path discriminators, not just balance
-//! checks: `CREATED` is the positive control that proves a body actually
-//! created summaries at all (a balance of zero is otherwise ambiguous between
-//! "everything was dropped" and "nothing was ever created"), and `CLONES` is
-//! what `self_jaccard_short_circuits_before_cloning_any_summary` uses to tell
-//! the pointer-identity early return apart from the ordinary scratch-copy
-//! path, since both produce identical `{1,1,1}` bounds.
+//! `CLONES` does double duty, not just balance-checking: it is both the
+//! positive control that proves a body actually drove C++ to call back into
+//! Rust at all (see `assert_balanced`), and what
+//! `self_jaccard_short_circuits_before_cloning_any_summary` uses to tell the
+//! pointer-identity early return apart from the ordinary scratch-copy path,
+//! since both produce identical `{1,1,1}` bounds.
+//!
+//! The positive control is deliberately built on `CLONES`, not on a counter
+//! bumped in `Counted::create`. Every `S::create` in this crate's
+//! `TupleSketch::update_*` runs entirely Rust-side, before anything crosses
+//! the FFI boundary (`generic/sketch.rs`'s `update_u64` and friends call
+//! `S::create` and only then call into C++); a `create`-side counter would
+//! stay positive even if the sketch update, the builder, or the clone
+//! trampoline never reached C++ at all, because the temporary would still
+//! have been created and dropped on the Rust side. `CLONES` cannot be bumped
+//! that way -- it is bumped only inside `Clone::clone`, and the only path
+//! C++ has to reach that method is the `rust_summary_clone` trampoline. Every
+//! update in this file's tests crosses that trampoline at least once: a
+//! brand-new key is disengaged going in, so `DynUpdatePolicy::update`
+//! (`dyn_summary.h`) takes the `assign_clone_of` arm, which clones. So
+//! `CLONES > 0` after a body runs is proof C++ actually called back into
+//! Rust -- not merely that `S::create` ran.
 
 use apache_datasketches::tuple::generic::{
     tuple_jaccard_similarity, TupleAnotB, TupleIntersection, TupleSketch, TupleSketchBuilder,
@@ -27,13 +42,10 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 
 static LIVE: AtomicI64 = AtomicI64::new(0);
 /// Counts only `Clone::clone`, which is what the C++ side reaches through the
-/// `rust_summary_clone` trampoline. `create` does not bump it.
+/// `rust_summary_clone` trampoline. `create` does not bump it. This is also
+/// the positive control for `assert_balanced` -- see the file header for why
+/// a `create`-side counter would not do.
 static CLONES: AtomicI64 = AtomicI64::new(0);
-/// Bumped by every `Counted::new` call (both direct `create`s and the ones
-/// `Clone::clone` makes). The positive control for `assert_balanced`: a
-/// balance of zero is consistent both with "everything was dropped" and with
-/// "nothing was ever created", and only this counter tells the two apart.
-static CREATED: AtomicI64 = AtomicI64::new(0);
 
 fn lock() -> MutexGuard<'static, ()> {
     static M: OnceLock<Mutex<()>> = OnceLock::new();
@@ -51,7 +63,6 @@ struct Counted(i64);
 impl Counted {
     fn new(v: i64) -> Self {
         LIVE.fetch_add(1, Ordering::SeqCst);
-        CREATED.fetch_add(1, Ordering::SeqCst);
         Counted(v)
     }
 }
@@ -92,27 +103,43 @@ fn sketch(keys: std::ops::Range<u64>) -> TupleSketch<Counted> {
 
 /// Runs `body`, then asserts every summary it created has been dropped.
 ///
-/// Also asserts `CREATED > 0` as a positive control: without it, a body that
-/// creates zero summaries (because `update_u64` silently no-ops, the builder
-/// drops every update, or the clone trampoline is never reached at all) would
-/// still pass the balance assertion below with `LIVE == 0`, since "everything
-/// was dropped" and "nothing was ever created" are indistinguishable from
-/// `LIVE` alone.
+/// Also asserts `CLONES > 0` as a positive control: without it, a body whose
+/// `update_u64` silently no-ops, whose builder drops every update, or whose
+/// path into C++ never reaches the clone trampoline at all would still pass
+/// the balance assertion below with `LIVE == 0`, since "everything was
+/// dropped" and "nothing ever crossed into C++" are indistinguishable from
+/// `LIVE` alone. `CLONES` closes that gap because it can only be bumped from
+/// inside `Clone::clone`, which C++ reaches solely through
+/// `rust_summary_clone` -- so `CLONES > 0` is proof C++ called back into
+/// Rust, not merely that a Rust-side `S::create` ran. See the file header for
+/// why a `create`-side counter would not have this property.
+///
+/// `self_jaccard_short_circuits_before_cloning_any_summary` resets and reads
+/// `CLONES` itself mid-body to compare the pointer-identity early return
+/// against the ordinary path; that is compatible with this control because
+/// the check here only looks at `CLONES`'s value once `body` has fully
+/// returned. That test's last act that touches `CLONES` is the "two separate
+/// sketches" `tuple_jaccard_similarity` call, which clones every retained
+/// summary; the assertions and drops that follow it inside the body do not
+/// touch `CLONES`, so it is left positive regardless of the test's internal
+/// resets.
 fn assert_balanced(body: impl FnOnce()) {
     let _guard = lock();
     LIVE.store(0, Ordering::SeqCst);
-    CREATED.store(0, Ordering::SeqCst);
+    CLONES.store(0, Ordering::SeqCst);
     body();
     let live = LIVE.load(Ordering::SeqCst);
     assert_eq!(
         live, 0,
         "summaries created but never dropped (negative means double-drop): {live}"
     );
-    let created = CREATED.load(Ordering::SeqCst);
+    let clones = CLONES.load(Ordering::SeqCst);
     assert!(
-        created > 0,
-        "no summaries were ever created -- the balance assertion above is \
-         vacuous without this control; created = {created}"
+        clones > 0,
+        "no summary was ever cloned across the FFI boundary -- the balance \
+         assertion above is vacuous without this control, since it cannot \
+         tell \"nothing ever reached C++\" apart from \"everything was \
+         dropped\"; clones = {clones}"
     );
 }
 

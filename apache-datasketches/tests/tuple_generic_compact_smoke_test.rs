@@ -123,12 +123,16 @@ impl<T> ProbeViaFallback for SyncProbe<T> {
 #[test]
 fn compact_is_not_sync() {
     let probe = SyncProbe::<CompactTupleSketch<Sum>>(std::marker::PhantomData);
-    // The double borrow is defensive, not load-bearing: method resolution on
-    // `&SyncProbe<T>` already reaches `ProbeViaSync` at its first deref step,
-    // so a single borrow would discriminate identically. The real guard
-    // against this probe degenerating into an always-`false` answer is the
-    // positive control below (the `u64` case), which asserts a known-`Sync`
-    // type probes as `Sync`.
+    // The double borrow IS load-bearing: with receiver `&SyncProbe<T>`, the
+    // candidate-receiver list starts with `&SyncProbe<T>` itself, which
+    // already matches `ProbeViaFallback::is_sync(&self)` (`Self =
+    // SyncProbe<T>`), so a single borrow resolves there immediately and the
+    // probe would degenerate into an always-`false` constant, never reaching
+    // `ProbeViaSync`. The double borrow's candidate list reaches
+    // `&&SyncProbe<T>` first, which matches `ProbeViaSync::is_sync(&self)`
+    // (`Self = &SyncProbe<T>`) whenever `T: Sync` holds. The positive control
+    // below (the `u64` case) is what proves this empirically: it asserts a
+    // known-`Sync` type probes as `Sync`.
     #[allow(clippy::needless_borrow)]
     let is_sync = (&&probe).is_sync();
     assert!(
