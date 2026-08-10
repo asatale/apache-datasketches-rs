@@ -114,3 +114,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_a_not_b_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_jaccard_link_test"
+required-features = ["tuple"]
