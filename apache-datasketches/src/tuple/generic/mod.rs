@@ -47,6 +47,7 @@
 //! # }
 //! ```
 
+mod a_not_b;
 mod builder;
 mod compact;
 mod input;
@@ -55,6 +56,7 @@ mod sketch;
 mod summary;
 mod union;
 
+pub use a_not_b::TupleAnotB;
 pub use builder::TupleSketchBuilder;
 pub use compact::CompactTupleSketch;
 pub use input::TupleInput;

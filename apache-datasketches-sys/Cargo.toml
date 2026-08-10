@@ -110,3 +110,7 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_intersection_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "tuple_generic_a_not_b_link_test"
+required-features = ["tuple"]

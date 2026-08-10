@@ -60,6 +60,7 @@ fn main() {
             "src/tuple_generic.rs",
             "src/tuple_generic_union.rs",
             "src/tuple_generic_intersection.rs",
+            "src/tuple_generic_a_not_b.rs",
         ] {
             require_exists(path);
             bridges.push(path);
@@ -151,6 +152,7 @@ fn main() {
             "cpp/tuple/tuple_generic_compact_shim.cc",
             "cpp/tuple/tuple_generic_union_shim.cc",
             "cpp/tuple/tuple_generic_intersection_shim.cc",
+            "cpp/tuple/tuple_generic_a_not_b_shim.cc",
         ] {
             require_exists(path);
             build.file(path);
@@ -224,6 +226,9 @@ fn main() {
     println!("cargo:rerun-if-changed=src/tuple_generic_intersection.rs");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_intersection_shim.h");
     println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_intersection_shim.cc");
+    println!("cargo:rerun-if-changed=src/tuple_generic_a_not_b.rs");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_a_not_b_shim.h");
+    println!("cargo:rerun-if-changed=cpp/tuple/tuple_generic_a_not_b_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on
