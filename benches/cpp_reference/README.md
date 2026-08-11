@@ -35,11 +35,39 @@ Run the Rust side with the same item count to compare:
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 ```
 
+## What is here
+
+| this directory | its Rust counterpart |
+|---|---|
+| `hll_update.cc` | `examples/bench_hll_update.rs` |
+| `theta_update.cc` | `examples/bench_theta_update.rs` |
+| `cpc_update.cc` | `examples/bench_cpc_update.rs` |
+| `array_of_doubles_update.cc` | `examples/bench_tuple_update.rs` |
+
+`examples/bench_tuple_generic_update.rs` deliberately has no counterpart: the
+generic Tuple sketch calls back into Rust per summary, which has no C++
+equivalent to compare against. Quote its cost against the concrete
+ArrayOfDoubles path instead.
+
+`run.sh` builds and runs all of them, passing every family's include directory
+to every program — that costs nothing and means adding a benchmark needs no
+change to the include list.
+
 ## Keeping them in sync
 
-`array_of_doubles_update.cc` mirrors `bench_tuple_update.rs`: same `lg_k`, same
-`num_values`, same scenarios (`distinct` and `hot`), same hot-key space. If you
-change the parameters on one side, change them on the other or the ratio
+Each `.cc` mirrors its Rust counterpart exactly: same `lg_k`, same target type
+or `num_values`, same scenarios (`distinct` and `hot`), same hot-key space. If
+you change the parameters on one side, change them on the other or the ratio
 becomes meaningless. Both print the sketch estimate, which is the cheap check
-that the two harnesses really are doing the same work — the numbers should
-match exactly, since both feed identical keys to identical hashing.
+that the two harnesses really are doing the same work — the numbers should match
+exactly, since both feed identical keys to identical hashing.
+
+## Reading the numbers
+
+Prefer the **absolute** difference (Rust minus C++, in ns/op) to the ratio. The
+binding costs a roughly constant 1.7–2.4 ns per update call; the ratio varies
+from 1.3x to 2.2x purely because the families' own updates differ in cost, which
+tells you about the algorithm rather than about the binding.
+
+Expect 10–20% run-to-run variance on a normal laptop. Take a median of at least
+three passes before recording anything.

@@ -18,6 +18,36 @@ fact — this file was introduced during 0.2.1.
 0.2.1.
 
 ### Added
+- **Benchmark harnesses and native C++ counterparts for HLL, Theta and CPC**, so
+  every family now has both. This replaces the one figure in this file that no
+  committed code could reproduce: 0.2.2 quoted "1.5–1.9x" for these three,
+  taken from a report rather than measured. Measured (10M items, `lg_k = 12`,
+  `Hll8`, macOS release, median of three passes):
+
+  | family | scenario | Rust | C++ | ratio | overhead |
+  |---|---|---|---|---|---|
+  | HLL | distinct | 5.27 | 3.51 | 1.50x | +1.76 ns |
+  | HLL | repeated | 4.83 | 3.01 | 1.60x | +1.82 ns |
+  | Theta | distinct | 6.01 | 3.60 | 1.67x | +2.41 ns |
+  | Theta | repeated | 6.97 | 4.76 | 1.46x | +2.21 ns |
+  | CPC | distinct | 6.82 | 5.17 | 1.32x | +1.65 ns |
+  | CPC | repeated | 6.82 | 5.14 | 1.33x | +1.68 ns |
+
+  So the reported range was roughly right for HLL and Theta, and pessimistic for
+  CPC, which comes in at 1.3x. Nothing reaches 1.9x.
+
+  The more useful reading is the last column. **The binding costs a roughly
+  constant 1.7–2.4 ns per update call across all four families**; the ratio
+  varies only because the families' own updates differ in cost, so it flatters
+  CPC (slowest update, 5.1 ns) and punishes HLL (fastest, 3.0 ns) while saying
+  nothing about the binding itself. `AGENTS.md` now asks for the absolute figure
+  first for that reason, and for a median of three runs — consecutive passes
+  varied by 10–20%.
+
+  No per-call allocation was found in these three families' shims: with no
+  per-key summary to carry, their numeric `update_*` are direct pass-throughs.
+  The remaining overhead is the FFI crossing itself, which is not removable
+  without inlining across the language boundary.
 - A `benchmark harnesses run` CI job. The Rust benches are examples, so
   `cargo test`/`clippy --all-targets` compiled them but never ran them, and the
   native C++ reference is not a Cargo target at all — nothing in CI so much as
@@ -144,8 +174,11 @@ that, Cargo could resolve the older sys crate and silently drop the fixes.
   `lg_k = 12`, `num_values = 3` (macOS, release): 26.3 → 8.0 ns/op for distinct
   keys and 25.8 → 9.9 ns/op for repeated keys. Against native C++ compiled from
   the same vendored headers, that closes the gap from 7.7x to 2.3x (distinct)
-  and 3.9x to 1.5x (repeated) — in line with the 1.5–1.9x the other families
-  already showed. Two independent causes, listed by size of contribution:
+  and 3.9x to 1.5x (repeated) — comparable to the other families. (This
+  originally cited "the 1.5–1.9x the other families already showed", a figure
+  taken from a report rather than measured here; the three families have since
+  been benchmarked, and the measured range is 1.3–1.7x. See Unreleased.) Two
+  independent causes, listed by size of contribution:
 
   - The shim copied the caller's slice into a fresh `std::vector<double>` on
     every update, so every call heap-allocated. Upstream screens the key first

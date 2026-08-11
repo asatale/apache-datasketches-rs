@@ -56,7 +56,12 @@ cargo run -p apache-datasketches --example tuple_generic --features tuple
 # Throughput harness for the ArrayOfDoubles update path — the one hot loop
 # where shim overhead is measurable. --release is not optional: a debug build
 # measures nothing useful. Optional trailing arg is the item count (default 10M).
+cargo run --release -p apache-datasketches --example bench_hll_update --features hll
+cargo run --release -p apache-datasketches --example bench_theta_update --features theta
+cargo run --release -p apache-datasketches --example bench_cpc_update --features cpc
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple
+cargo run --release -p apache-datasketches --example bench_tuple_generic_update --features tuple
+# All take an optional trailing item count (default 10M):
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
 # Native C++ reference for the same workload, built against the same vendored
@@ -168,6 +173,18 @@ reference bench. For paths like that, quote the **concrete-vs-generic ratio**
 (`bench_tuple_generic_update` ÷ `bench_tuple_update`) rather than an absolute
 ns/op: it answers the question a user actually has — what does defining my own
 summary cost me — and it self-normalises across machines.
+
+Prefer stating the **absolute** overhead (Rust minus C++, in ns/op) over the
+ratio. Measured across all four families, the per-call cost of the binding is a
+roughly constant 1.7-2.4 ns; the ratio varies from 1.3x to 2.2x purely because
+the families' own updates differ in cost, so a ratio flatters CPC (whose update
+is slowest) and punishes HLL (whose update is fastest) while saying nothing
+about the binding. Quote the ratio only alongside the absolute figure.
+
+Numbers move 10-20% run to run on a normal laptop -- HLL's distinct case was
+observed between 5.24 and 6.20 ns/op across three consecutive passes. Take a
+median of at least three runs before recording anything, and do not quote more
+precision than that supports.
 
 Both sides of a comparison must use the same `lg_k`, item count and scenarios,
 and both print the sketch estimate so a mismatch is visible; the estimates

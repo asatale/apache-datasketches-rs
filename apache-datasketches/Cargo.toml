@@ -66,6 +66,18 @@ required-features = ["tuple"]
 name = "bench_tuple_generic_update"
 required-features = ["tuple"]
 
+[[example]]
+name = "bench_hll_update"
+required-features = ["hll"]
+
+[[example]]
+name = "bench_theta_update"
+required-features = ["theta"]
+
+[[example]]
+name = "bench_cpc_update"
+required-features = ["cpc"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]
