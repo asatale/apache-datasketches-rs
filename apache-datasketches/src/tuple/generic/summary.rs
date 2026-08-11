@@ -94,8 +94,45 @@ impl<S: TupleSummary> RawSummaryOps for Adapter<S> {
 }
 
 /// Wraps a user summary in the opaque type that crosses the FFI boundary.
+///
+/// Allocates. On the per-update path prefer [`refill`], which reuses a box the
+/// sketch already owns.
 pub(crate) fn erase<S: TupleSummary>(value: S) -> RustSummary {
     RustSummary::new(Box::new(Adapter::new(value)))
+}
+
+/// Overwrites an existing erased summary in place, without allocating.
+///
+/// This is what keeps the update path allocation-free. `erase` heap-allocates a
+/// `Box<dyn RawSummaryOps>`, and doing that per update meant a malloc/free on
+/// every call — including for keys that C++ then discarded, since the box is
+/// built before the FFI crossing and therefore before upstream's theta screen.
+/// Reusing one box across updates removes that entirely; a new *entry* still
+/// costs one allocation, but that is C++ cloning into the table, which is
+/// inherent.
+///
+/// Sound because C++ only borrows the value for the duration of the update
+/// call: upstream reads it to clone into a fresh entry or combine into an
+/// existing one, and never stores it. So the same box can back the next update.
+///
+/// The type mismatch is unreachable through the public API — the scratch box is
+/// created by `erase` from the same `S` as the sketch it lives on — so this
+/// signals a broken internal invariant, exactly as [`unerase`] does.
+pub(crate) fn refill<S: TupleSummary>(scratch: &mut RustSummary, value: S) {
+    // Upcast `dyn RawSummaryOps` to its `Any` supertrait rather than adding an
+    // `as_any_mut` to that trait. The trait is public, so a new required method
+    // would be a breaking change to a published crate -- and unnecessary:
+    // trait upcasting has been stable since Rust 1.86, which is exactly the
+    // workaround `as_any` was written to avoid needing.
+    let ops: &mut dyn Any = scratch.ops_mut();
+    match ops.downcast_mut::<Adapter<S>>() {
+        Some(adapter) => adapter.value = value,
+        None => panic!(
+            "apache-datasketches internal invariant violated: a generic Tuple sketch's \
+             scratch summary held a different concrete type than the sketch's own. This \
+             should be impossible through the public API; please report it."
+        ),
+    }
 }
 
 /// Recovers an owned `S` from a summary that crossed back from C++.

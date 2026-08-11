@@ -154,6 +154,28 @@ commit that completes the family must restore the hard assertion before landing.
 not, since its FFI surface is unstable and not meant to be consumed directly). Every public item (types, variants, fields,
 methods, modules) needs a `///`/`//!` doc comment. Keep this clean when adding public API.
 
+### Performance claims must be reproducible
+
+Any claim of the form "Nx native C++" — in `CHANGELOG.md`, a commit message, or
+a PR — requires a committed counterpart in `benches/cpp_reference/`. A number
+produced by an ad-hoc program that never entered the repo is not a claim anyone
+can check, including you in six months. If there is no counterpart, either add
+one or attribute the figure to its source instead of asserting it.
+
+Not every path can have one. The generic Tuple sketch calls back into Rust per
+summary, which has no C++ equivalent to compare against, so it gets no
+reference bench. For paths like that, quote the **concrete-vs-generic ratio**
+(`bench_tuple_generic_update` ÷ `bench_tuple_update`) rather than an absolute
+ns/op: it answers the question a user actually has — what does defining my own
+summary cost me — and it self-normalises across machines.
+
+Both sides of a comparison must use the same `lg_k`, item count and scenarios,
+and both print the sketch estimate so a mismatch is visible; the estimates
+should be identical, since identical keys go through identical hashing. The
+`benchmark harnesses run` CI job builds and runs all of them at a tiny item
+count so they cannot rot silently — it is deliberately not a perf gate, since
+shared runners are far too noisy for ns/op thresholds.
+
 ### Design docs
 
 Feature work is planned under `docs/superpowers/`: `specs/` holds design docs

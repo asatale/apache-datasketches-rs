@@ -14,7 +14,53 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
-Nothing yet.
+`apache-datasketches` only; `apache-datasketches-sys` is untouched and stays at
+0.2.1.
+
+### Added
+- A `benchmark harnesses run` CI job. The Rust benches are examples, so
+  `cargo test`/`clippy --all-targets` compiled them but never ran them, and the
+  native C++ reference is not a Cargo target at all — nothing in CI so much as
+  compiled it. It would have rotted silently the next time the vendored headers
+  moved, which is a poor property for the files whose job is backing up the
+  numbers in this changelog. Runs everything at 100k items; deliberately not a
+  perf gate, since shared runners are far too noisy for ns/op thresholds.
+- A rule in `AGENTS.md`: an "Nx native C++" claim requires a committed
+  counterpart in `benches/cpp_reference/`, and paths that cannot have one (the
+  generic Tuple sketch calls back into Rust, which has no C++ equivalent) quote
+  the concrete-vs-generic ratio instead of an absolute figure.
+
+### Changed
+- **Generic Tuple `TupleSketch::update_*` is ~2.1x faster, reaching parity with
+  the concrete ArrayOfDoubles path.** At 10M items, `lg_k = 12` (macOS,
+  release): 17.1 → 8.0 ns/op distinct and 19.1 → 10.9 ns/op repeated, against
+  ArrayOfDoubles' 8.3 / 10.3 on the same run.
+
+  `update_*` built its erased summary with `erase(S::create(value))`, which
+  heap-allocates a `Box<dyn RawSummaryOps>` per call. That happens in Rust
+  before the FFI crossing, so before upstream's `if (hash == 0) return;` screen
+  — a key C++ discarded still paid for the box. This was the third instance of
+  the same mistake in this family: work performed ahead of the theta screen.
+
+  `TupleSketch<S>` now holds one erased summary and overwrites its contents per
+  update (`summary::refill`), so the update path allocates nothing. Inserting a
+  new entry still costs one allocation — that is C++ cloning into its table, and
+  is inherent.
+
+  Sound because C++ only borrows the value for the duration of the call:
+  upstream reads it to clone into a fresh entry or combine into an existing one,
+  and never stores it, so one box can back every update. Implemented by
+  upcasting `dyn RawSummaryOps` to its `Any` supertrait — stable since Rust
+  1.86 — rather than adding an `as_any_mut` to that public trait, which would
+  have been a breaking change to an already-published crate for no benefit.
+
+  Note this keeps one summary alive for the sketch's lifetime, and `reset()`
+  does not release it: reset clears the C++ table but keeps the scratch box,
+  since the sketch is likely to be updated again. It is freed on drop.
+
+  Supersedes an earlier claim that the generic path's ~2x gap over
+  ArrayOfDoubles was structural — the trampoline and a box per *entry* are
+  inherent, but the box per *update* was not, and it was almost the entire gap.
 
 ## [0.2.2] — 2026-08-11
 
