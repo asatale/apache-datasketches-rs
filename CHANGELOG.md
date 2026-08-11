@@ -14,6 +14,15 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.2] — 2026-08-11
+
+`apache-datasketches` 0.2.2 and `apache-datasketches-sys` 0.2.1. The
+performance work below lives in the sys crate's C++ shims, so
+`apache-datasketches` raises its dependency requirement to `0.2.1` — without
+that, Cargo could resolve the older sys crate and silently drop the fixes.
+
 ### Added
 - `vendor_drift_test`: detects divergence between the workspace-root
   `datasketches-cpp` submodule and the copy vendored into
@@ -196,7 +205,8 @@ period and published all at once.
   family** (`hll` feature) — `HllSketch` and `HllUnion`, with serialization —
   over vendored `datasketches-cpp`, bridged with `cxx`.
 
-[Unreleased]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/asatale/apache-datasketches-rs/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/asatale/apache-datasketches-rs/compare/v0.1.0...v0.1.1
