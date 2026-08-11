@@ -27,61 +27,58 @@ dyn_update_sketch build_sketch(uint8_t lg_k, uint8_t rf, float p) {
   return builder.build();
 }
 
-// The sketch's Update type is DynSummary, so every update wraps the borrowed
-// RustSummary in a DynSummary. assign_clone_of() below clones unconditionally
-// -- one Box allocation on every update() call, whether or not the key
-// already exists -- and on the insert path there is a *second* clone,
-// because DynUpdatePolicy::create() returns a disengaged DynSummary and
-// DynUpdatePolicy::update() then calls assign_clone_of() again to populate
-// it (tuple_sketch_impl.hpp:218-219). This is a deliberate correctness-first
-// simplification, not the intended end state: the optimization, not
-// attempted here, is a DynSummary variant that holds a non-owning
-// `const RustSummary*` for the update-value slot instead of an owned Box, so
-// this wrapper allocates only when the policy actually clones into a new or
-// existing entry.
-DynSummary borrow_as_update(const RustSummary& value) {
-  DynSummary wrapper;
-  wrapper.assign_clone_of(value);
-  return wrapper;
-}
-
 } // namespace
 
 TupleGenericSketchShim::TupleGenericSketchShim(uint8_t lg_k, uint8_t rf, float p)
   : sketch_(build_sketch(lg_k, rf, p)) {}
 
+// The update_* methods below hand the borrowed `const RustSummary&` straight to
+// sketch_.update(), where DynUpdatePolicy's matching overload consumes it.
+//
+// This used to wrap the value in a DynSummary first, via a
+// `borrow_as_update()` helper that called assign_clone_of(). That cloned a Box
+// on *every* update, ahead of upstream's `if (hash == 0) return;` screen, so a
+// key rejected by theta paid for a clone that was dropped immediately; and the
+// insert path cloned twice, once into the wrapper and again to populate the
+// entry. The wrapper is gone, so the only clone left is the one that actually
+// populates a new entry -- a rejected key now costs zero clones and a repeated
+// key costs none beyond the combine.
+//
+// The correctness argument lives on DynUpdatePolicy::update in dyn_summary.h:
+// upstream only ever reads the update value, never stores it, so a borrow
+// cannot outlive the call.
 void TupleGenericSketchShim::update_u64(uint64_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_i64(int64_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_u32(uint32_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_i32(int32_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_u16(uint16_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_i16(int16_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_u8(uint8_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_i8(int8_t key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_f64(double key, const RustSummary& value) {
-  sketch_.update(key, borrow_as_update(value));
+  sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_str(rust::Str key, const RustSummary& value) {
-  sketch_.update(std::string(key), borrow_as_update(value));
+  sketch_.update(std::string(key), value);
 }
 void TupleGenericSketchShim::update_bytes(rust::Slice<const uint8_t> key, const RustSummary& value) {
-  sketch_.update(key.data(), key.size(), borrow_as_update(value));
+  sketch_.update(key.data(), key.size(), value);
 }
 
 void TupleGenericSketchShim::trim() { sketch_.trim(); }

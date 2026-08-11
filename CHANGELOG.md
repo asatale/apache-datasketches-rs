@@ -31,6 +31,14 @@ fact — this file was introduced during 0.2.1.
 - A sys-crate test that a short values slice terminates the process instead of
   reading out of bounds. This was previously untested, and the change below
   promotes the shim's length check from defence-in-depth to the only guard.
+- `examples/bench_tuple_generic_update.rs`: throughput harness for the generic
+  Tuple path. Separate from the ArrayOfDoubles one because the cost structures
+  differ — the generic path boxes every summary and reaches Rust through a
+  trampoline. No native C++ reference exists for it: the callback design has no
+  C++ equivalent, so the number to watch is the harness against itself.
+- A test pinning the update path's exact clone count — one for a new key, zero
+  for a key already present. That is what the generic Tuple change below buys,
+  and an off-by-one is precisely the regression worth catching.
 - `benches/cpp_reference/`: native C++ counterparts to the Rust benches, built
   against the same vendored headers via `run.sh`. Every "Nx native C++" claim
   below is a Rust bench divided by one of these; until now the reference
@@ -48,6 +56,35 @@ fact — this file was introduced during 0.2.1.
 - Reformatted four cxx bridge files that had been rustfmt-dirty since they
   were written. Mechanical only. The workspace is now rustfmt-clean, so CI can
   enforce formatting.
+- **Generic Tuple `TupleSketch::update_*` is ~2.3x faster.** At 10M items,
+  `lg_k = 12` (macOS, release): 39.1 → 17.1 ns/op for distinct keys and
+  41.5 → 19.1 ns/op for repeated keys.
+
+  The shim wrapped every borrowed summary in a `DynSummary` before handing it
+  to upstream, and that wrapper cloned a `Box` unconditionally. Because the
+  wrapper was built as the *argument* to `update()`, it was paid before
+  upstream's `if (hash == 0) return;` screen — so a key theta rejected cloned a
+  summary that was never looked at. The insert path cloned twice: once into the
+  wrapper, then again to populate the entry.
+
+  `DynUpdatePolicy::update` now has an overload taking the borrowed
+  `const RustSummary&` directly, so the wrapper is gone. A rejected key clones
+  zero times, a repeated key clones zero times (it combines in place), and a
+  new key clones once. This is the optimisation the shim's own comment had
+  described as deliberately deferred; it turned out not to need the
+  non-owning-pointer `DynSummary` variant that comment envisaged, because
+  upstream's `update` is a forwarding reference and never requires the value to
+  be the sketch's summary type — the same property the ArrayOfDoubles fix uses
+  to pass a bare `const double*`.
+
+  Sound because upstream only ever *reads* the update value — cloning from it
+  into a fresh entry, or combining from it into an existing one — and never
+  moves or stores it, so the borrow cannot outlive the call
+  (`tuple_sketch_impl.hpp:213-223`). No behaviour change: estimates and
+  retained counts are identical, and the user-visible contract on
+  `TupleSummary` is unchanged. Summaries are cloned strictly fewer times, which
+  only matters if a `Clone` impl has side effects — it must be total anyway,
+  since a panic there aborts.
 - **`ArrayOfDoublesSketch::update_*` is ~3.3x faster.** At 10M items,
   `lg_k = 12`, `num_values = 3` (macOS, release): 26.3 → 8.0 ns/op for distinct
   keys and 25.8 → 9.9 ns/op for repeated keys. Against native C++ compiled from

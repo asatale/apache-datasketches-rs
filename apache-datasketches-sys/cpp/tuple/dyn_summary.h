@@ -154,12 +154,41 @@ private:
 struct DynUpdatePolicy {
   DynSummary create() const { return DynSummary(); }
 
-  void update(DynSummary& summary, const DynSummary& value) const {
+  // The overload the update path actually uses: the caller's borrowed
+  // RustSummary, passed straight through without being wrapped in a DynSummary
+  // first.
+  //
+  // The wrapper used to be built at the call site in
+  // tuple_generic_sketch_shim.cc, which meant a Box clone on every update()
+  // -- before upstream's `if (hash == 0) return;` screen, so a key theta
+  // rejected paid for a clone that was immediately dropped. It also made the
+  // insert path clone twice: once into the wrapper, then again in the
+  // assign_clone_of() below. Taking `const RustSummary&` removes the wrapper
+  // entirely, so the only clone left is the one that genuinely populates a new
+  // entry.
+  //
+  // Why a borrow is sound here: upstream's insert_or_ignore
+  // (tuple_sketch_impl.hpp:213-223) builds the entry from `policy_.create()`
+  // and only ever *reads* the update value -- cloning from it to populate a
+  // fresh summary, or combining from it into an existing one. The value is
+  // never moved or stored into the table, so nothing retains this reference
+  // past the call. `update_tuple_sketch::update` takes the value as a
+  // forwarding reference and perfect-forwards it, so the argument type is not
+  // required to be the sketch's Update type -- same property the
+  // ArrayOfDoubles shim relies on to pass a bare `const double*`.
+  void update(DynSummary& summary, const RustSummary& value) const {
     if (!summary.engaged()) {
-      summary.assign_clone_of(value.get());
+      summary.assign_clone_of(value);
     } else {
-      rust_summary_union_combine(summary.get(), value.get());
+      rust_summary_union_combine(summary.get(), value);
     }
+  }
+
+  // Retained for any caller that already holds a DynSummary. Nothing in the
+  // shims uses it now; it delegates rather than duplicating the logic so the
+  // two cannot drift.
+  void update(DynSummary& summary, const DynSummary& value) const {
+    update(summary, value.get());
   }
 };
 
