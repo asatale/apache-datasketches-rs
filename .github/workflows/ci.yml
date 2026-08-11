@@ -151,6 +151,42 @@ jobs:
           cd "$workdir/apache-datasketches-sys-${version}"
           cargo build --all-features
 
+  # The benchmark harnesses are not covered by anything else. The Rust ones are
+  # examples, so `cargo test`/`clippy --all-targets` compile them but never run
+  # them; the native C++ reference is not a Cargo target at all, so nothing in
+  # this workflow so much as compiles it. Left alone it would rot silently the
+  # next time the vendored headers move -- and it is the file whose entire
+  # purpose is to be there when someone doubts a number in CHANGELOG.md.
+  #
+  # Deliberately NOT a performance gate. Shared runners are far too noisy for
+  # ns/op thresholds, and a flaky perf assertion would get disabled within a
+  # month. This only proves the harnesses build and run. The item counts are
+  # tiny for the same reason: wall-clock here is meaningless, so do not read the
+  # printed numbers as measurements.
+  benches:
+    name: benchmark harnesses run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # --release because that is how they are meant to be invoked, and a debug
+      # build of the FFI layer is slow enough to matter even at 100k items.
+      - name: Rust harnesses
+        run: |
+          cargo run --release -p apache-datasketches --features tuple \
+            --example bench_tuple_update -- 100000
+          cargo run --release -p apache-datasketches --features tuple \
+            --example bench_tuple_generic_update -- 100000
+
+      # Exercises run.sh itself, not just the .cc: the include paths it derives
+      # are as likely to break as the source.
+      - name: Native C++ reference
+        run: ./benches/cpp_reference/run.sh 100000
+
   # The single check branch protection should require. Matrix leg names embed
   # their parameters ("features (--no-default-features --features cpc)"), so
   # requiring them directly would mean updating protection settings every time
@@ -163,7 +199,7 @@ jobs:
   ci-success:
     name: CI success
     if: always()
-    needs: [fmt, test, features, no-family-guard, package]
+    needs: [fmt, test, features, no-family-guard, package, benches]
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every job succeeded

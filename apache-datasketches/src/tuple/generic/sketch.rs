@@ -1,8 +1,9 @@
 use super::builder::resize_factor_multiplier;
-use super::summary::{erase, TupleSummary};
+use super::summary::{erase, refill, TupleSummary};
 use crate::error::SketchError;
 use crate::tuple::ResizeFactor;
 use apache_datasketches_sys::tuple_generic::ffi as sys;
+use apache_datasketches_sys::tuple_generic::RustSummary;
 use cxx::UniquePtr;
 use std::marker::PhantomData;
 
@@ -11,6 +12,27 @@ use std::marker::PhantomData;
 /// [`TupleSketchBuilder`](super::TupleSketchBuilder).
 pub struct TupleSketch<S: TupleSummary> {
     pub(crate) inner: UniquePtr<sys::TupleGenericSketchShim>,
+    /// A single erased summary, reused as the value argument of every update.
+    ///
+    /// Every `update_*` has to hand C++ a `RustSummary`, and building a fresh
+    /// one per call heap-allocated a `Box<dyn RawSummaryOps>` every time —
+    /// before the FFI crossing, so before upstream's theta screen, meaning even
+    /// a key C++ immediately discarded paid for it. Holding one box and
+    /// overwriting its contents (see `summary::refill`) makes the update path
+    /// allocation-free.
+    ///
+    /// `None` until the first update, because constructing one needs an `S` and
+    /// there is no `S` to be had before a caller supplies an update value.
+    ///
+    /// Not part of the sketch's logical state: it is scratch space, holds
+    /// whatever the last update left behind, and is never read except by the
+    /// update that just wrote it.
+    ///
+    /// One visible consequence: this keeps one `S` alive for the sketch's
+    /// lifetime, and [`Self::reset`] does not release it — reset clears the C++
+    /// table but leaves the scratch box allocated, deliberately, since the
+    /// sketch is likely to be updated again. It is freed when the sketch drops.
+    scratch: Option<RustSummary>,
     pub(crate) _marker: PhantomData<fn() -> S>,
 }
 
@@ -24,76 +46,119 @@ impl<S: TupleSummary> TupleSketch<S> {
             .map_err(|e| SketchError::InvalidConfig(e.what().to_string()))?;
         Ok(Self {
             inner,
+            scratch: None,
             _marker: PhantomData,
         })
+    }
+
+    /// Loads `value` into the reused scratch summary, allocating only on the
+    /// first call for this sketch.
+    ///
+    /// Returns nothing, and callers read `self.scratch` themselves, so that the
+    /// immutable borrow of `scratch` and the mutable borrow of `inner` are two
+    /// disjoint field borrows. A helper returning `&RustSummary` from
+    /// `&mut self` would borrow the whole sketch and conflict with the
+    /// `inner.pin_mut()` that has to follow.
+    fn load_scratch(&mut self, value: S) {
+        if let Some(existing) = self.scratch.as_mut() {
+            refill(existing, value);
+        } else {
+            self.scratch = Some(erase(value));
+        }
+    }
+
+    /// The scratch summary `load_scratch` just filled.
+    ///
+    /// Takes the field, not `&self`: a `&self` method borrows the whole sketch
+    /// and so cannot coexist with the `self.inner.pin_mut()` that follows.
+    /// Passing `&self.scratch` keeps it to one field, which leaves `inner` free
+    /// to be borrowed mutably.
+    ///
+    /// The `expect` is unreachable — every caller runs `load_scratch` first, and
+    /// that leaves `scratch` engaged on both paths.
+    fn filled(scratch: &Option<RustSummary>) -> &RustSummary {
+        scratch
+            .as_ref()
+            .expect("load_scratch always leaves the scratch summary engaged")
     }
 
     /// Adds a `u64` key. `S::create` runs first, entirely in Rust; the
     /// resulting summary is combined into an existing entry or cloned into a
     /// new one.
     pub fn update_u64(&mut self, key: u64, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_u64(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_u64(key, summary);
     }
 
     /// Adds an `i64` key. See [`Self::update_u64`].
     pub fn update_i64(&mut self, key: i64, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_i64(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_i64(key, summary);
     }
 
     /// Adds a `u32` key. See [`Self::update_u64`].
     pub fn update_u32(&mut self, key: u32, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_u32(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_u32(key, summary);
     }
 
     /// Adds an `i32` key. See [`Self::update_u64`].
     pub fn update_i32(&mut self, key: i32, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_i32(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_i32(key, summary);
     }
 
     /// Adds a `u16` key. See [`Self::update_u64`].
     pub fn update_u16(&mut self, key: u16, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_u16(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_u16(key, summary);
     }
 
     /// Adds an `i16` key. See [`Self::update_u64`].
     pub fn update_i16(&mut self, key: i16, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_i16(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_i16(key, summary);
     }
 
     /// Adds a `u8` key. See [`Self::update_u64`].
     pub fn update_u8(&mut self, key: u8, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_u8(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_u8(key, summary);
     }
 
     /// Adds an `i8` key. See [`Self::update_u64`].
     pub fn update_i8(&mut self, key: i8, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_i8(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_i8(key, summary);
     }
 
     /// Adds an `f64` key. See [`Self::update_u64`].
     pub fn update_f64(&mut self, key: f64, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_f64(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_f64(key, summary);
     }
 
     /// Adds a string key. See [`Self::update_u64`].
     pub fn update_str(&mut self, key: &str, value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_str(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_str(key, summary);
     }
 
     /// Adds an arbitrary byte-slice key. See [`Self::update_u64`].
     pub fn update_bytes(&mut self, key: &[u8], value: &S::Update) {
-        let summary = erase(S::create(value));
-        self.inner.pin_mut().update_bytes(key, &summary);
+        self.load_scratch(S::create(value));
+        let summary = Self::filled(&self.scratch);
+        self.inner.pin_mut().update_bytes(key, summary);
     }
 
     /// Removes retained entries in excess of the nominal size `k`, lowering
