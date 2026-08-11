@@ -30,17 +30,24 @@ datasketches::update_array_of_doubles_sketch build_sketch(uint8_t lg_k, TupleRes
 }
 
 // Upstream's default_array_tuple_update_policy indexes the supplied value
-// blindly for i in [0, num_values), with no bounds check of its own. The safe
-// Rust wrapper rejects a wrong-length slice before it ever gets here; this is
-// a second line of defence for direct sys-crate callers.
+// blindly for i in [0, num_values), with no bounds check of its own.
+//
+// This is load-bearing, not defence-in-depth. The update_* methods below hand
+// upstream a bare `const double*` (see the note there), which carries no
+// length, so this check is the *only* thing standing between a short slice and
+// an out-of-bounds read. It must stay, and it must run before the update call.
+//
+// Note what the throw does here: the update_* methods are declared in
+// src/array_of_doubles_sketch.rs *without* `Result`, so cxx's generated
+// trampoline is noexcept and this exception terminates the process rather than
+// surfacing as an Err. That is deliberate -- trading a wild read for a loud
+// abort -- but it means this is not a graceful error path for direct sys-crate
+// callers. The safe wrapper in `apache-datasketches` checks the length itself
+// and returns InvalidConfig, so ordinary users never reach this.
 void check_values_len(const datasketches::update_array_of_doubles_sketch& sketch, rust::Slice<const double> values) {
   if (values.size() != sketch.get_num_values()) {
     throw std::invalid_argument("values length does not match num_values");
   }
-}
-
-std::vector<double> to_vector(rust::Slice<const double> values) {
-  return std::vector<double>(values.begin(), values.end());
 }
 
 } // namespace
@@ -48,49 +55,67 @@ std::vector<double> to_vector(rust::Slice<const double> values) {
 ArrayOfDoublesSketchShim::ArrayOfDoublesSketchShim(uint8_t lg_k, TupleResizeFactor rf, float p, uint8_t num_values)
   : sketch_(build_sketch(lg_k, rf, p, num_values)) {}
 
+// Every update_* below passes `values.data()` -- a bare `const double*` --
+// rather than copying the slice into a std::vector.
+//
+// Upstream's update policy is `template<typename InputArray> void
+// update(Array&, const InputArray&)`, which only ever does `array[i] +=
+// update[i]` over [0, num_values); its own comment blesses `double*`
+// explicitly. `update_tuple_sketch::update` takes the value as a forwarding
+// reference and perfect-forwards it to the policy, and update_array_tuple_sketch
+// does not narrow that signature, so nothing in the chain requires an actual
+// container.
+//
+// This matters because the copy was not free: it heap-allocated on *every*
+// call, while upstream's update screens the key first
+// (`if (hash == 0) return;`) and never reads the values for a key that theta
+// rejects. Native C++ allocates nothing per update; so do we now.
+//
+// The cost is that length information no longer reaches upstream -- hence
+// check_values_len above, which is why it is mandatory rather than advisory.
 void ArrayOfDoublesSketchShim::update_u64(uint64_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_i64(int64_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_u32(uint32_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_i32(int32_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_u16(uint16_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_i16(int16_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_u8(uint8_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_i8(int8_t key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_f64(double key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key, to_vector(values));
+  sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_str(rust::Str key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(std::string(key), to_vector(values));
+  sketch_.update(std::string(key), values.data());
 }
 void ArrayOfDoublesSketchShim::update_bytes(rust::Slice<const uint8_t> key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);
-  sketch_.update(key.data(), key.size(), to_vector(values));
+  sketch_.update(key.data(), key.size(), values.data());
 }
 
 void ArrayOfDoublesSketchShim::trim() { sketch_.trim(); }

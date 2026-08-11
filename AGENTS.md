@@ -53,6 +53,12 @@ cargo run -p apache-datasketches --example cpc --features cpc
 cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
 
+# Throughput harness for the ArrayOfDoubles update path — the one hot loop
+# where shim overhead is measurable. --release is not optional: a debug build
+# measures nothing useful. Optional trailing arg is the item count (default 10M).
+cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple
+cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
+
 # Lint (missing_docs is enforced — see below)
 cargo clippy --workspace --all-features
 

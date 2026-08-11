@@ -53,6 +53,15 @@ required-features = ["tuple"]
 name = "tuple_generic"
 required-features = ["tuple"]
 
+# Perf harness for the ArrayOfDoubles update path, deliberately an example
+# rather than a `[[bench]]`: with `harness = false` a bench target is *run* by
+# `cargo test`, which would put a multi-million-item loop in CI. As an example
+# it is still built and clippy-checked by `--all-targets`, but only ever run
+# on request.
+[[example]]
+name = "bench_tuple_update"
+required-features = ["tuple"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

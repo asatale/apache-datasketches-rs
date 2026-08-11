@@ -13,6 +13,25 @@ use cxx::UniquePtr;
 /// or use as input to a set operation.
 pub struct ArrayOfDoublesSketch {
     pub(crate) inner: UniquePtr<sys::ArrayOfDoublesSketchShim>,
+    /// Cached copy of the shim's `get_num_values()`.
+    ///
+    /// Every `update_*` has to validate the caller's slice length (see
+    /// [`Self::check_values`]), and reading `num_values` back from C++ to do
+    /// so cost a full FFI crossing per update — on the order of the update
+    /// itself.
+    ///
+    /// Caching is sound because the value is fixed for the sketch's lifetime:
+    /// it lives in the C++ update policy, is set once when the builder
+    /// constructs the sketch, has no setter, and `reset()` clears the hash
+    /// table without touching the policy.
+    ///
+    /// **This invariant is what makes the cache correct, and the compiler will
+    /// not enforce it.** `from_parts` is currently the only constructor. Any
+    /// new one — a `deserialize`, or a `from_shim` wrapping a sketch built
+    /// elsewhere — must populate this field from the shim rather than assume a
+    /// value, or the cache silently disagrees with C++ and `check_values`
+    /// starts rejecting valid slices (or admitting short ones).
+    num_values: u8,
 }
 
 unsafe impl Send for ArrayOfDoublesSketch {}
@@ -31,7 +50,7 @@ impl ArrayOfDoublesSketch {
         }
         let inner = sys::new_array_of_doubles_sketch(lg_k, rf.into(), p, num_values)
             .map_err(|e| SketchError::InvalidConfig(e.what().to_string()))?;
-        Ok(Self { inner })
+        Ok(Self { inner, num_values })
     }
 
     /// Validates that `values` has exactly [`Self::get_num_values`] elements.
@@ -40,8 +59,11 @@ impl ArrayOfDoublesSketch {
     /// `lg_k`/`num_std_dev` validation is: upstream's update policy indexes
     /// the supplied values blindly for `i in 0..num_values`, so a short slice
     /// would be an out-of-bounds read rather than a graceful failure.
+    ///
+    /// Reads the cached [`Self::num_values`] rather than calling into C++, so
+    /// this costs no FFI crossing.
     fn check_values(&self, values: &[f64]) -> Result<(), SketchError> {
-        let expected = self.inner.get_num_values() as usize;
+        let expected = self.num_values as usize;
         if values.len() != expected {
             return Err(SketchError::InvalidConfig(format!(
                 "expected {expected} values, got {}",
@@ -203,7 +225,7 @@ impl ArrayOfDoublesSketch {
     /// Returns the fixed number of `f64` values each retained entry carries,
     /// as configured at build time.
     pub fn get_num_values(&self) -> u8 {
-        self.inner.get_num_values()
+        self.num_values
     }
 
     /// Iterates the retained entries as `(hash, values)` pairs, where
@@ -215,7 +237,7 @@ impl ArrayOfDoublesSketch {
     /// for an update sketch; compact it with `ordered = true` for
     /// hash-ordered iteration.
     pub fn entries(&self) -> impl Iterator<Item = (u64, Vec<f64>)> {
-        let num_values = self.inner.get_num_values() as usize;
+        let num_values = self.num_values as usize;
         let hashes: Vec<u64> = self.inner.entry_hashes().into_iter().collect();
         let values: Vec<f64> = self.inner.entry_values().into_iter().collect();
         let grouped: Vec<Vec<f64>> = if num_values == 0 {
