@@ -59,6 +59,13 @@ cargo run -p apache-datasketches --example tuple_generic --features tuple
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
+# Native C++ reference for the same workload, built against the same vendored
+# headers. The Rust number divided by this one is the binding's overhead, which
+# is what any "Nx native C++" claim in CHANGELOG.md refers to. Keep its
+# parameters in sync with the Rust bench — see benches/cpp_reference/README.md.
+./benches/cpp_reference/run.sh
+./benches/cpp_reference/run.sh 100000000
+
 # Lint (missing_docs is enforced — see below)
 cargo clippy --workspace --all-features
 

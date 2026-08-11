@@ -13,6 +13,17 @@
 //! `num_values = 3`, `resize_factor` and `p` at their defaults. The item
 //! count defaults to 10M and can be overridden as the first argument.
 //!
+//! This measures absolute throughput. To get the number that actually matters
+//! — how much of the cost is *this binding* rather than the algorithm — run
+//! the native C++ counterpart on the same item count and divide:
+//!
+//!   ./benches/cpp_reference/run.sh 10000000
+//!
+//! That program mirrors this one's parameters and scenarios exactly. Keep the
+//! two in sync: if you change `LG_K`, `NUM_VALUES` or `HOT_KEY_SPACE` here,
+//! change them there too. Both print the sketch estimate, and the estimates
+//! must match — that is the cheap check that they are doing the same work.
+//!
 //! Two scenarios, because they exercise different halves of upstream's
 //! `update_tuple_sketch::update`:
 //!

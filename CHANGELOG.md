@@ -31,8 +31,20 @@ fact — this file was introduced during 0.2.1.
 - A sys-crate test that a short values slice terminates the process instead of
   reading out of bounds. This was previously untested, and the change below
   promotes the shim's length check from defence-in-depth to the only guard.
+- `benches/cpp_reference/`: native C++ counterparts to the Rust benches, built
+  against the same vendored headers via `run.sh`. Every "Nx native C++" claim
+  below is a Rust bench divided by one of these; until now the reference
+  program was ad hoc, so those ratios were not reproducible from a clean
+  checkout. Deliberately outside both crate directories, since `cargo package`
+  would otherwise ship the `.cc` in the published tarball.
 
 ### Changed
+- Bumped `actions/checkout` from v4 to v5 in CI. v5.0.0 is the release that
+  moves the action to Node 24; GitHub was force-running v4 on Node 24 anyway
+  and annotating every job with a deprecation warning. Stopped at v5 rather
+  than the current v7 deliberately: v6 changes how credentials are persisted
+  and v7 blocks fork-PR checkout for `pull_request_target`/`workflow_run`,
+  neither of which this workflow needs.
 - Reformatted four cxx bridge files that had been rustfmt-dirty since they
   were written. Mechanical only. The workspace is now rustfmt-clean, so CI can
   enforce formatting.
