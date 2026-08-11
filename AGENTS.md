@@ -10,7 +10,10 @@ built via the `cxx` crate over a pinned git submodule. Two-crate workspace:
 - `apache-datasketches-sys` — raw `cxx` FFI bridge. Unstable, low-level; not meant to be used directly.
 - `apache-datasketches` — safe, idiomatic Rust API that wraps `-sys`. This is what consumers depend on.
 
-Both crates have `default = []`; every sketch family is opt-in via Cargo features: `hll`, `theta`, `cpc`, `tuple`.
+There are four sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`.
+`apache-datasketches` enables all four by default; `apache-datasketches-sys` has `default = []`
+and gets its features turned on by the safe crate. Consumers opt out with `default-features = false`
+plus the families they want — naming none is a `compile_error!`.
 
 ## Setup
 
