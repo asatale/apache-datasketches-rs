@@ -40,6 +40,41 @@ fn sketch_reset() {
     assert_eq!(sketch.get_num_retained(), 0);
 }
 
+/// Not from upstream: `num_values` is cached on the Rust side to keep the
+/// per-update length check off the FFI path, and that cache is only correct
+/// because the value is fixed for the sketch's lifetime -- in particular
+/// because `reset()` clears the hash table without touching the C++ update
+/// policy that holds it.
+///
+/// Nothing else in the suite would notice if that stopped being true: the
+/// cache would silently disagree with C++ and the length check would start
+/// rejecting valid slices or admitting short ones.
+#[test]
+fn reset_preserves_num_values_and_the_length_check() {
+    let mut sketch = ArrayOfDoublesSketchBuilder::new()
+        .num_values(3)
+        .build()
+        .unwrap();
+    sketch.update_u64(1, &[1.0, 2.0, 3.0]).unwrap();
+    assert_eq!(sketch.get_num_values(), 3);
+
+    sketch.reset();
+
+    assert_eq!(sketch.get_num_values(), 3);
+    // A correctly-sized slice is still accepted...
+    sketch.update_u64(2, &[4.0, 5.0, 6.0]).unwrap();
+    // ...and a short one is still rejected, rather than reaching C++ and
+    // reading out of bounds.
+    assert!(sketch.update_u64(3, &[7.0]).is_err());
+    assert!(sketch.update_u64(3, &[7.0, 8.0, 9.0, 10.0]).is_err());
+
+    // The values that did land are intact, so the cache did not corrupt the
+    // update path.
+    let entries: Vec<(u64, Vec<f64>)> = sketch.entries().collect();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].1, vec![4.0, 5.0, 6.0]);
+}
+
 /// Upstream: `TEST_CASE("aod sketch: stream serialize deserialize - estimation
 /// mode")`, merged with the two byte-oriented serialization cases (see the
 /// module comment).

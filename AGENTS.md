@@ -10,7 +10,10 @@ built via the `cxx` crate over a pinned git submodule. Two-crate workspace:
 - `apache-datasketches-sys` — raw `cxx` FFI bridge. Unstable, low-level; not meant to be used directly.
 - `apache-datasketches` — safe, idiomatic Rust API that wraps `-sys`. This is what consumers depend on.
 
-Both crates have `default = []`; every sketch family is opt-in via Cargo features: `hll`, `theta`, `cpc`, `tuple`.
+There are four sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`.
+`apache-datasketches` enables all four by default; `apache-datasketches-sys` has `default = []`
+and gets its features turned on by the safe crate. Consumers opt out with `default-features = false`
+plus the families they want — naming none is a `compile_error!`.
 
 ## Setup
 
@@ -49,6 +52,12 @@ cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
 cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
+
+# Throughput harness for the ArrayOfDoubles update path — the one hot loop
+# where shim overhead is measurable. --release is not optional: a debug build
+# measures nothing useful. Optional trailing arg is the item count (default 10M).
+cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple
+cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
 # Lint (missing_docs is enforced — see below)
 cargo clippy --workspace --all-features

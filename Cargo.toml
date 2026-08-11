@@ -3,7 +3,9 @@ resolver = "2"
 members = ["apache-datasketches-sys", "apache-datasketches"]
 
 [workspace.package]
-version = "0.1.1"
+# No `version` here on purpose: the two crates are versioned independently
+# (see CHANGELOG.md), so each member spells out its own `version` rather than
+# inheriting one.
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/asatale/apache-datasketches-rs"

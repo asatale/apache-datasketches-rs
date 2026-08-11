@@ -24,11 +24,52 @@ fact — this file was introduced during 0.2.1.
   per-family feature matrix; an inverted assertion that a build with no family
   enabled is rejected; a check that the packaged sys crate builds with all
   features; and `cargo fmt --all -- --check`.
+- `examples/bench_tuple_update.rs`: throughput harness for the ArrayOfDoubles
+  update path, at fixed `lg_k = 12` / `num_values = 3` so runs are comparable.
+  An example rather than a `[[bench]]` because a `harness = false` bench target
+  is *run* by `cargo test`, which would put a multi-million-item loop in CI.
+- A sys-crate test that a short values slice terminates the process instead of
+  reading out of bounds. This was previously untested, and the change below
+  promotes the shim's length check from defence-in-depth to the only guard.
 
 ### Changed
 - Reformatted four cxx bridge files that had been rustfmt-dirty since they
   were written. Mechanical only. The workspace is now rustfmt-clean, so CI can
   enforce formatting.
+- **`ArrayOfDoublesSketch::update_*` is ~3.3x faster.** At 10M items,
+  `lg_k = 12`, `num_values = 3` (macOS, release): 26.3 → 8.0 ns/op for distinct
+  keys and 25.8 → 9.9 ns/op for repeated keys. Against native C++ compiled from
+  the same vendored headers, that closes the gap from 7.7x to 2.3x (distinct)
+  and 3.9x to 1.5x (repeated) — in line with the 1.5–1.9x the other families
+  already showed. Two independent causes, listed by size of contribution:
+
+  - The shim copied the caller's slice into a fresh `std::vector<double>` on
+    every update, so every call heap-allocated. Upstream screens the key first
+    (`if (hash == 0) return;`) and never reads the values for a key theta
+    rejects, so native C++ allocates nothing per update. The shim now passes
+    `values.data()` directly: upstream's update policy is templated on anything
+    with indexed access and its own comment blesses `double*`. This accounted
+    for most of the improvement — on the distinct-key case, 26.3 → 11.8 ns/op
+    of the total 26.3 → 8.0.
+  - `check_values` in the safe wrapper read `num_values` back from C++ before
+    every update, costing a full FFI crossing per call. It is now cached in the
+    Rust struct, which is sound because the value is fixed for the sketch's
+    lifetime. This accounted for the remainder, 11.8 → 8.0 ns/op. (Run-to-run
+    variance is around 5%, so treat the split as approximate; the ~3.3x
+    headline is well outside it.)
+
+  The tell that this was per-call overhead ahead of the theta screen: before
+  the fix, the distinct and repeated-key cases cost the same (26.3 vs 25.8),
+  while in native C++ distinct is nearly twice as *fast* as repeated (3.5 vs
+  6.6) precisely because screened keys return immediately.
+
+  No behaviour change — estimates and retained counts are identical before and
+  after. Note the tradeoff: a bare pointer carries no length, so the shim's
+  `check_values_len` is now the only thing preventing an out-of-bounds read for
+  direct sys-crate callers, and because the update bridge fns are declared
+  without `Result` it terminates the process rather than returning an `Err`.
+  Users of the safe `apache-datasketches` API are unaffected — that layer
+  validates the length and returns `InvalidConfig`.
 
 ## [0.2.1] — 2026-08-10
 
