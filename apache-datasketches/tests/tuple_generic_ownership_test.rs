@@ -31,6 +31,16 @@
 //! (`dyn_summary.h`) takes the `assign_clone_of` arm, which clones. So
 //! `CLONES > 0` after a body runs is proof C++ actually called back into
 //! Rust -- not merely that `S::create` ran.
+//!
+//! Note what that rests on: **inserting a new key**. Updating a key already in
+//! the sketch clones nothing — the shim passes a borrowed `RustSummary` and
+//! `DynUpdatePolicy::update` combines into the retained summary in place. A
+//! body that only re-updates existing keys would therefore leave `CLONES == 0`
+//! and trip the positive control for a reason that has nothing to do with the
+//! bug it is guarding. Give every new test body at least one fresh key. (This
+//! used to be free, because the shim wrapped every update value in a
+//! `DynSummary` and so cloned on every call regardless — see
+//! `update_clones_once_for_a_new_key_and_never_for_an_existing_one`.)
 
 use apache_datasketches::tuple::generic::{
     tuple_jaccard_similarity, TupleAnotB, TupleIntersection, TupleSketch, TupleSketchBuilder,
@@ -251,5 +261,54 @@ fn self_jaccard_short_circuits_before_cloning_any_summary() {
             "two separate sketches must go through the scratch union, \
              which clones every retained summary"
         );
+    });
+}
+
+/// Pins the clone count of the update path itself, which is the thing the
+/// shim's borrow optimisation buys and the thing a regression would undo.
+///
+/// The shim hands C++ a borrowed `const RustSummary&` and lets
+/// `DynUpdatePolicy::update` decide whether to clone. So:
+///
+/// - a brand-new key clones exactly once, to populate the new entry;
+/// - a key already present clones **zero** times — it goes straight to
+///   `union_combine` on the retained summary.
+///
+/// Before that change the shim wrapped every update value in a `DynSummary`
+/// via `assign_clone_of`, so these numbers were 2 and 1 respectively: an
+/// update to an existing key allocated and dropped a summary for nothing, and
+/// a theta-rejected key paid for a clone that upstream never even looked at
+/// (`update_tuple_sketch::update` screens the key before reading the value).
+///
+/// Exact equality rather than an upper bound: an off-by-one here is precisely
+/// the regression worth catching, and the counts are deterministic — two keys
+/// at the default `lg_k` are nowhere near theta, so neither update is screened.
+#[test]
+fn update_clones_once_for_a_new_key_and_never_for_an_existing_one() {
+    assert_balanced(|| {
+        let mut s: TupleSketch<Counted> = TupleSketchBuilder::new().build().unwrap();
+
+        s.update_u64(1, &1);
+
+        CLONES.store(0, Ordering::SeqCst);
+        s.update_u64(1, &1);
+        let existing_key_clones = CLONES.load(Ordering::SeqCst);
+
+        // Done last so the harness's `CLONES > 0` positive control still holds
+        // when the body returns.
+        CLONES.store(0, Ordering::SeqCst);
+        s.update_u64(2, &1);
+        let new_key_clones = CLONES.load(Ordering::SeqCst);
+
+        assert_eq!(
+            existing_key_clones, 0,
+            "updating a key already in the sketch must not clone -- it combines \
+             into the retained summary in place"
+        );
+        assert_eq!(
+            new_key_clones, 1,
+            "a brand-new key must clone exactly once, to populate its entry"
+        );
+        assert_eq!(s.get_num_retained(), 2);
     });
 }

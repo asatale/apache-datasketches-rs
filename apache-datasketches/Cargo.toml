@@ -62,6 +62,10 @@ required-features = ["tuple"]
 name = "bench_tuple_update"
 required-features = ["tuple"]
 
+[[example]]
+name = "bench_tuple_generic_update"
+required-features = ["tuple"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]
