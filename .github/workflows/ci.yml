@@ -177,6 +177,10 @@ jobs:
       # build of the FFI layer is slow enough to matter even at 100k items.
       - name: Rust harnesses
         run: |
+          for bench in hll theta cpc; do
+            cargo run --release -p apache-datasketches --features "$bench" \
+              --example "bench_${bench}_update" -- 100000
+          done
           cargo run --release -p apache-datasketches --features tuple \
             --example bench_tuple_update -- 100000
           cargo run --release -p apache-datasketches --features tuple \
