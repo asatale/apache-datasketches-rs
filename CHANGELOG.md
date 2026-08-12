@@ -85,6 +85,28 @@ fact — this file was introduced during 0.2.1.
   of the empty-key guard, matching upstream, which validates the summary before
   discarding an empty key.
 
+  Measured on the new `str` scenario (10M items, 64Ki distinct keys, `lg_k = 12`,
+  macOS release, median of three passes, ns/op):
+
+  | family | before | after | saved | native C++ | ratio | overhead |
+  |---|---|---|---|---|---|---|
+  | HLL | 11.22 | 9.36 | −1.86 | 6.38 | 1.47x | +2.98 |
+  | Theta | 11.54 | 9.42 | −2.12 | 5.79 | 1.63x | +3.63 |
+  | CPC | 24.58 | 21.51 | −3.07 | 19.04 | 1.13x | +2.47 |
+  | ArrayOfDoubles | 14.07 | 11.92 | −2.15 | 6.33 | 1.88x | +5.59 |
+  | generic Tuple | 12.54 | 10.94 | −1.60 | — | — | — |
+
+  A consistent 1.6–3.1 ns per call across every family, which is about what one
+  small `malloc`/`free` pair costs — the right shape for the thing removed,
+  rather than a speedup that varies with the algorithm.
+
+  Two honest caveats. `ArrayOfDoubles` still carries +5.59 ns over C++ rather
+  than the 1.7–2.4 ns the integer paths cost, because its string update also
+  crosses a values slice and returns a `Result` after a `num_values` check;
+  that residue is not addressed here. And `HllUnion::update_str` is the one
+  fixed path with no harness — there is no union bench on either side — so its
+  gain is inferred from the identical change to `HllSketch`, not measured.
+
 - **Generic Tuple `TupleSketch::update_*` is ~2.1x faster, reaching parity with
   the concrete ArrayOfDoubles path.** At 10M items, `lg_k = 12` (macOS,
   release): 17.1 → 8.0 ns/op distinct and 19.1 → 10.9 ns/op repeated, against

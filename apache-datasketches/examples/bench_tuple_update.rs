@@ -24,7 +24,7 @@
 //! change them there too. Both print the sketch estimate, and the estimates
 //! must match — that is the cheap check that they are doing the same work.
 //!
-//! Two scenarios, because they exercise different halves of upstream's
+//! Three scenarios, because they exercise different halves of upstream's
 //! `update_tuple_sketch::update`:
 //!
 //! - `distinct` — every key is new. Once theta drops below 1.0 most keys are
@@ -33,6 +33,10 @@
 //!   screen is pure waste here.
 //! - `hot` — keys drawn from a space small enough to stay fully retained, so
 //!   every call reaches the summary-combine path.
+//! - `str` — the string key path, which crosses the boundary as a borrowed
+//!   `(pointer, length)` pair rather than an integer. The C++ counterpart
+//!   calls the same `(data, length)` overload the shim does, so the difference
+//!   between them is binding overhead and not a choice of overload.
 
 use apache_datasketches::tuple::ArrayOfDoublesSketchBuilder;
 use std::time::{Duration, Instant};
@@ -43,6 +47,17 @@ const HOT_KEY_SPACE: u64 = 1 << 10;
 
 /// Values passed on every update. Length must equal `NUM_VALUES`.
 const VALUES: [f64; 3] = [1.0, 2.0, 3.0];
+
+/// Size of the pre-built string-key pool. See `string_keys`.
+const STR_KEY_SPACE: u64 = 1 << 16;
+
+/// Built once, outside every timed region: formatting a key costs more than
+/// the update does, and it costs a different amount in each language, so
+/// including it would swamp the per-call delta this harness exists to show.
+/// Keep the format identical to the C++ counterpart or the estimates diverge.
+fn string_keys() -> Vec<String> {
+    (0..STR_KEY_SPACE).map(|i| format!("key_{i:010}")).collect()
+}
 
 fn report(label: &str, items: u64, elapsed: Duration, estimate: f64) {
     let nanos = elapsed.as_secs_f64() * 1e9;
@@ -92,6 +107,25 @@ fn bench_hot(items: u64) {
     report("hot", items, elapsed, sketch.get_estimate());
 }
 
+fn bench_str(items: u64) {
+    let mut sketch = ArrayOfDoublesSketchBuilder::new()
+        .lg_k(LG_K)
+        .num_values(NUM_VALUES)
+        .build()
+        .expect("builder rejected fixed valid parameters");
+
+    let keys = string_keys();
+    let start = Instant::now();
+    for i in 0..items {
+        sketch
+            .update_str(&keys[(i % STR_KEY_SPACE) as usize], &VALUES)
+            .expect("update rejected a correctly-sized value slice");
+    }
+    let elapsed = start.elapsed();
+
+    report("str", items, elapsed, sketch.get_estimate());
+}
+
 fn main() {
     let items: u64 = std::env::args()
         .nth(1)
@@ -101,4 +135,5 @@ fn main() {
     println!("lg_k={LG_K} num_values={NUM_VALUES} items={items}");
     bench_distinct(items);
     bench_hot(items);
+    bench_str(items);
 }

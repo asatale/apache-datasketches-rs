@@ -14,11 +14,27 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace {
 
 constexpr uint8_t LG_K = 12;
 constexpr uint64_t HOT_KEY_SPACE = 1 << 10;
+constexpr uint64_t STR_KEY_SPACE = 1 << 16;
+
+// Built once, outside every timed region -- see the Rust counterpart. Keep the
+// format identical there or the estimates diverge.
+std::vector<std::string> string_keys() {
+  std::vector<std::string> keys;
+  keys.reserve(STR_KEY_SPACE);
+  char buf[32];
+  for (uint64_t i = 0; i < STR_KEY_SPACE; ++i) {
+    snprintf(buf, sizeof buf, "key_%010llu", static_cast<unsigned long long>(i));
+    keys.emplace_back(buf);
+  }
+  return keys;
+}
 
 void report(const char* label, uint64_t items, double secs, double estimate) {
   printf("%-9s %12llu items  %8.3f s  %7.2f ns/op  %8.1f M/s  (estimate %.0f)\n",
@@ -53,6 +69,20 @@ void bench_hot(uint64_t items) {
   report("hot", items, secs, sketch.get_estimate());
 }
 
+// Calls the same (data, length) overload the shim calls, so the difference
+// against Rust is binding overhead rather than a choice of overload.
+void bench_str(uint64_t items) {
+  auto sketch = build();
+  const auto keys = string_keys();
+  const auto start = std::chrono::steady_clock::now();
+  for (uint64_t i = 0; i < items; ++i) {
+    const std::string& key = keys[i % STR_KEY_SPACE];
+    sketch.update(key.data(), key.size());
+  }
+  const double secs = seconds_since(start);
+  report("str", items, secs, sketch.get_estimate());
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -60,5 +90,6 @@ int main(int argc, char** argv) {
   printf("lg_config_k=%u target=Hll8 items=%llu\n", LG_K, static_cast<unsigned long long>(items));
   bench_distinct(items);
   bench_hot(items);
+  bench_str(items);
   return 0;
 }

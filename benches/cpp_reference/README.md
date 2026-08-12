@@ -56,11 +56,31 @@ change to the include list.
 ## Keeping them in sync
 
 Each `.cc` mirrors its Rust counterpart exactly: same `lg_k`, same target type
-or `num_values`, same scenarios (`distinct` and `hot`), same hot-key space. If
+or `num_values`, same scenarios (`distinct`, `hot` and `str`), same key spaces. If
 you change the parameters on one side, change them on the other or the ratio
 becomes meaningless. Both print the sketch estimate, which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match
 exactly, since both feed identical keys to identical hashing.
+
+## The `str` scenario
+
+`str` measures the string update path, which crosses the boundary as a
+borrowed `(pointer, length)` pair rather than by value. Two deliberate choices
+make the comparison mean something:
+
+- **The C++ side calls `update(data, length)`, not `update(const
+  std::string&)`.** That is the overload the shim itself calls, so the
+  difference between the two harnesses is binding overhead rather than a
+  choice of overload. Comparing against the `std::string` overload would
+  flatter us, since that overload allocates on the C++ side too.
+- **Keys are pre-built into a fixed pool, outside the timed region.**
+  Formatting a key costs more than the update does, and it costs a different
+  amount in Rust than in C++, so timing it would swamp the per-call delta.
+
+The pool is 64Ki distinct keys, cycled. For the families with a theta screen
+that puts most updates past it — which is exactly where a per-call allocation
+in the shim is pure waste, since upstream discards the key without ever
+looking at it.
 
 ## Reading the numbers
 
