@@ -163,6 +163,13 @@ jobs:
   # month. This only proves the harnesses build and run. The item counts are
   # tiny for the same reason: wall-clock here is meaningless, so do not read the
   # printed numbers as measurements.
+  #
+  # `--reps 2` for the same reason: repetition exists to make a *measurement*
+  # trustworthy, and there is no measurement here to make trustworthy, so the
+  # default three passes would just cost more job time. Two rather than one
+  # because the cross-rep estimate assertion needs a second rep to compare
+  # against -- with one rep it can never fire, and that assertion is exactly the
+  # kind of thing worth having CI exercise.
   benches:
     name: benchmark harnesses run
     runs-on: ubuntu-latest
@@ -179,17 +186,17 @@ jobs:
         run: |
           for bench in hll theta cpc; do
             cargo run --release -p apache-datasketches --features "$bench" \
-              --example "bench_${bench}_update" -- 100000
+              --example "bench_${bench}_update" -- 100000 --reps 2
           done
           cargo run --release -p apache-datasketches --features tuple \
-            --example bench_tuple_update -- 100000
+            --example bench_tuple_update -- 100000 --reps 2
           cargo run --release -p apache-datasketches --features tuple \
-            --example bench_tuple_generic_update -- 100000
+            --example bench_tuple_generic_update -- 100000 --reps 2
 
       # Exercises run.sh itself, not just the .cc: the include paths it derives
       # are as likely to break as the source.
       - name: Native C++ reference
-        run: ./benches/cpp_reference/run.sh 100000
+        run: ./benches/cpp_reference/run.sh 100000 --reps 2
 
   # The single check branch protection should require. Matrix leg names embed
   # their parameters ("features (--no-default-features --features cpc)"), so

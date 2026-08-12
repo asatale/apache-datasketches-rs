@@ -182,14 +182,24 @@ is slowest) and punishes HLL (whose update is fastest) while saying nothing
 about the binding. Quote the ratio only alongside the absolute figure.
 
 Numbers move 10-20% run to run on a normal laptop -- HLL's distinct case was
-observed between 5.24 and 6.20 ns/op across three consecutive passes. Take a
-median of at least three runs before recording anything, and do not quote more
-precision than that supports.
+observed between 5.24 and 6.20 ns/op across three consecutive passes. Every
+harness therefore repeats each scenario and prints the **lower median** of the
+passes with its min and max: `--reps N`, default 3. Do not quote more precision
+than the printed spread supports, and do not hand-average passes yourself --
+raise `--reps` instead.
+
+Run `--ladder` (1M / 10M / 100M) before quoting any figure, because per-update
+cost is not constant as a sketch fills: CPC's `distinct` is 13.80 ns/op at 1M
+and 5.54 at 100M, while `str` is flat across all three rungs. Say which item
+count a recorded number came from, and prefer one the ladder shows is on the
+flat part of the curve.
 
 Both sides of a comparison must use the same `lg_k`, item count and scenarios,
 and both print the sketch estimate so a mismatch is visible; the estimates
-should be identical, since identical keys go through identical hashing. The
-`benchmark harnesses run` CI job builds and runs all of them at a tiny item
+should be identical, since identical keys go through identical hashing. Both
+sides take the same arguments and print the same format, so `--reps`/`--ladder`
+apply to either. The `benchmark harnesses run` CI job builds and runs all of
+them at a tiny item
 count so they cannot rot silently — it is deliberately not a perf gate, since
 shared runners are far too noisy for ns/op thresholds.
 
