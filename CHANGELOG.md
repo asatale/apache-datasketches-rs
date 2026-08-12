@@ -18,6 +18,28 @@ fact — this file was introduced during 0.2.1.
 0.2.1.
 
 ### Added
+- **`--reps N` and `--ladder` in every benchmark harness, Rust and C++.** Each
+  harness took a single item count and ran a single pass, so a published figure
+  was one point with no spread and no shape.
+
+  Every printed `ns/op` is now the lower median of `--reps` passes (default 3)
+  with min and max beside it — the `AGENTS.md` rule that a performance claim
+  rest on a median of at least three runs is enforced by the harness rather than
+  left to whoever runs it. The lower median rather than an average of the two
+  middle values, so every number printed is one an actual pass produced.
+
+  `--ladder` sweeps 1M / 10M / 100M, because per-update cost is not constant as
+  a sketch fills. It starts at 1M on purpose: below that HLL is still in its
+  coupon list and CPC is still changing flavour, so the figure would average
+  across a regime change rather than report a steady state. The sweep is worth
+  running before quoting anything — `distinct` costs 13.80 ns/op at 1M on CPC
+  against 5.54 at 100M, while `str` is flat across all three rungs.
+
+  Each rep rebuilds its sketch, and the harness asserts the per-rep estimates
+  agree; a reused sketch would make every rep after the first measure a
+  different workload and quietly lower the median. `ns/op`, `reps` and
+  `estimate` are printed as labelled values rather than bare numbers in fixed
+  columns, so reading them back does not mean counting shifting awk fields.
 - **Benchmark harnesses and native C++ counterparts for HLL, Theta and CPC**, so
   every family now has both. This replaces the one figure in this file that no
   committed code could reproduce: 0.2.2 quoted "1.5–1.9x" for these three,
@@ -86,21 +108,27 @@ fact — this file was introduced during 0.2.1.
   discarding an empty key.
 
   Measured on the new `str` scenario (10M items, 64Ki distinct keys, `lg_k = 12`,
-  macOS release, median of three passes, ns/op):
+  macOS release, ns/op). Taken at `--reps 5` rather than the default 3, and all
+  three columns in one session, so the before/after/C++ comparison is not made
+  across differing thermal states:
 
   | family | before | after | saved | native C++ | ratio | overhead |
   |---|---|---|---|---|---|---|
-  | HLL | 11.22 | 9.36 | −1.86 | 6.38 | 1.47x | +2.98 |
-  | Theta | 11.54 | 9.42 | −2.12 | 5.79 | 1.63x | +3.63 |
-  | CPC | 24.58 | 21.51 | −3.07 | 19.04 | 1.13x | +2.47 |
-  | ArrayOfDoubles | 14.07 | 11.92 | −2.15 | 6.33 | 1.88x | +5.59 |
-  | generic Tuple | 12.54 | 10.94 | −1.60 | — | — | — |
+  | HLL | 11.66 | 9.61 | −2.05 | 6.56 | 1.47x | +3.05 |
+  | Theta | 11.79 | 9.99 | −1.80 | 5.95 | 1.68x | +4.04 |
+  | CPC | 24.78 | 22.85 | −1.93 | 18.53 | 1.23x | +4.32 |
+  | ArrayOfDoubles | 14.10 | 12.50 | −1.60 | 6.37 | 1.96x | +6.13 |
+  | generic Tuple | 12.12 | 10.94 | −1.18 | — | — | — |
 
-  A consistent 1.6–3.1 ns per call across every family, which is about what one
+  A consistent 1.2–2.1 ns per call across every family, which is about what one
   small `malloc`/`free` pair costs — the right shape for the thing removed,
   rather than a speedup that varies with the algorithm.
 
-  Two honest caveats. `ArrayOfDoubles` still carries +5.59 ns over C++ rather
+  The `--ladder` sweep added below confirms 10M is a fair point to quote for
+  this scenario: unlike `distinct`, whose cost falls sharply between 1M and 10M
+  as the sketch fills, `str` is flat across 1M / 10M / 100M on every family.
+
+  Two honest caveats. `ArrayOfDoubles` still carries +6.13 ns over C++ rather
   than the 1.7–2.4 ns the integer paths cost; its string update also crosses a
   values slice, but that residue has not been isolated and is not addressed
   here. And `HllUnion::update_str` is the one fixed path with no harness —

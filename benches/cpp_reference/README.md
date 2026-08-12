@@ -20,9 +20,14 @@ the published tarball as dead weight.
 ## Running
 
 ```bash
-./benches/cpp_reference/run.sh                      # default item count
+./benches/cpp_reference/run.sh                      # 10M items, 3 passes
 ./benches/cpp_reference/run.sh 100000000            # explicit item count
+./benches/cpp_reference/run.sh --ladder             # sweep 1M / 10M / 100M
+./benches/cpp_reference/run.sh 10000000 --reps 5    # more passes, tighter median
 ```
+
+Arguments are forwarded verbatim to every program, and the Rust harnesses take
+the same ones, so the two sides always measure the same shape.
 
 The script compiles against `apache-datasketches-sys/vendor/datasketches-cpp`
 — the copy `build.rs` actually compiles, *not* the root `vendor/` submodule —
@@ -48,6 +53,17 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 generic Tuple sketch calls back into Rust per summary, which has no C++
 equivalent to compare against. Quote its cost against the concrete
 ArrayOfDoubles path instead.
+
+`bench_common.h` holds the shared mechanism: argument parsing, the repetition
+loop's median selection, the key pool and the output format. Only mechanism —
+each `.cc` keeps its own `LG_K`, `HOT_KEY_SPACE` and `build()` at the top,
+since those are the parameters that have to match the Rust side and they are
+easier to check when visible in the file you are reading.
+
+The Rust harnesses duplicate that logic rather than sharing it: there is no way
+to share a module across Cargo examples without declaring every example in
+`Cargo.toml`. Keep the two in step — especially the output format, the median
+definition and the key format.
 
 `run.sh` builds and runs all of them, passing every family's include directory
 to every program — that costs nothing and means adding a benchmark needs no
@@ -89,5 +105,19 @@ binding costs a roughly constant 1.7–2.4 ns per update call; the ratio varies
 from 1.3x to 2.2x purely because the families' own updates differ in cost, which
 tells you about the algorithm rather than about the binding.
 
-Expect 10–20% run-to-run variance on a normal laptop. Take a median of at least
-three passes before recording anything.
+Expect 10–20% run-to-run variance on a normal laptop. Each harness handles that
+itself: the printed `ns/op` is the lower median of `--reps` passes (default 3),
+with `min` and `max` beside it. The lower median rather than an average of the
+two middle values, so every number printed is one an actual pass produced. If
+the spread is wide, raise `--reps` rather than averaging passes by hand.
+
+Run `--ladder` before quoting anything. Per-update cost is not constant as a
+sketch fills — CPC's `distinct` is 13.80 ns/op at 1M against 5.54 at 100M —
+so a single point can be a warm-up average dressed up as a steady-state cost.
+The ladder starts at 1M for that reason: below it HLL is still in its coupon
+list and CPC is still changing flavour. `str`, by contrast, is flat across all
+three rungs.
+
+Each rep rebuilds its sketch, and the harness aborts if the per-rep estimates
+disagree — these workloads are deterministic, so a disagreement means the reps
+are not running the same thing.
