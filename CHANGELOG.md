@@ -101,11 +101,12 @@ fact — this file was introduced during 0.2.1.
   rather than a speedup that varies with the algorithm.
 
   Two honest caveats. `ArrayOfDoubles` still carries +5.59 ns over C++ rather
-  than the 1.7–2.4 ns the integer paths cost, because its string update also
-  crosses a values slice and returns a `Result` after a `num_values` check;
-  that residue is not addressed here. And `HllUnion::update_str` is the one
-  fixed path with no harness — there is no union bench on either side — so its
-  gain is inferred from the identical change to `HllSketch`, not measured.
+  than the 1.7–2.4 ns the integer paths cost; its string update also crosses a
+  values slice, but that residue has not been isolated and is not addressed
+  here. And `HllUnion::update_str` is the one fixed path with no harness —
+  there is no union bench on either side — so its gain is inferred from the
+  identical change to `HllSketch`, not measured. Its correctness *is* pinned:
+  removing the guard fails `update_str_empty_test`.
 
 - **Generic Tuple `TupleSketch::update_*` is ~2.1x faster, reaching parity with
   the concrete ArrayOfDoubles path.** At 10M items, `lg_k = 12` (macOS,
