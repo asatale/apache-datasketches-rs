@@ -13,7 +13,9 @@ void HllUnionShim::update_i64(int64_t value) { u_.update(value); }
 void HllUnionShim::update_f64(double value) { u_.update(value); }
 void HllUnionShim::update_str(rust::Str value) {
   // See HllSketchShim::update_str: no std::string copy, and the empty guard
-  // has to be replicated here because it lives in the bypassed overload.
+  // has to be replicated here because it lives in the bypassed overload --
+  // two hops down, in fact: hll_union::update(const std::string&) just
+  // forwards to the gadget, and the guard is on hll_sketch's overload.
   if (value.empty()) return;
   u_.update(value.data(), value.size());
 }
