@@ -180,23 +180,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
+      # compare.sh runs both sides, so this one step covers the four C++
+      # programs, run.sh itself (the include paths it derives are as likely to
+      # break as the source), and their four Rust counterparts.
+      #
+      # It also gates on the two harnesses agreeing scenario-for-scenario, and
+      # that part IS a real assertion rather than a build check: it compares
+      # sketch estimates, which are deterministic, so it is immune to the
+      # runner noise that rules out a timing gate. It catches a parameter
+      # changed on one side only -- the failure that otherwise shows up as a
+      # published ratio nobody can reproduce.
+      #
       # --release because that is how they are meant to be invoked, and a debug
-      # build of the FFI layer is slow enough to matter even at 100k items.
-      - name: Rust harnesses
+      # build of the FFI layer is slow enough to matter even at 100k items;
+      # compare.sh passes it for the Rust side.
+      - name: Both harnesses, and their estimates agree
+        run: ./benches/cpp_reference/compare.sh 100000 --reps 2
+
+      # Not covered above: the generic Tuple sketch has no C++ counterpart, so
+      # it is outside the comparison and needs running on its own.
+      - name: Generic Tuple harness
         run: |
-          for bench in hll theta cpc; do
-            cargo run --release -p apache-datasketches --features "$bench" \
-              --example "bench_${bench}_update" -- 100000 --reps 2
-          done
-          cargo run --release -p apache-datasketches --features tuple \
-            --example bench_tuple_update -- 100000 --reps 2
           cargo run --release -p apache-datasketches --features tuple \
             --example bench_tuple_generic_update -- 100000 --reps 2
-
-      # Exercises run.sh itself, not just the .cc: the include paths it derives
-      # are as likely to break as the source.
-      - name: Native C++ reference
-        run: ./benches/cpp_reference/run.sh 100000 --reps 2
 
   # The single check branch protection should require. Matrix leg names embed
   # their parameters ("features (--no-default-features --features cpc)"), so

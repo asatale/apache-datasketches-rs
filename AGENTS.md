@@ -64,10 +64,15 @@ cargo run --release -p apache-datasketches --example bench_tuple_generic_update 
 # All take an optional trailing item count (default 10M):
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
-# Native C++ reference for the same workload, built against the same vendored
-# headers. The Rust number divided by this one is the binding's overhead, which
-# is what any "Nx native C++" claim in CHANGELOG.md refers to. Keep its
-# parameters in sync with the Rust bench — see benches/cpp_reference/README.md.
+# Both sides at once, printing the binding's overhead per scenario — this is
+# what produces any "Nx native C++" figure, and it fails if the two harnesses
+# disagree on a sketch estimate, i.e. if their parameters have drifted apart.
+# Run it with --ladder before quoting anything.
+./benches/cpp_reference/compare.sh --ladder
+./benches/cpp_reference/compare.sh 10000000 --reps 5
+
+# Just the native C++ side, built against the same vendored headers that
+# build.rs compiles. compare.sh calls this.
 ./benches/cpp_reference/run.sh
 ./benches/cpp_reference/run.sh 100000000
 
@@ -194,14 +199,19 @@ and 5.54 at 100M, while `str` is flat across all three rungs. Say which item
 count a recorded number came from, and prefer one the ladder shows is on the
 flat part of the curve.
 
-Both sides of a comparison must use the same `lg_k`, item count and scenarios,
-and both print the sketch estimate so a mismatch is visible; the estimates
-should be identical, since identical keys go through identical hashing. Both
-sides take the same arguments and print the same format, so `--reps`/`--ladder`
-apply to either. The `benchmark harnesses run` CI job builds and runs all of
-them at a tiny item
-count so they cannot rot silently — it is deliberately not a perf gate, since
-shared runners are far too noisy for ns/op thresholds.
+Both sides of a comparison must use the same `lg_k`, item count and scenarios.
+Do not run them separately and subtract by hand — use
+`benches/cpp_reference/compare.sh`, which runs both, prints the overhead, and
+**exits non-zero if any scenario's sketch estimates disagree**. They are
+deterministic and must match exactly, since identical keys go through identical
+hashing, so a disagreement means a parameter was changed on one side only and
+the overhead column is meaningless.
+
+The `benchmark harnesses run` CI job runs `compare.sh` at a tiny item count so
+the harnesses cannot rot silently and so a one-sided parameter change is caught
+at the PR. It is deliberately not a *perf* gate — shared runners are far too
+noisy for ns/op thresholds — but the estimate check is exact and unaffected by
+that noise.
 
 ### Design docs
 
