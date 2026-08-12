@@ -40,6 +40,22 @@ fact — this file was introduced during 0.2.1.
   different workload and quietly lower the median. `ns/op`, `reps` and
   `estimate` are printed as labelled values rather than bare numbers in fixed
   columns, so reading them back does not mean counting shifting awk fields.
+- **`benches/cpp_reference/compare.sh`, which runs both sides and gates on them
+  agreeing.** Producing an overhead figure previously meant running the C++ and
+  Rust harnesses separately and subtracting by hand, with nothing checking that
+  the two had been given the same parameters. A `lg_k` changed on one side only
+  still yields a plausible ratio — one that is simply wrong, and unreproducible
+  by anyone who later runs it correctly.
+
+  `compare.sh` runs both, prints C++ / Rust / overhead / ratio per scenario, and
+  exits non-zero if any scenario's sketch estimates differ. Estimates are
+  deterministic — identical keys through identical hashing — so the check is
+  exact, which is also why CI can enforce it at a tiny item count where the
+  timings themselves are meaningless. It warns when run below 1M items so a
+  smoke run is not mistaken for a measurement.
+
+  The `benchmark harnesses run` job now invokes it instead of running each side
+  separately, gaining the parity assertion at no extra cost.
 - **Benchmark harnesses and native C++ counterparts for HLL, Theta and CPC**, so
   every family now has both. This replaces the one figure in this file that no
   committed code could reproduce: 0.2.2 quoted "1.5–1.9x" for these three,

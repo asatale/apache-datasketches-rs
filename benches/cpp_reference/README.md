@@ -19,6 +19,27 @@ the published tarball as dead weight.
 
 ## Running
 
+Use `compare.sh` — it runs *both* sides and prints the overhead directly:
+
+```bash
+./benches/cpp_reference/compare.sh --ladder          # what to run before quoting a number
+./benches/cpp_reference/compare.sh 10000000 --reps 5
+```
+
+```text
+family                   items scenario       C++     Rust  overhead  ratio
+hll                   10000000 str           6.53     9.72     +3.19  1.49x
+theta                 10000000 str           5.98    10.10     +4.12  1.69x
+```
+
+It also **fails** if the two sides disagree on any scenario's sketch estimate.
+That is the check worth having: running the two halves by hand and subtracting
+works fine right up until a parameter is changed on one side only, and then it
+produces a confident-looking ratio that means nothing. Estimates are
+deterministic, so the check is exact — see "Keeping them in sync" below.
+
+`run.sh` runs only the C++ side, and is what `compare.sh` calls:
+
 ```bash
 ./benches/cpp_reference/run.sh                      # 10M items, 3 passes
 ./benches/cpp_reference/run.sh 100000000            # explicit item count
@@ -26,15 +47,16 @@ the published tarball as dead weight.
 ./benches/cpp_reference/run.sh 10000000 --reps 5    # more passes, tighter median
 ```
 
-Arguments are forwarded verbatim to every program, and the Rust harnesses take
-the same ones, so the two sides always measure the same shape.
+Both scripts forward their arguments verbatim to every program, and the Rust
+harnesses take the same ones, so the two sides always measure the same shape.
 
 The script compiles against `apache-datasketches-sys/vendor/datasketches-cpp`
 — the copy `build.rs` actually compiles, *not* the root `vendor/` submodule —
 so the comparison is against the same headers the Rust side uses. It builds
 with `-O2`, matching a release Cargo profile closely enough for a ratio.
 
-Run the Rust side with the same item count to compare:
+To run one Rust harness on its own — the generic Tuple one has no counterpart
+here, so it is outside `compare.sh`:
 
 ```bash
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
@@ -68,6 +90,13 @@ definition and the key format.
 `run.sh` builds and runs all of them, passing every family's include directory
 to every program — that costs nothing and means adding a benchmark needs no
 change to the include list.
+
+`compare.sh` drives `run.sh` and the four Rust counterparts and hands both
+outputs to `compare.py`, which parses them with one function: the two harnesses
+print an identical line format precisely so that it can. `compare.py` is not
+meant to be run directly. Adding a benchmark means adding a line to the `pairs`
+list in `compare.sh`; nothing else needs to change, and a scenario or ladder
+rung that exists on only one side is reported rather than quietly skipped.
 
 ## Keeping them in sync
 
