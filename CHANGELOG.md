@@ -61,6 +61,30 @@ fact — this file was introduced during 0.2.1.
   the concrete-vs-generic ratio instead of an absolute figure.
 
 ### Changed
+- **`update_str` no longer heap-copies the key on any family.** All six string
+  update paths — `HllSketch`, `HllUnion`, `ThetaSketch`, `CpcSketch`,
+  `ArrayOfDoublesSketch` and the generic `TupleSketch` — built a `std::string`
+  from the borrowed `rust::Str` on every call, allocating a copy of bytes the
+  caller already owned. Upstream's `std::string` overload does nothing with it
+  but forward `(data, length)` onward, so the shims now forward the borrowed
+  pointer and length directly.
+
+  This is the same mistake as the two before it — work performed ahead of
+  upstream's `if (hash == 0) return;` screen, so a key C++ discards still paid
+  for the allocation — and it is the last instance of it on an update path.
+
+  The empty-string no-op had to be replicated explicitly at each site: it lives
+  in the `std::string` overload being bypassed, and the `(data, length)`
+  overload does not stand in for it. HLL's screens on a *null pointer* rather
+  than a zero length, and a `rust::Str` for `""` is non-null with length 0 —
+  so an unguarded forward would hash a zero-length payload and record an item
+  where upstream records nothing. `tests/update_str_empty_test.rs` asserts the
+  no-op on all six paths, and that each guard still admits a real key.
+
+  For `ArrayOfDoublesSketch` the values-length check deliberately stays *ahead*
+  of the empty-key guard, matching upstream, which validates the summary before
+  discarding an empty key.
+
 - **Generic Tuple `TupleSketch::update_*` is ~2.1x faster, reaching parity with
   the concrete ArrayOfDoubles path.** At 10M items, `lg_k = 12` (macOS,
   release): 17.1 → 8.0 ns/op distinct and 19.1 → 10.9 ns/op repeated, against

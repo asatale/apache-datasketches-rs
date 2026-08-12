@@ -40,7 +40,10 @@ void ThetaSketchShim::update_u8(uint8_t value) { sketch_.update(value); }
 void ThetaSketchShim::update_i8(int8_t value) { sketch_.update(value); }
 void ThetaSketchShim::update_f64(double value) { sketch_.update(value); }
 void ThetaSketchShim::update_str(rust::Str value) {
-  sketch_.update(std::string(value));
+  // Forward the borrowed bytes directly; the empty guard is replicated
+  // because it lives in the std::string overload being bypassed.
+  if (value.empty()) return;
+  sketch_.update(value.data(), value.size());
 }
 void ThetaSketchShim::update_bytes(rust::Slice<const uint8_t> value) {
   sketch_.update(value.data(), value.size());

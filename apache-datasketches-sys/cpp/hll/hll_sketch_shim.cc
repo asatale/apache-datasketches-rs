@@ -32,7 +32,12 @@ void HllSketchShim::update_u64(uint64_t value) { sketch_.update(value); }
 void HllSketchShim::update_i64(int64_t value) { sketch_.update(value); }
 void HllSketchShim::update_f64(double value) { sketch_.update(value); }
 void HllSketchShim::update_str(rust::Str value) {
-  sketch_.update(std::string(value));
+  // Forward the borrowed bytes rather than heap-copying them into a
+  // std::string. The empty guard is replicated because it lives in the
+  // overload being bypassed, and the pointer overload below it screens on a
+  // null pointer rather than on a zero length.
+  if (value.empty()) return;
+  sketch_.update(value.data(), value.size());
 }
 void HllSketchShim::update_bytes(rust::Slice<const uint8_t> value) {
   sketch_.update(value.data(), value.size());

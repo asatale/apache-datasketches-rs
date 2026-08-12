@@ -18,7 +18,10 @@ void CpcSketchShim::update_i8(int8_t value) { sketch_.update(value); }
 void CpcSketchShim::update_f64(double value) { sketch_.update(value); }
 void CpcSketchShim::update_f32(float value) { sketch_.update(value); }
 void CpcSketchShim::update_str(rust::Str value) {
-  sketch_.update(std::string(value));
+  // Forward the borrowed bytes directly; the empty guard is replicated
+  // because it lives in the std::string overload being bypassed.
+  if (value.empty()) return;
+  sketch_.update(value.data(), value.size());
 }
 void CpcSketchShim::update_bytes(rust::Slice<const uint8_t> value) {
   sketch_.update(value.data(), value.size());
