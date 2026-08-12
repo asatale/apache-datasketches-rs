@@ -10,42 +10,12 @@
 
 #include "theta_sketch.hpp"
 
-#include <chrono>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <vector>
+#include "bench_common.h"
 
 namespace {
 
 constexpr uint8_t LG_K = 12;
 constexpr uint64_t HOT_KEY_SPACE = 1 << 10;
-constexpr uint64_t STR_KEY_SPACE = 1 << 16;
-
-// Built once, outside every timed region -- see the Rust counterpart. Keep the
-// format identical there or the estimates diverge.
-std::vector<std::string> string_keys() {
-  std::vector<std::string> keys;
-  keys.reserve(STR_KEY_SPACE);
-  char buf[32];
-  for (uint64_t i = 0; i < STR_KEY_SPACE; ++i) {
-    snprintf(buf, sizeof buf, "key_%010llu", static_cast<unsigned long long>(i));
-    keys.emplace_back(buf);
-  }
-  return keys;
-}
-
-void report(const char* label, uint64_t items, double secs, double estimate) {
-  printf("%-9s %12llu items  %8.3f s  %7.2f ns/op  %8.1f M/s  (estimate %.0f)\n",
-         label, static_cast<unsigned long long>(items), secs,
-         secs * 1e9 / static_cast<double>(items),
-         static_cast<double>(items) / secs / 1e6, estimate);
-}
-
-double seconds_since(std::chrono::steady_clock::time_point start) {
-  return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-}
 
 datasketches::update_theta_sketch build() {
   auto builder = datasketches::update_theta_sketch::builder();
@@ -53,43 +23,61 @@ datasketches::update_theta_sketch build() {
   return builder.build();
 }
 
-void bench_distinct(uint64_t items) {
-  auto sketch = build();
-  const auto start = std::chrono::steady_clock::now();
-  for (uint64_t key = 0; key < items; ++key) sketch.update(key);
-  const double secs = seconds_since(start);
-  report("distinct", items, secs, sketch.get_estimate());
+// Each rep rebuilds the sketch: a reused one would already be full, so every
+// rep after the first would measure a different workload. bench::report asserts
+// the per-rep estimates agree, which is what catches that if it regresses.
+void bench_distinct(uint64_t items, uint64_t reps) {
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    auto sketch = build();
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t key = 0; key < items; ++key) sketch.update(key);
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(items));
+    estimates.push_back(sketch.get_estimate());
+  }
+  bench::report("distinct", items, ns_per_op, estimates);
 }
 
-void bench_hot(uint64_t items) {
-  auto sketch = build();
-  const auto start = std::chrono::steady_clock::now();
-  for (uint64_t i = 0; i < items; ++i) sketch.update(i % HOT_KEY_SPACE);
-  const double secs = seconds_since(start);
-  report("hot", items, secs, sketch.get_estimate());
+void bench_hot(uint64_t items, uint64_t reps) {
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    auto sketch = build();
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < items; ++i) sketch.update(i % HOT_KEY_SPACE);
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(items));
+    estimates.push_back(sketch.get_estimate());
+  }
+  bench::report("hot", items, ns_per_op, estimates);
 }
 
 // Calls the same (data, length) overload the shim calls, so the difference
 // against Rust is binding overhead rather than a choice of overload.
-void bench_str(uint64_t items) {
-  auto sketch = build();
-  const auto keys = string_keys();
-  const auto start = std::chrono::steady_clock::now();
-  for (uint64_t i = 0; i < items; ++i) {
-    const std::string& key = keys[i % STR_KEY_SPACE];
-    sketch.update(key.data(), key.size());
+void bench_str(uint64_t items, uint64_t reps) {
+  const auto keys = bench::string_keys();
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    auto sketch = build();
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < items; ++i) {
+      const std::string& key = keys[i % bench::STR_KEY_SPACE];
+      sketch.update(key.data(), key.size());
+    }
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(items));
+    estimates.push_back(sketch.get_estimate());
   }
-  const double secs = seconds_since(start);
-  report("str", items, secs, sketch.get_estimate());
+  bench::report("str", items, ns_per_op, estimates);
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
-  const uint64_t items = argc > 1 ? strtoull(argv[1], nullptr, 10) : 10000000ULL;
-  printf("lg_k=%u items=%llu\n", LG_K, static_cast<unsigned long long>(items));
-  bench_distinct(items);
-  bench_hot(items);
-  bench_str(items);
+  const bench::Config cfg = bench::parse_args(argc, argv);
+  for (const uint64_t items : cfg.counts) {
+    printf("lg_k=%u items=%llu reps=%llu\n", LG_K, static_cast<unsigned long long>(items),
+           static_cast<unsigned long long>(cfg.reps));
+    bench_distinct(items, cfg.reps);
+    bench_hot(items, cfg.reps);
+    bench_str(items, cfg.reps);
+  }
   return 0;
 }
