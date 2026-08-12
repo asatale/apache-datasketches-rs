@@ -110,8 +110,14 @@ void ArrayOfDoublesSketchShim::update_f64(double key, rust::Slice<const double> 
   sketch_.update(key, values.data());
 }
 void ArrayOfDoublesSketchShim::update_str(rust::Str key, rust::Slice<const double> values) {
+  // The length check stays ahead of the empty-key guard: upstream validates
+  // the values before discarding an empty key, and reordering would quietly
+  // stop rejecting a bad values slice paired with an empty key.
   check_values_len(sketch_, values);
-  sketch_.update(std::string(key), values.data());
+  // Forward the borrowed bytes directly; the empty guard is replicated
+  // because it lives in the std::string overload being bypassed.
+  if (key.empty()) return;
+  sketch_.update(key.data(), key.size(), values.data());
 }
 void ArrayOfDoublesSketchShim::update_bytes(rust::Slice<const uint8_t> key, rust::Slice<const double> values) {
   check_values_len(sketch_, values);

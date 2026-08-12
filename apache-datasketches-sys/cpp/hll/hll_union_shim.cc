@@ -12,7 +12,10 @@ void HllUnionShim::update_u64(uint64_t value) { u_.update(value); }
 void HllUnionShim::update_i64(int64_t value) { u_.update(value); }
 void HllUnionShim::update_f64(double value) { u_.update(value); }
 void HllUnionShim::update_str(rust::Str value) {
-  u_.update(std::string(value));
+  // See HllSketchShim::update_str: no std::string copy, and the empty guard
+  // has to be replicated here because it lives in the bypassed overload.
+  if (value.empty()) return;
+  u_.update(value.data(), value.size());
 }
 void HllUnionShim::update_bytes(rust::Slice<const uint8_t> value) {
   u_.update(value.data(), value.size());

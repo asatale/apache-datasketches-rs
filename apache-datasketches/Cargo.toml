@@ -243,6 +243,10 @@ name = "cross_family_all_features_test"
 required-features = ["theta", "tuple"]
 
 [[test]]
+name = "update_str_empty_test"
+required-features = ["hll", "theta", "cpc", "tuple"]
+
+[[test]]
 name = "tuple_generic_sketch_smoke_test"
 required-features = ["tuple"]
 

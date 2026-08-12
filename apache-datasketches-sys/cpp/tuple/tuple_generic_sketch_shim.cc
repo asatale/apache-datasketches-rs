@@ -75,7 +75,10 @@ void TupleGenericSketchShim::update_f64(double key, const RustSummary& value) {
   sketch_.update(key, value);
 }
 void TupleGenericSketchShim::update_str(rust::Str key, const RustSummary& value) {
-  sketch_.update(std::string(key), value);
+  // Forward the borrowed bytes directly; the empty guard is replicated
+  // because it lives in the std::string overload being bypassed.
+  if (key.empty()) return;
+  sketch_.update(key.data(), key.size(), value);
 }
 void TupleGenericSketchShim::update_bytes(rust::Slice<const uint8_t> key, const RustSummary& value) {
   sketch_.update(key.data(), key.size(), value);
