@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Compiles and runs the native C++ reference benchmarks.
 #
-# Usage: ./benches/cpp_reference/run.sh [item_count]
+# Usage: ./benches/cpp_reference/run.sh [item_count] [--reps N] [--ladder]
+#
+# Arguments are forwarded verbatim to every benchmark, so they all measure the
+# same shape.
 #
 # See README.md in this directory for what these are for.
 set -euo pipefail
@@ -33,6 +36,7 @@ trap 'rm -rf "$out"' EXIT
 # header set alone -- but the include dir has to be present.
 CXX="${CXX:-c++}"
 includes=(
+  -I"$here" # bench_common.h, shared by every benchmark in this directory
   -I"$vendor/common/include"
   -I"$vendor/theta/include"
   -I"$vendor/tuple/include"
