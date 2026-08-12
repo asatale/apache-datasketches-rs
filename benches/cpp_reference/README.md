@@ -101,7 +101,8 @@ rung that exists on only one side is reported rather than quietly skipped.
 ## Keeping them in sync
 
 Each `.cc` mirrors its Rust counterpart exactly: same `lg_k`, same target type
-or `num_values`, same scenarios (`distinct`, `hot` and `str`), same key spaces. If
+or `num_values`, same scenarios (`distinct`, `hot`, `str` and `ser`/`deser`),
+same key spaces. If
 you change the parameters on one side, change them on the other or the ratio
 becomes meaningless. Both print the sketch estimate, which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match
@@ -126,6 +127,33 @@ The pool is 64Ki distinct keys, cycled. For the families with a theta screen
 that puts most updates past it — which is exactly where a per-call allocation
 in the shim is pure waste, since upstream discards the key without ever
 looking at it.
+
+## The `ser` and `deser` scenarios
+
+These are the one place where the item count is not the divisor. Serialization
+cost tracks the serialized *size*, and at `lg_k = 12` every family saturates
+well below the ladder's bottom rung — the same buffer comes out at 1M items as
+at 100M. The printed `ns/op` is therefore per serialize call, over a call count
+fixed in `bench_common.h` (`SER_CALLS`, `DESER_CALLS`) rather than taken from
+the command line; a count that moved with `--ladder` would make the number mean
+something different at each rung. The `items` column still says what the sketch
+was built from, and the ladder's three rungs printing near-identical `ser`
+timings is the expected result rather than a bug.
+
+The sketch is built once and shared by both directions and by every rep.
+Serializing does not mutate it, so unlike the update scenarios there is no state
+a second rep would find already dirtied — and rebuilding at the 100M rung would
+cost far more than the measurement.
+
+Both lines carry a `bytes=` field. It is needed to read the timing at all, and
+it is also a check the estimate cannot make: two sides can agree exactly on the
+estimate while one compacts ordered and the other does not, or serializes a
+different format. `compare.py` compares every labelled value on a scenario line
+except `reps`, so `bytes=` is gated alongside `estimate=` automatically.
+
+One format per family, matching the Rust side: HLL's compact (not updatable) and
+Theta's v3 (not the v4 compressed variant). Theta and ArrayOfDoubles compact
+with `ordered = true` before serializing, since only a compact sketch serializes.
 
 ## Reading the numbers
 
