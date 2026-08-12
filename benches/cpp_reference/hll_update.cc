@@ -68,6 +68,48 @@ void bench_str(uint64_t items, uint64_t reps) {
   bench::report("str", items, ns_per_op, estimates);
 }
 
+// Serialization, measured per call rather than per item: its cost tracks the
+// serialized size, which at lg_k = 12 is the same at every ladder rung.
+//
+// The sketch is built once and shared by both directions and every rep.
+// Serializing does not mutate it, so unlike the update scenarios there is no
+// state that a second rep would find already dirtied -- and rebuilding at the
+// 100M rung would cost more than the measurement itself.
+//
+// The compact format, matching the Rust harness: it is the one a caller
+// serializing for storage or the wire reaches for.
+void bench_serde(uint64_t items, uint64_t reps) {
+  auto sketch = build();
+  for (uint64_t key = 0; key < items; ++key) sketch.update(key);
+  const auto reference = sketch.serialize_compact();
+
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    uint64_t total = 0;
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < bench::SER_CALLS; ++i) total += sketch.serialize_compact().size();
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(bench::SER_CALLS));
+    bench::keep(static_cast<double>(total));
+    estimates.push_back(sketch.get_estimate());
+  }
+  bench::report_bytes("ser", items, ns_per_op, estimates, reference.size());
+
+  ns_per_op.clear();
+  estimates.clear();
+  const auto deserialize = [&reference] {
+    return datasketches::hll_sketch::deserialize(reference.data(), reference.size());
+  };
+  for (uint64_t r = 0; r < reps; ++r) {
+    double total = 0;
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < bench::DESER_CALLS; ++i) total += deserialize().get_estimate();
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(bench::DESER_CALLS));
+    bench::keep(total);
+    estimates.push_back(deserialize().get_estimate());
+  }
+  bench::report_bytes("deser", items, ns_per_op, estimates, reference.size());
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -78,6 +120,7 @@ int main(int argc, char** argv) {
     bench_distinct(items, cfg.reps);
     bench_hot(items, cfg.reps);
     bench_str(items, cfg.reps);
+    bench_serde(items, cfg.reps);
   }
   return 0;
 }

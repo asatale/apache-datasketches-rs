@@ -34,9 +34,23 @@
 //! difference between them is binding overhead and not a choice of overload.
 
 use apache_datasketches::hll::{HllSketch, TargetHllType};
+use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 const LG_K: u8 = 12;
+
+/// The `ser` and `deser` scenarios are the one place where the item count is
+/// not the divisor: serialization cost tracks the serialized *size*, and at
+/// this harness's `lg_k` the sketch saturates well below the ladder's bottom
+/// rung, so the same buffer is produced at 1M items as at 100M. The printed
+/// `ns/op` is therefore per serialize call, over a call count fixed here
+/// rather than taken from the command line -- otherwise the number would
+/// silently mean something different at each rung.
+///
+/// Keep in step with `bench_common.h`.
+const SER_CALLS: u64 = 20_000;
+const DESER_CALLS: u64 = 5_000;
+
 const HOT_KEY_SPACE: u64 = 1 << 10;
 
 /// Size of the pre-built string-key pool. See `string_keys`.
@@ -123,6 +137,23 @@ fn parse_args() -> (Vec<u64>, usize) {
 /// as bare numbers in fixed columns, so that reading them back does not mean
 /// counting awk fields that shift whenever a column is added.
 fn report(label: &str, items: u64, passes: &[Pass]) {
+    report_line(label, items, items, passes, String::new());
+}
+
+/// As [`report`], plus the serialized size, and dividing by an explicit `ops`
+/// rather than by the item count.
+///
+/// The size is worth printing for its own sake -- it is the quantity a `ser`
+/// or `deser` `ns/op` is proportional to, so without it the timing cannot be
+/// interpreted -- but it is also a check the estimate cannot make. Two sides
+/// can agree exactly on the estimate while one compacts ordered and the other
+/// does not, or serializes a different format; the byte count differs the
+/// moment they do.
+fn report_bytes(label: &str, items: u64, ops: u64, passes: &[Pass], bytes: usize) {
+    report_line(label, items, ops, passes, format!(" bytes={bytes}"));
+}
+
+fn report_line(label: &str, items: u64, ops: u64, passes: &[Pass], suffix: String) {
     for (i, pass) in passes.iter().enumerate() {
         assert_eq!(
             pass.estimate, passes[0].estimate,
@@ -133,7 +164,7 @@ fn report(label: &str, items: u64, passes: &[Pass]) {
     }
     let mut ns_per_op: Vec<f64> = passes
         .iter()
-        .map(|p| p.elapsed.as_secs_f64() * 1e9 / items as f64)
+        .map(|p| p.elapsed.as_secs_f64() * 1e9 / ops as f64)
         .collect();
     ns_per_op.sort_by(f64::total_cmp);
     let median = ns_per_op[(ns_per_op.len() - 1) / 2];
@@ -142,7 +173,7 @@ fn report(label: &str, items: u64, passes: &[Pass]) {
     let (reps, estimate) = (passes.len(), passes[0].estimate);
     println!(
         "{label:9} {items:>12} items  {median:>7.2} ns/op  min {min:>7.2}  max {max:>7.2}  \
-         {rate:>8.1} M/s  reps={reps} estimate={estimate:.0}"
+         {rate:>8.1} M/s  reps={reps} estimate={estimate:.0}{suffix}"
     );
 }
 
@@ -213,6 +244,54 @@ fn bench_str(items: u64, reps: usize) {
     report("str", items, &passes);
 }
 
+/// Serialization, measured per call rather than per item: its cost tracks the
+/// serialized size, which at `lg_k = 12` is the same at every ladder rung.
+///
+/// The sketch is built once and shared by both directions and every rep.
+/// Serializing does not mutate it, so unlike the update scenarios there is no
+/// state that a second rep would find already dirtied -- and rebuilding at the
+/// 100M rung would cost more than the measurement itself.
+fn bench_serde(items: u64, reps: usize) {
+    let mut sketch = build();
+    for key in 0..items {
+        sketch.update_u64(key);
+    }
+    let reference = sketch.serialize_compact();
+
+    let mut passes = Vec::with_capacity(reps);
+    for _ in 0..reps {
+        let start = Instant::now();
+        let mut total = 0usize;
+        for _ in 0..SER_CALLS {
+            total += black_box(sketch.serialize_compact()).len();
+        }
+        let elapsed = start.elapsed();
+        black_box(total);
+        passes.push(Pass {
+            elapsed,
+            estimate: sketch.get_estimate(),
+        });
+    }
+    report_bytes("ser", items, SER_CALLS, &passes, reference.len());
+
+    let deserialize = || HllSketch::deserialize(&reference).expect("the bytes came from serialize");
+    let mut passes = Vec::with_capacity(reps);
+    for _ in 0..reps {
+        let start = Instant::now();
+        let mut total = 0.0;
+        for _ in 0..DESER_CALLS {
+            total += deserialize().get_estimate();
+        }
+        let elapsed = start.elapsed();
+        black_box(total);
+        passes.push(Pass {
+            elapsed,
+            estimate: deserialize().get_estimate(),
+        });
+    }
+    report_bytes("deser", items, DESER_CALLS, &passes, reference.len());
+}
+
 fn main() {
     let (counts, reps) = parse_args();
     for items in counts {
@@ -220,5 +299,6 @@ fn main() {
         bench_distinct(items, reps);
         bench_hot(items, reps);
         bench_str(items, reps);
+        bench_serde(items, reps);
     }
 }

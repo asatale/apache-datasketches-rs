@@ -31,6 +31,20 @@ constexpr uint64_t STR_KEY_SPACE = 1 << 16;
 constexpr uint64_t DEFAULT_ITEMS = 10000000ULL;
 constexpr uint64_t DEFAULT_REPS = 3;
 
+// The `ser` and `deser` scenarios are the one place where the item count is not
+// the divisor: serialization cost tracks the serialized *size*, and at these
+// harnesses' lg_k the sketch saturates well below the ladder's bottom rung, so
+// the same buffer is produced at 1M items as at 100M. The printed ns/op is
+// therefore per serialize call, over a call count fixed here rather than taken
+// from the command line -- otherwise the number would silently mean something
+// different at each rung and could not be compared across them.
+//
+// Sized so the timed region is around a tenth of a second once the shim is not
+// the bottleneck. Small enough not to dominate a --ladder run, large enough
+// that a single scheduler hiccup does not move the median.
+constexpr uint64_t SER_CALLS = 20000;
+constexpr uint64_t DESER_CALLS = 5000;
+
 // Item counts for --ladder, which exists because a single item count hides the
 // shape: a family's per-update cost is not constant as the sketch fills.
 //
@@ -98,6 +112,14 @@ inline std::vector<std::string> string_keys() {
   return keys;
 }
 
+// Consumes a value so the loop that produced it cannot be optimised away. The
+// update scenarios get this for free by reading the sketch's estimate
+// afterwards; a serialize loop throws its result away, so it needs saying.
+inline void keep(double value) {
+  static volatile double sink;
+  sink = value;
+}
+
 inline double seconds_since(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
@@ -119,8 +141,10 @@ inline double seconds_since(std::chrono::steady_clock::time_point start) {
 // ns/op, reps and estimate are printed as labelled values rather than as bare
 // numbers in fixed columns, so that reading them back does not mean counting
 // awk fields that shift whenever a column is added.
-inline void report(const char* label, uint64_t items, std::vector<double> ns_per_op,
-                   const std::vector<double>& estimates) {
+namespace detail {
+
+inline void report_line(const char* label, uint64_t items, std::vector<double> ns_per_op,
+                        const std::vector<double>& estimates, const char* suffix) {
   for (size_t i = 1; i < estimates.size(); ++i) {
     if (estimates[i] != estimates[0]) {
       fprintf(stderr,
@@ -132,9 +156,29 @@ inline void report(const char* label, uint64_t items, std::vector<double> ns_per
   }
   std::sort(ns_per_op.begin(), ns_per_op.end());
   const double median = ns_per_op[(ns_per_op.size() - 1) / 2];
-  printf("%-9s %12llu items  %7.2f ns/op  min %7.2f  max %7.2f  %8.1f M/s  reps=%zu estimate=%.0f\n",
+  printf("%-9s %12llu items  %7.2f ns/op  min %7.2f  max %7.2f  %8.1f M/s  reps=%zu estimate=%.0f%s\n",
          label, static_cast<unsigned long long>(items), median, ns_per_op.front(),
-         ns_per_op.back(), 1000.0 / median, ns_per_op.size(), estimates[0]);
+         ns_per_op.back(), 1000.0 / median, ns_per_op.size(), estimates[0], suffix);
+}
+
+} // namespace detail
+
+inline void report(const char* label, uint64_t items, std::vector<double> ns_per_op,
+                   const std::vector<double>& estimates) {
+  detail::report_line(label, items, std::move(ns_per_op), estimates, "");
+}
+
+// As report, plus the serialized size. Worth printing for its own sake -- it is
+// the quantity the ns/op of a `ser` or `deser` scenario is proportional to, so
+// without it the timing cannot be interpreted -- but it is also the check that
+// catches a difference the estimate cannot see. Two sides can agree exactly on
+// the estimate while one compacts ordered and the other does not, or serializes
+// a different format; the byte count differs the moment they do.
+inline void report_bytes(const char* label, uint64_t items, std::vector<double> ns_per_op,
+                         const std::vector<double>& estimates, size_t bytes) {
+  char suffix[32];
+  snprintf(suffix, sizeof suffix, " bytes=%zu", bytes);
+  detail::report_line(label, items, std::move(ns_per_op), estimates, suffix);
 }
 
 } // namespace bench

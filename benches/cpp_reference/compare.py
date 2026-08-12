@@ -10,9 +10,9 @@ same line format on purpose, so one parser serves both:
 
 Only the scenario lines are read. The parameter header is skipped rather than
 compared, because the two sides legitimately word it differently (HLL prints a
-target type, the others do not) -- the estimate is the check that they really
-ran the same workload, and it is a far stronger one than matching a header
-string would be.
+target type, the others do not) -- the labelled values on the scenario lines are
+the check that they really ran the same workload, and a far stronger one than
+matching a header string would be.
 """
 
 import sys
@@ -24,7 +24,14 @@ LADDER_FLOOR = 1_000_000
 
 
 def parse(path):
-    """Returns {(family, items, scenario): (ns_per_op, estimate)}."""
+    """Returns {(family, items, scenario): (ns_per_op, {label: value})}.
+
+    The second element collects every `name=value` field on the line except
+    `reps`, which the two sides are free to differ on. Both `estimate` and the
+    `bytes` the serialization scenarios add are therefore checked without this
+    parser needing to know which scenarios carry which -- a scenario that
+    prints a new field gets it compared for free.
+    """
     rows = {}
     family = None
     with open(path) as f:
@@ -33,11 +40,13 @@ def parse(path):
             if line.startswith("--- "):
                 family = fields[1]
             elif len(fields) >= 3 and fields[2] == "items" and family:
-                estimate = next(
-                    x.split("=", 1)[1] for x in fields if x.startswith("estimate=")
+                checked = dict(
+                    x.split("=", 1)
+                    for x in fields
+                    if "=" in x and not x.startswith("reps=")
                 )
                 key = (family, int(fields[1]), fields[0])
-                rows[key] = (float(fields[3]), float(estimate))
+                rows[key] = (float(fields[3]), checked)
     return rows
 
 
@@ -59,13 +68,16 @@ def main():
     )
     for key in sorted(cpp.keys() & rust.keys()):
         family, items, scenario = key
-        cpp_ns, cpp_estimate = cpp[key]
-        rust_ns, rust_estimate = rust[key]
-        if cpp_estimate != rust_estimate:
-            failures.append(
-                f"{family}/{items}/{scenario}: C++ estimated {cpp_estimate:.0f} but "
-                f"Rust estimated {rust_estimate:.0f}"
-            )
+        cpp_ns, cpp_checked = cpp[key]
+        rust_ns, rust_checked = rust[key]
+        for label in sorted(cpp_checked.keys() | rust_checked.keys()):
+            cpp_value = cpp_checked.get(label, "(absent)")
+            rust_value = rust_checked.get(label, "(absent)")
+            if cpp_value != rust_value:
+                failures.append(
+                    f"{family}/{items}/{scenario}: C++ reported {label}={cpp_value} "
+                    f"but Rust reported {label}={rust_value}"
+                )
         print(
             f"{family:<17} {items:>12} {scenario:<9} {cpp_ns:>8.2f} {rust_ns:>8.2f} "
             f"{rust_ns - cpp_ns:>+9.2f} {rust_ns / cpp_ns:>5.2f}x"
@@ -84,10 +96,11 @@ def main():
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         print(
-            "\nBoth sides feed identical keys through identical hashing, so their "
-            "estimates must match exactly. Check that lg_k, the key spaces and the "
-            "scenario set agree -- see the 'Keeping them in sync' section of "
-            "benches/cpp_reference/README.md.",
+            "\nBoth sides feed identical keys through identical hashing, so every "
+            "labelled value must match exactly: the estimate, and the serialized size "
+            "where a scenario prints one. Check that lg_k, the key spaces, the "
+            "compaction ordering and the scenario set agree -- see the 'Keeping them "
+            "in sync' section of benches/cpp_reference/README.md.",
             file=sys.stderr,
         )
         sys.exit(1)
