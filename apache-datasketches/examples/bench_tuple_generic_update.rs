@@ -16,7 +16,7 @@
 //! Fixed parameters so runs are comparable: `lg_k = 12`, defaults elsewhere,
 //! item count defaults to 10M and can be overridden as the first argument.
 //!
-//! Same two scenarios as the ArrayOfDoubles harness, for the same reason —
+//! Same three scenarios as the ArrayOfDoubles harness, for the same reason —
 //! they exercise different halves of upstream's `update_tuple_sketch::update`:
 //!
 //! - `distinct` — every key is new, so once theta drops most keys are rejected
@@ -34,6 +34,17 @@ use std::time::{Duration, Instant};
 
 const LG_K: u8 = 12;
 const HOT_KEY_SPACE: u64 = 1 << 10;
+
+/// Size of the pre-built string-key pool. See `string_keys`.
+const STR_KEY_SPACE: u64 = 1 << 16;
+
+/// Built once, outside every timed region: formatting a key costs more than
+/// the update does, and it costs a different amount in each language, so
+/// including it would swamp the per-call delta this harness exists to show.
+/// Keep the format identical to the C++ counterpart or the estimates diverge.
+fn string_keys() -> Vec<String> {
+    (0..STR_KEY_SPACE).map(|i| format!("key_{i:010}")).collect()
+}
 
 #[derive(Clone)]
 struct Count(u64);
@@ -89,6 +100,17 @@ fn bench_hot(items: u64) {
     report("hot", items, elapsed, sketch.get_estimate());
 }
 
+fn bench_str(items: u64) {
+    let mut sketch = build();
+    let keys = string_keys();
+    let start = Instant::now();
+    for i in 0..items {
+        sketch.update_str(&keys[(i % STR_KEY_SPACE) as usize], &());
+    }
+    let elapsed = start.elapsed();
+    report("str", items, elapsed, sketch.get_estimate());
+}
+
 fn main() {
     let items: u64 = std::env::args()
         .nth(1)
@@ -98,4 +120,5 @@ fn main() {
     println!("lg_k={LG_K} items={items}");
     bench_distinct(items);
     bench_hot(items);
+    bench_str(items);
 }
