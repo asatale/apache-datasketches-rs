@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include "rust/cxx.h"
 #include "theta_sketch.hpp"
 #include "theta_sketch_shim.h"
@@ -20,8 +21,8 @@ public:
   double get_theta() const;
   uint32_t get_num_retained() const;
 
-  rust::Vec<uint8_t> serialize_compact() const;
-  rust::Vec<uint8_t> serialize_compressed() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_compact() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_compressed() const;
 
   const datasketches::compact_theta_sketch& inner() const { return sketch_; }
 

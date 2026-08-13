@@ -18,18 +18,18 @@ bool CompactThetaSketchShim::is_ordered() const { return sketch_.is_ordered(); }
 double CompactThetaSketchShim::get_theta() const { return sketch_.get_theta(); }
 uint32_t CompactThetaSketchShim::get_num_retained() const { return sketch_.get_num_retained(); }
 
-rust::Vec<uint8_t> CompactThetaSketchShim::serialize_compact() const {
-  auto bytes = sketch_.serialize();
-  rust::Vec<uint8_t> out;
-  for (auto b : bytes) out.push_back(b);
-  return out;
+// Returned as a heap std::vector rather than a rust::Vec built by hand.
+// rust::Vec::push_back goes through emplace_back, which makes two
+// non-inlinable extern "C" calls back into Rust per element; over a
+// serialized buffer that is two boundary crossings per byte, and it dominated
+// everything else the call does. A unique_ptr hands the buffer over whole and
+// leaves the Rust side one memcpy to do.
+std::unique_ptr<std::vector<uint8_t>> CompactThetaSketchShim::serialize_compact() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize());
 }
 
-rust::Vec<uint8_t> CompactThetaSketchShim::serialize_compressed() const {
-  auto bytes = sketch_.serialize_compressed();
-  rust::Vec<uint8_t> out;
-  for (auto b : bytes) out.push_back(b);
-  return out;
+std::unique_ptr<std::vector<uint8_t>> CompactThetaSketchShim::serialize_compressed() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize_compressed());
 }
 
 std::unique_ptr<CompactThetaSketchShim> theta_sketch_compact(const ThetaSketchShim& sketch, bool ordered) {

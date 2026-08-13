@@ -58,7 +58,7 @@ fn union_sums_values_on_collision() {
     u.pin_mut().update_with_sketch(&b);
     let result = u.get_result(true);
     assert_eq!(result.get_num_retained(), 1);
-    let values: Vec<f64> = result.entry_values().into_iter().collect();
+    let values: Vec<f64> = result.entry_values().as_slice().to_vec();
     assert_eq!(values, vec![3.0, 30.0]);
 }
 

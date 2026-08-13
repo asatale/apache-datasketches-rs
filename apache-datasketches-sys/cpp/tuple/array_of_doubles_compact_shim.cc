@@ -19,25 +19,29 @@ double CompactArrayOfDoublesSketchShim::get_theta() const { return sketch_.get_t
 uint32_t CompactArrayOfDoublesSketchShim::get_num_retained() const { return sketch_.get_num_retained(); }
 uint8_t CompactArrayOfDoublesSketchShim::get_num_values() const { return sketch_.get_num_values(); }
 
-rust::Vec<uint64_t> CompactArrayOfDoublesSketchShim::entry_hashes() const {
-  rust::Vec<uint64_t> out;
-  for (const auto& entry : sketch_) out.push_back(entry.first);
+// Returned as heap std::vectors rather than rust::Vecs built by hand.
+// rust::Vec::push_back goes through emplace_back, which makes two
+// non-inlinable extern "C" calls back into Rust per element; over a full
+// sketch's worth of entries that dominated everything else the call does. A
+// unique_ptr hands each buffer over whole and leaves the Rust side one memcpy.
+std::unique_ptr<std::vector<uint64_t>> CompactArrayOfDoublesSketchShim::entry_hashes() const {
+  auto out = std::make_unique<std::vector<uint64_t>>();
+  out->reserve(sketch_.get_num_retained());
+  for (const auto& entry : sketch_) out->push_back(entry.first);
   return out;
 }
 
-rust::Vec<double> CompactArrayOfDoublesSketchShim::entry_values() const {
-  rust::Vec<double> out;
+std::unique_ptr<std::vector<double>> CompactArrayOfDoublesSketchShim::entry_values() const {
+  auto out = std::make_unique<std::vector<double>>();
+  out->reserve(static_cast<size_t>(sketch_.get_num_retained()) * sketch_.get_num_values());
   for (const auto& entry : sketch_) {
-    for (uint8_t i = 0; i < entry.second.size(); ++i) out.push_back(entry.second[i]);
+    for (uint8_t i = 0; i < entry.second.size(); ++i) out->push_back(entry.second[i]);
   }
   return out;
 }
 
-rust::Vec<uint8_t> CompactArrayOfDoublesSketchShim::serialize() const {
-  auto bytes = sketch_.serialize();
-  rust::Vec<uint8_t> out;
-  for (auto b : bytes) out.push_back(b);
-  return out;
+std::unique_ptr<std::vector<uint8_t>> CompactArrayOfDoublesSketchShim::serialize() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize());
 }
 
 std::unique_ptr<CompactArrayOfDoublesSketchShim> array_of_doubles_sketch_compact(const ArrayOfDoublesSketchShim& sketch, bool ordered) {

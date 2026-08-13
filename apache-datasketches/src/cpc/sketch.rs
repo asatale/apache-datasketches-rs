@@ -133,7 +133,7 @@ impl CpcSketch {
     /// compressed, so there is only this one serialization method (unlike
     /// Theta's separate compressed/uncompressed formats).
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.serialize()
+        self.inner.serialize().as_slice().to_vec()
     }
 }
 

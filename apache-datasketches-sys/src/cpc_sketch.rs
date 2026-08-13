@@ -30,6 +30,6 @@ pub mod ffi {
         fn get_lg_k(self: &CpcSketchShim) -> u8;
         fn to_string_summary(self: &CpcSketchShim) -> String;
 
-        fn serialize(self: &CpcSketchShim) -> Vec<u8>;
+        fn serialize(self: &CpcSketchShim) -> UniquePtr<CxxVector<u8>>;
     }
 }

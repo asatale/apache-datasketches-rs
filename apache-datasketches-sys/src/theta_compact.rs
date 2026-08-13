@@ -25,7 +25,7 @@ pub mod ffi {
         fn get_theta(self: &CompactThetaSketchShim) -> f64;
         fn get_num_retained(self: &CompactThetaSketchShim) -> u32;
 
-        fn serialize_compact(self: &CompactThetaSketchShim) -> Vec<u8>;
-        fn serialize_compressed(self: &CompactThetaSketchShim) -> Vec<u8>;
+        fn serialize_compact(self: &CompactThetaSketchShim) -> UniquePtr<CxxVector<u8>>;
+        fn serialize_compressed(self: &CompactThetaSketchShim) -> UniquePtr<CxxVector<u8>>;
     }
 }

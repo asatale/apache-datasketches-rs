@@ -41,12 +41,14 @@ rust::String CpcSketchShim::to_string_summary() const {
   return rust::String(std::string(sketch_.to_string().c_str()));
 }
 
-rust::Vec<uint8_t> CpcSketchShim::serialize() const {
-  auto bytes = sketch_.serialize();
-  rust::Vec<uint8_t> out;
-  out.reserve(bytes.size());
-  for (auto b : bytes) out.push_back(b);
-  return out;
+// Returned as a heap std::vector rather than a rust::Vec built by hand.
+// rust::Vec::push_back goes through emplace_back, which makes two
+// non-inlinable extern "C" calls back into Rust per element; over a
+// serialized buffer that is two boundary crossings per byte, and it dominated
+// everything else the call does. A unique_ptr hands the buffer over whole and
+// leaves the Rust side one memcpy to do.
+std::unique_ptr<std::vector<uint8_t>> CpcSketchShim::serialize() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize());
 }
 
 std::unique_ptr<CpcSketchShim> new_cpc_sketch(uint8_t lg_k) {

@@ -38,8 +38,8 @@ pub mod ffi {
         fn reset(self: Pin<&mut HllSketchShim>);
         fn to_string_summary(self: &HllSketchShim) -> String;
 
-        fn serialize_compact(self: &HllSketchShim) -> Vec<u8>;
-        fn serialize_updatable(self: &HllSketchShim) -> Vec<u8>;
+        fn serialize_compact(self: &HllSketchShim) -> UniquePtr<CxxVector<u8>>;
+        fn serialize_updatable(self: &HllSketchShim) -> UniquePtr<CxxVector<u8>>;
 
         type HllUnionShim;
 
@@ -54,8 +54,14 @@ pub mod ffi {
 
         fn get_result(self: &HllUnionShim, tgt_type: TargetHllType) -> UniquePtr<HllSketchShim>;
 
-        fn serialize_compact(self: &HllUnionShim, tgt_type: TargetHllType) -> Vec<u8>;
-        fn serialize_updatable(self: &HllUnionShim, tgt_type: TargetHllType) -> Vec<u8>;
+        fn serialize_compact(
+            self: &HllUnionShim,
+            tgt_type: TargetHllType,
+        ) -> UniquePtr<CxxVector<u8>>;
+        fn serialize_updatable(
+            self: &HllUnionShim,
+            tgt_type: TargetHllType,
+        ) -> UniquePtr<CxxVector<u8>>;
 
         fn get_estimate(self: &HllUnionShim) -> f64;
         fn get_lower_bound(self: &HllUnionShim, num_std_dev: u8) -> Result<f64>;

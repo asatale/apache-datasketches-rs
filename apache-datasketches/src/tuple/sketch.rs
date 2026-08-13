@@ -238,8 +238,8 @@ impl ArrayOfDoublesSketch {
     /// hash-ordered iteration.
     pub fn entries(&self) -> impl Iterator<Item = (u64, Vec<f64>)> {
         let num_values = self.num_values as usize;
-        let hashes: Vec<u64> = self.inner.entry_hashes().into_iter().collect();
-        let values: Vec<f64> = self.inner.entry_values().into_iter().collect();
+        let hashes: Vec<u64> = self.inner.entry_hashes().as_slice().to_vec();
+        let values: Vec<f64> = self.inner.entry_values().as_slice().to_vec();
         let grouped: Vec<Vec<f64>> = if num_values == 0 {
             Vec::new()
         } else {

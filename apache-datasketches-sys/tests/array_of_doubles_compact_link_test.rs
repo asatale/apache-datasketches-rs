@@ -36,16 +36,17 @@ fn serialize_deserialize_round_trip() {
     let bytes = compact.serialize();
     assert!(!bytes.is_empty());
 
-    let restored = compact_ffi::compact_array_of_doubles_sketch_deserialize(&bytes).unwrap();
+    let restored =
+        compact_ffi::compact_array_of_doubles_sketch_deserialize(bytes.as_slice()).unwrap();
     assert_eq!(restored.get_num_retained(), compact.get_num_retained());
     assert_eq!(restored.get_num_values(), compact.get_num_values());
     assert_eq!(restored.get_estimate(), compact.get_estimate());
     // Collect into std Vecs: cxx::Vec does not implement PartialEq.
-    let restored_hashes: Vec<u64> = restored.entry_hashes().into_iter().collect();
-    let compact_hashes: Vec<u64> = compact.entry_hashes().into_iter().collect();
+    let restored_hashes: Vec<u64> = restored.entry_hashes().as_slice().to_vec();
+    let compact_hashes: Vec<u64> = compact.entry_hashes().as_slice().to_vec();
     assert_eq!(restored_hashes, compact_hashes);
-    let restored_values: Vec<f64> = restored.entry_values().into_iter().collect();
-    let compact_values: Vec<f64> = compact.entry_values().into_iter().collect();
+    let restored_values: Vec<f64> = restored.entry_values().as_slice().to_vec();
+    let compact_values: Vec<f64> = compact.entry_values().as_slice().to_vec();
     assert_eq!(restored_values, compact_values);
 }
 

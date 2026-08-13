@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include <stdexcept>
 #include "rust/cxx.h"
 #include "hll.hpp"
@@ -42,8 +43,8 @@ public:
   void reset();
   rust::String to_string_summary() const;
 
-  rust::Vec<uint8_t> serialize_compact() const;
-  rust::Vec<uint8_t> serialize_updatable() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_compact() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_updatable() const;
 
   const datasketches::hll_sketch& inner() const { return sketch_; }
 

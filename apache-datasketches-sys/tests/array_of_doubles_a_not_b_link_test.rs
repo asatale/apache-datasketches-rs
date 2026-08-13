@@ -82,6 +82,6 @@ fn a_not_b_preserves_num_values_and_values() {
     let result = calc.compute_sketch_sketch(&a, &b, true);
     assert_eq!(result.get_num_values(), 2);
     assert_eq!(result.get_num_retained(), 1);
-    let values: Vec<f64> = result.entry_values().into_iter().collect();
+    let values: Vec<f64> = result.entry_values().as_slice().to_vec();
     assert_eq!(values, vec![5.0, 6.0]);
 }
