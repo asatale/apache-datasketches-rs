@@ -101,8 +101,8 @@ rung that exists on only one side is reported rather than quietly skipped.
 ## Keeping them in sync
 
 Each `.cc` mirrors its Rust counterpart exactly: same `lg_k`, same target type
-or `num_values`, same scenarios (`distinct`, `hot`, `str` and `ser`/`deser`),
-same key spaces. If
+or `num_values`, same scenarios (`distinct`, `hot`, `str`, `ser`/`deser`, and
+for Theta and ArrayOfDoubles `union`/`intersect`/`jaccard`), same key spaces. If
 you change the parameters on one side, change them on the other or the ratio
 becomes meaningless. Both print the sketch estimate, which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match
@@ -154,6 +154,34 @@ except `reps`, so `bytes=` is gated alongside `estimate=` automatically.
 One format per family, matching the Rust side: HLL's compact (not updatable) and
 Theta's v3 (not the v4 compressed variant). Theta and ArrayOfDoubles compact
 with `ordered = true` before serializing, since only a compact sketch serializes.
+
+## The `union`, `intersect` and `jaccard` scenarios
+
+These exist only for `theta_update.cc`/`bench_theta_update.rs` and
+`array_of_doubles_update.cc`/`bench_tuple_update.rs`. HLL and CPC expose only
+`union.rs` in this crate — no `intersection.rs` or `jaccard.rs` — so there is
+nothing for those two families to pair against here.
+
+Two operands are built once outside every timed region, with 50% key overlap,
+so the operand-construction cost lands in setup rather than in the number
+being measured. `union` and `intersect` build a fresh accumulator on every
+call inside the timed loop — reusing one across `OP_CALLS` iterations would
+have each call merge into an ever-growing result, measuring a different
+workload every time. `jaccard` has no accumulator to rebuild; it is a pure
+function of the two operands.
+
+As with `ser`/`deser`, cost here tracks the retained-entries table (at most
+`2^lg_k` entries), not the item count, so it is measured over a fixed call
+count (`OP_CALLS` in `bench_common.h`) rather than one taken from the command
+line. The ladder's rungs printing near-identical timings is expected.
+
+`jaccard`'s result is a `{lower_bound, estimate, upper_bound}` confidence
+interval in `[0.0, 1.0]`, not a cardinality estimate, so it does not fit the
+`report()`/`bench::report()` print format: at that precision (`%.0f`) every
+value would round to `0`. `report_jaccard()`/`bench::report_jaccard()` print
+all three fields to 9 decimal places instead, and `compare.py` picks up
+`lower=`, `estimate=` and `upper=` the same way it picks up `estimate=`
+elsewhere — no changes to `compare.py` were needed.
 
 ## Reading the numbers
 
