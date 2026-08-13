@@ -31,7 +31,7 @@ impl CompactArrayOfDoublesSketch {
     /// created (e.g. via
     /// [`ArrayOfDoublesSketch::compact`](super::ArrayOfDoublesSketch::compact)).
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.serialize()
+        self.inner.serialize().as_slice().to_vec()
     }
 
     /// Returns the current estimate of the number of distinct keys in this
@@ -102,8 +102,8 @@ impl CompactArrayOfDoublesSketch {
     /// rather than borrowing from the sketch.
     pub fn entries(&self) -> impl Iterator<Item = (u64, Vec<f64>)> {
         let num_values = self.inner.get_num_values() as usize;
-        let hashes: Vec<u64> = self.inner.entry_hashes().into_iter().collect();
-        let values: Vec<f64> = self.inner.entry_values().into_iter().collect();
+        let hashes: Vec<u64> = self.inner.entry_hashes().as_slice().to_vec();
+        let values: Vec<f64> = self.inner.entry_values().as_slice().to_vec();
         let grouped: Vec<Vec<f64>> = if num_values == 0 {
             Vec::new()
         } else {

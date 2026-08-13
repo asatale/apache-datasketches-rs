@@ -95,11 +95,11 @@ impl CompactThetaSketch {
     /// orderedness is fixed when this sketch was created (e.g. via
     /// `ThetaSketch::compact(ordered)`).
     pub fn serialize_compact(&self) -> Vec<u8> {
-        self.inner.serialize_compact()
+        self.inner.serialize_compact().as_slice().to_vec()
     }
 
     /// Serializes in the v4 (compressed) format.
     pub fn serialize_compressed(&self) -> Vec<u8> {
-        self.inner.serialize_compressed()
+        self.inner.serialize_compressed().as_slice().to_vec()
     }
 }

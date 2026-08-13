@@ -27,9 +27,9 @@ pub mod ffi {
         fn get_num_retained(self: &CompactArrayOfDoublesSketchShim) -> u32;
         fn get_num_values(self: &CompactArrayOfDoublesSketchShim) -> u8;
 
-        fn entry_hashes(self: &CompactArrayOfDoublesSketchShim) -> Vec<u64>;
-        fn entry_values(self: &CompactArrayOfDoublesSketchShim) -> Vec<f64>;
+        fn entry_hashes(self: &CompactArrayOfDoublesSketchShim) -> UniquePtr<CxxVector<u64>>;
+        fn entry_values(self: &CompactArrayOfDoublesSketchShim) -> UniquePtr<CxxVector<f64>>;
 
-        fn serialize(self: &CompactArrayOfDoublesSketchShim) -> Vec<u8>;
+        fn serialize(self: &CompactArrayOfDoublesSketchShim) -> UniquePtr<CxxVector<u8>>;
     }
 }

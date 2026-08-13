@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include "rust/cxx.h"
 #include "hll.hpp"
 #include "hll_sketch_shim.h"
@@ -34,8 +35,8 @@ public:
   // state isn't independently serializable, only its result sketch is. These
   // convenience methods serialize get_result(tgt_type) directly so callers
   // don't need to round-trip through get_result() themselves.
-  rust::Vec<uint8_t> serialize_compact(TargetHllType tgt_type) const;
-  rust::Vec<uint8_t> serialize_updatable(TargetHllType tgt_type) const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_compact(TargetHllType tgt_type) const;
+  std::unique_ptr<std::vector<uint8_t>> serialize_updatable(TargetHllType tgt_type) const;
 
   double get_estimate() const;
   double get_lower_bound(uint8_t num_std_dev) const;

@@ -63,8 +63,8 @@ public:
 
   std::unique_ptr<CompactArrayOfDoublesSketchShim> compact(bool ordered) const;
 
-  rust::Vec<uint64_t> entry_hashes() const;
-  rust::Vec<double> entry_values() const;
+  std::unique_ptr<std::vector<uint64_t>> entry_hashes() const;
+  std::unique_ptr<std::vector<double>> entry_values() const;
 
   const datasketches::update_array_of_doubles_sketch& inner() const { return sketch_; }
 

@@ -51,8 +51,8 @@ pub mod ffi {
         fn get_num_retained(self: &ArrayOfDoublesSketchShim) -> u32;
         fn get_num_values(self: &ArrayOfDoublesSketchShim) -> u8;
 
-        fn entry_hashes(self: &ArrayOfDoublesSketchShim) -> Vec<u64>;
-        fn entry_values(self: &ArrayOfDoublesSketchShim) -> Vec<f64>;
+        fn entry_hashes(self: &ArrayOfDoublesSketchShim) -> UniquePtr<CxxVector<u64>>;
+        fn entry_values(self: &ArrayOfDoublesSketchShim) -> UniquePtr<CxxVector<f64>>;
 
         fn compact(
             self: &ArrayOfDoublesSketchShim,

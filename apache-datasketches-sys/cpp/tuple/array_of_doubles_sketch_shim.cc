@@ -141,16 +141,23 @@ double ArrayOfDoublesSketchShim::get_theta() const { return sketch_.get_theta();
 uint32_t ArrayOfDoublesSketchShim::get_num_retained() const { return sketch_.get_num_retained(); }
 uint8_t ArrayOfDoublesSketchShim::get_num_values() const { return sketch_.get_num_values(); }
 
-rust::Vec<uint64_t> ArrayOfDoublesSketchShim::entry_hashes() const {
-  rust::Vec<uint64_t> out;
-  for (const auto& entry : sketch_) out.push_back(entry.first);
+// Returned as heap std::vectors rather than rust::Vecs built by hand.
+// rust::Vec::push_back goes through emplace_back, which makes two
+// non-inlinable extern "C" calls back into Rust per element; over a full
+// sketch's worth of entries that dominated everything else the call does. A
+// unique_ptr hands each buffer over whole and leaves the Rust side one memcpy.
+std::unique_ptr<std::vector<uint64_t>> ArrayOfDoublesSketchShim::entry_hashes() const {
+  auto out = std::make_unique<std::vector<uint64_t>>();
+  out->reserve(sketch_.get_num_retained());
+  for (const auto& entry : sketch_) out->push_back(entry.first);
   return out;
 }
 
-rust::Vec<double> ArrayOfDoublesSketchShim::entry_values() const {
-  rust::Vec<double> out;
+std::unique_ptr<std::vector<double>> ArrayOfDoublesSketchShim::entry_values() const {
+  auto out = std::make_unique<std::vector<double>>();
+  out->reserve(static_cast<size_t>(sketch_.get_num_retained()) * sketch_.get_num_values());
   for (const auto& entry : sketch_) {
-    for (uint8_t i = 0; i < entry.second.size(); ++i) out.push_back(entry.second[i]);
+    for (uint8_t i = 0; i < entry.second.size(); ++i) out->push_back(entry.second[i]);
   }
   return out;
 }

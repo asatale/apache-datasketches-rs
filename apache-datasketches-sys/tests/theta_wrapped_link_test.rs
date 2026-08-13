@@ -13,7 +13,7 @@ fn wrap_matches_compact_estimate() {
     let compact = compact_ffi::theta_sketch_compact(&sketch, true);
     let bytes = compact.serialize_compact();
 
-    let wrapped = wrapped_ffi::wrapped_compact_theta_sketch_wrap(&bytes).unwrap();
+    let wrapped = wrapped_ffi::wrapped_compact_theta_sketch_wrap(bytes.as_slice()).unwrap();
     assert_eq!(compact.get_estimate(), wrapped.get_estimate());
     assert_eq!(compact.get_num_retained(), wrapped.get_num_retained());
 }

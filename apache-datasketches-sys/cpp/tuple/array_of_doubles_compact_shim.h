@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include "rust/cxx.h"
 #include "array_of_doubles_sketch.hpp"
 #include "array_of_doubles_sketch_shim.h"
@@ -21,10 +22,10 @@ public:
   uint32_t get_num_retained() const;
   uint8_t get_num_values() const;
 
-  rust::Vec<uint64_t> entry_hashes() const;
-  rust::Vec<double> entry_values() const;
+  std::unique_ptr<std::vector<uint64_t>> entry_hashes() const;
+  std::unique_ptr<std::vector<double>> entry_values() const;
 
-  rust::Vec<uint8_t> serialize() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize() const;
 
   const datasketches::compact_array_of_doubles_sketch& inner() const { return sketch_; }
 

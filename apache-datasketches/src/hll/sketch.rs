@@ -157,13 +157,13 @@ impl HllSketch {
     /// updated further. Use [`Self::serialize_updatable`] if you need to
     /// resume adding items after deserializing.
     pub fn serialize_compact(&self) -> Vec<u8> {
-        self.inner.serialize_compact()
+        self.inner.serialize_compact().as_slice().to_vec()
     }
 
     /// Serializes this sketch in updatable form: larger on the wire than
     /// [`Self::serialize_compact`], but a deserialized sketch can have more
     /// items added to it.
     pub fn serialize_updatable(&self) -> Vec<u8> {
-        self.inner.serialize_updatable()
+        self.inner.serialize_updatable().as_slice().to_vec()
     }
 }

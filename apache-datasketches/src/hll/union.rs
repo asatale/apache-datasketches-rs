@@ -68,13 +68,19 @@ impl HllUnion {
     /// `HllSketch::deserialize` and feed the sketch back in via
     /// `update_sketch`.
     pub fn serialize_compact(&self, tgt_type: TargetHllType) -> Vec<u8> {
-        self.inner.serialize_compact(tgt_type.into())
+        self.inner
+            .serialize_compact(tgt_type.into())
+            .as_slice()
+            .to_vec()
     }
 
     /// Serializes `get_result(tgt_type)` in updatable form. See
     /// [`Self::serialize_compact`] for why `HllUnion` has no `deserialize`.
     pub fn serialize_updatable(&self, tgt_type: TargetHllType) -> Vec<u8> {
-        self.inner.serialize_updatable(tgt_type.into())
+        self.inner
+            .serialize_updatable(tgt_type.into())
+            .as_slice()
+            .to_vec()
     }
 
     /// Returns the current estimate of the number of distinct items merged

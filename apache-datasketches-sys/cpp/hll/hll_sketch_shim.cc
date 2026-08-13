@@ -61,18 +61,18 @@ rust::String HllSketchShim::to_string_summary() const {
   return rust::String(std::string(sketch_.to_string().c_str()));
 }
 
-rust::Vec<uint8_t> HllSketchShim::serialize_compact() const {
-  auto bytes = sketch_.serialize_compact();
-  rust::Vec<uint8_t> out;
-  for (auto b : bytes) out.push_back(b);
-  return out;
+// Returned as a heap std::vector rather than a rust::Vec built by hand.
+// rust::Vec::push_back goes through emplace_back, which makes two
+// non-inlinable extern "C" calls back into Rust per element; over a
+// serialized buffer that is two boundary crossings per byte, and it dominated
+// everything else the call does. A unique_ptr hands the buffer over whole and
+// leaves the Rust side one memcpy to do.
+std::unique_ptr<std::vector<uint8_t>> HllSketchShim::serialize_compact() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize_compact());
 }
 
-rust::Vec<uint8_t> HllSketchShim::serialize_updatable() const {
-  auto bytes = sketch_.serialize_updatable();
-  rust::Vec<uint8_t> out;
-  for (auto b : bytes) out.push_back(b);
-  return out;
+std::unique_ptr<std::vector<uint8_t>> HllSketchShim::serialize_updatable() const {
+  return std::make_unique<std::vector<uint8_t>>(sketch_.serialize_updatable());
 }
 
 std::unique_ptr<HllSketchShim> new_hll_sketch(uint8_t lg_config_k, TargetHllType tgt_type) {

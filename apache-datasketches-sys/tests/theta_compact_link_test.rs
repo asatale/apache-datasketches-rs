@@ -15,10 +15,11 @@ fn compact_and_serialize_round_trip() {
     assert!(compact.is_ordered());
 
     let bytes = compact.serialize_compact();
-    let restored = compact_ffi::compact_theta_sketch_deserialize(&bytes).unwrap();
+    let restored = compact_ffi::compact_theta_sketch_deserialize(bytes.as_slice()).unwrap();
     assert_eq!(compact.get_estimate(), restored.get_estimate());
 
     let compressed = compact.serialize_compressed();
-    let restored_compressed = compact_ffi::compact_theta_sketch_deserialize(&compressed).unwrap();
+    let restored_compressed =
+        compact_ffi::compact_theta_sketch_deserialize(compressed.as_slice()).unwrap();
     assert_eq!(compact.get_estimate(), restored_compressed.get_estimate());
 }

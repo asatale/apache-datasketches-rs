@@ -32,6 +32,7 @@ fn entries_expose_hashes_and_values() {
     assert_eq!(sketch.get_num_retained(), 1);
     let hashes = sketch.entry_hashes();
     let values = sketch.entry_values();
+    let values = values.as_slice();
     assert_eq!(hashes.len(), 1);
     // Two updates of the same key sum their values.
     assert_eq!(values.len(), 2);

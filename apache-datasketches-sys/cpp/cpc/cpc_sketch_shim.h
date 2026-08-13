@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include "rust/cxx.h"
 #include "cpc_sketch.hpp"
 
@@ -32,7 +33,7 @@ public:
   uint8_t get_lg_k() const;
   rust::String to_string_summary() const;
 
-  rust::Vec<uint8_t> serialize() const;
+  std::unique_ptr<std::vector<uint8_t>> serialize() const;
 
   const datasketches::cpc_sketch& inner() const { return sketch_; }
 
