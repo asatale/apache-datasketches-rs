@@ -28,8 +28,8 @@ Use `compare.sh` — it runs *both* sides and prints the overhead directly:
 
 ```text
 family                   items scenario       C++     Rust  overhead  ratio
-hll                   10000000 str           6.53     9.72     +3.19  1.49x
-theta                 10000000 str           5.98    10.10     +4.12  1.69x
+hll                   10000000 str           6.50     9.63     +3.13  1.48x
+theta                 10000000 str           5.77     9.99     +4.22  1.73x
 ```
 
 It also **fails** if the two sides disagree on any scenario's sketch estimate.
