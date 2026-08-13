@@ -45,6 +45,12 @@ constexpr uint64_t DEFAULT_REPS = 3;
 constexpr uint64_t SER_CALLS = 20000;
 constexpr uint64_t DESER_CALLS = 5000;
 
+// Union, intersection and Jaccard cost tracks the retained-entries table (at
+// most 2^lg_k entries), not the item count -- like ser/deser, the same
+// operand sketches produce the same cost at every ladder rung, so this is a
+// fixed call count rather than one taken from the command line.
+constexpr uint64_t OP_CALLS = 5000;
+
 // Item counts for --ladder, which exists because a single item count hides the
 // shape: a family's per-update cost is not constant as the sketch fills.
 //
@@ -179,6 +185,35 @@ inline void report_bytes(const char* label, uint64_t items, std::vector<double> 
   char suffix[32];
   snprintf(suffix, sizeof suffix, " bytes=%zu", bytes);
   detail::report_line(label, items, std::move(ns_per_op), estimates, suffix);
+}
+
+// As report, but for Jaccard: the result is a confidence interval in
+// [0.0, 1.0], not a scale-free count, so report's fixed %.0f precision would
+// round every printed value to 0 and make the parity check vacuous. Nine
+// decimal digits instead -- both sides call into the exact same vendored
+// jaccard implementation, so the bits already agree and only the print
+// format needs to.
+inline void report_jaccard(const char* label, uint64_t items, std::vector<double> ns_per_op,
+                           const std::vector<double>& lower_bounds,
+                           const std::vector<double>& estimates,
+                           const std::vector<double>& upper_bounds) {
+  for (size_t i = 1; i < estimates.size(); ++i) {
+    if (estimates[i] != estimates[0] || lower_bounds[i] != lower_bounds[0] ||
+        upper_bounds[i] != upper_bounds[0]) {
+      fprintf(stderr,
+              "error: %s rep %zu did not reproduce rep 0's bounds; the reps are not running "
+              "the same workload\n",
+              label, i);
+      exit(1);
+    }
+  }
+  std::sort(ns_per_op.begin(), ns_per_op.end());
+  const double median = ns_per_op[(ns_per_op.size() - 1) / 2];
+  printf("%-9s %12llu items  %7.2f ns/op  min %7.2f  max %7.2f  %8.1f M/s  reps=%zu "
+         "lower=%.9f estimate=%.9f upper=%.9f\n",
+         label, static_cast<unsigned long long>(items), median, ns_per_op.front(),
+         ns_per_op.back(), 1000.0 / median, ns_per_op.size(), lower_bounds[0], estimates[0],
+         upper_bounds[0]);
 }
 
 } // namespace bench

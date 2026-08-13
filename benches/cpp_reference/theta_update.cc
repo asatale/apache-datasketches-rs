@@ -8,7 +8,13 @@
 // the estimates must match -- a mismatch means the two are no longer measuring
 // the same thing. Build and run via run.sh.
 
+#include <array>
+#include <utility>
+
 #include "theta_sketch.hpp"
+#include "theta_union.hpp"
+#include "theta_intersection.hpp"
+#include "theta_jaccard_similarity.hpp"
 
 #include "bench_common.h"
 
@@ -108,6 +114,86 @@ void bench_serde(uint64_t items, uint64_t reps) {
   bench::report_bytes("deser", items, ns_per_op, estimates, reference.size());
 }
 
+// Two operands with 50% overlap, built once outside every timed region: the
+// operand-construction cost belongs to the setup, not to the union/
+// intersection/jaccard call being measured.
+std::pair<datasketches::compact_theta_sketch, datasketches::compact_theta_sketch>
+build_operands(uint64_t items) {
+  auto a = build();
+  for (uint64_t key = 0; key < items; ++key) a.update(key);
+  auto b = build();
+  for (uint64_t key = items / 2; key < items + items / 2; ++key) b.update(key);
+  return {a.compact(true), b.compact(true)};
+}
+
+// A fresh union is built inside the timed loop, so the figure is
+// construct + two updates + get_result, not the merge alone -- reusing one
+// accumulator across OP_CALLS iterations would have each iteration merge into
+// an ever-growing result, measuring a different workload every time.
+void bench_union(uint64_t items, uint64_t reps) {
+  const auto [a, b] = build_operands(items);
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    double total = 0, estimate = 0;
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < bench::OP_CALLS; ++i) {
+      auto un = datasketches::theta_union::builder().set_lg_k(LG_K).build();
+      un.update(a);
+      un.update(b);
+      estimate = un.get_result(true).get_estimate();
+      total += estimate;
+    }
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(bench::OP_CALLS));
+    bench::keep(total);
+    estimates.push_back(estimate);
+  }
+  bench::report("union", items, ns_per_op, estimates);
+}
+
+// As bench_union: a fresh intersection per iteration, so the figure is
+// construct + two updates + get_result.
+void bench_intersect(uint64_t items, uint64_t reps) {
+  const auto [a, b] = build_operands(items);
+  std::vector<double> ns_per_op, estimates;
+  for (uint64_t r = 0; r < reps; ++r) {
+    double total = 0, estimate = 0;
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < bench::OP_CALLS; ++i) {
+      datasketches::theta_intersection isect;
+      isect.update(a);
+      isect.update(b);
+      estimate = isect.get_result(true).get_estimate();
+      total += estimate;
+    }
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(bench::OP_CALLS));
+    bench::keep(total);
+    estimates.push_back(estimate);
+  }
+  bench::report("intersect", items, ns_per_op, estimates);
+}
+
+// jaccard() is a pure function of its two operands -- no accumulator to
+// rebuild, unlike union and intersection.
+void bench_jaccard(uint64_t items, uint64_t reps) {
+  const auto [a, b] = build_operands(items);
+  std::vector<double> ns_per_op, lower_bounds, estimates, upper_bounds;
+  for (uint64_t r = 0; r < reps; ++r) {
+    double total = 0;
+    std::array<double, 3> bounds{};
+    const auto start = std::chrono::steady_clock::now();
+    for (uint64_t i = 0; i < bench::OP_CALLS; ++i) {
+      bounds = datasketches::theta_jaccard_similarity::jaccard(a, b);
+      total += bounds[1];
+    }
+    ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(bench::OP_CALLS));
+    bench::keep(total);
+    lower_bounds.push_back(bounds[0]);
+    estimates.push_back(bounds[1]);
+    upper_bounds.push_back(bounds[2]);
+  }
+  bench::report_jaccard("jaccard", items, ns_per_op, lower_bounds, estimates, upper_bounds);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -119,6 +205,9 @@ int main(int argc, char** argv) {
     bench_hot(items, cfg.reps);
     bench_str(items, cfg.reps);
     bench_serde(items, cfg.reps);
+    bench_union(items, cfg.reps);
+    bench_intersect(items, cfg.reps);
+    bench_jaccard(items, cfg.reps);
   }
   return 0;
 }

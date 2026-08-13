@@ -46,7 +46,8 @@
 //!   between them is binding overhead and not a choice of overload.
 
 use apache_datasketches::tuple::{
-    ArrayOfDoublesSketch, ArrayOfDoublesSketchBuilder, CompactArrayOfDoublesSketch,
+    array_of_doubles_jaccard_similarity, ArrayOfDoublesIntersection, ArrayOfDoublesSketch,
+    ArrayOfDoublesSketchBuilder, ArrayOfDoublesUnionBuilder, CompactArrayOfDoublesSketch,
 };
 use std::hint::black_box;
 use std::time::{Duration, Instant};
@@ -64,6 +65,14 @@ const LG_K: u8 = 12;
 /// Keep in step with `bench_common.h`.
 const SER_CALLS: u64 = 20_000;
 const DESER_CALLS: u64 = 5_000;
+
+/// Union, intersection and Jaccard cost tracks the retained-entries table (at
+/// most `2^lg_k` entries), not the item count -- like `ser`/`deser`, the same
+/// operand sketches produce the same cost at every ladder rung, so this is a
+/// fixed call count rather than one taken from the command line.
+///
+/// Keep in step with `bench_common.h`.
+const OP_CALLS: u64 = 5_000;
 
 const NUM_VALUES: u8 = 3;
 const HOT_KEY_SPACE: u64 = 1 << 10;
@@ -195,12 +204,59 @@ fn report_line(label: &str, items: u64, ops: u64, passes: &[Pass], suffix: Strin
     );
 }
 
+/// As [`report`], but for Jaccard: the result is a confidence interval in
+/// `[0.0, 1.0]`, not a scale-free count, so `report`'s fixed `{:.0}` precision
+/// would round every printed value to 0 and make the parity check vacuous.
+/// Nine decimal digits instead -- both sides call into the exact same
+/// vendored jaccard implementation, so the bits already agree and only the
+/// print format needs to.
+fn report_jaccard(label: &str, items: u64, ops: u64, passes: &[JaccardPass]) {
+    for (i, pass) in passes.iter().enumerate() {
+        assert_eq!(
+            (pass.lower_bound, pass.estimate, pass.upper_bound),
+            (
+                passes[0].lower_bound,
+                passes[0].estimate,
+                passes[0].upper_bound
+            ),
+            "rep {i} did not reproduce rep 0's bounds: the reps are not running the same workload"
+        );
+    }
+    let mut ns_per_op: Vec<f64> = passes
+        .iter()
+        .map(|p| p.elapsed.as_secs_f64() * 1e9 / ops as f64)
+        .collect();
+    ns_per_op.sort_by(f64::total_cmp);
+    let median = ns_per_op[(ns_per_op.len() - 1) / 2];
+    let (min, max) = (ns_per_op[0], ns_per_op[ns_per_op.len() - 1]);
+    let rate = 1000.0 / median;
+    let reps = passes.len();
+    let (lower_bound, estimate, upper_bound) = (
+        passes[0].lower_bound,
+        passes[0].estimate,
+        passes[0].upper_bound,
+    );
+    println!(
+        "{label:9} {items:>12} items  {median:>7.2} ns/op  min {min:>7.2}  max {max:>7.2}  \
+         {rate:>8.1} M/s  reps={reps} lower={lower_bound:.9} estimate={estimate:.9} \
+         upper={upper_bound:.9}"
+    );
+}
+
 /// One timed pass over `items` updates, and the estimate the sketch held
 /// afterwards. Reading the estimate also keeps the update loop from being
 /// optimised out.
 struct Pass {
     elapsed: Duration,
     estimate: f64,
+}
+
+/// As [`Pass`], but for the three-field Jaccard result.
+struct JaccardPass {
+    elapsed: Duration,
+    lower_bound: f64,
+    estimate: f64,
+    upper_bound: f64,
 }
 
 fn build() -> ArrayOfDoublesSketch {
@@ -325,6 +381,114 @@ fn bench_serde(items: u64, reps: usize) {
     report_bytes("deser", items, DESER_CALLS, &passes, reference.len());
 }
 
+/// Two operands with 50% overlap, built once outside every timed region: the
+/// operand-construction cost belongs to the setup, not to the union/
+/// intersection/jaccard call being measured.
+fn build_operands(items: u64) -> (CompactArrayOfDoublesSketch, CompactArrayOfDoublesSketch) {
+    let mut a = build();
+    for key in 0..items {
+        a.update_u64(key, &VALUES)
+            .expect("update rejected a correctly-sized value slice");
+    }
+    let mut b = build();
+    for key in (items / 2)..(items + items / 2) {
+        b.update_u64(key, &VALUES)
+            .expect("update rejected a correctly-sized value slice");
+    }
+    (a.compact(true), b.compact(true))
+}
+
+/// A fresh union is built inside the timed loop, so the figure is
+/// construct + two updates + get_result, not the merge alone -- reusing one
+/// accumulator across `OP_CALLS` iterations would have each iteration merge
+/// into an ever-growing result, measuring a different workload every time.
+fn bench_union(items: u64, reps: usize) {
+    let (a, b) = build_operands(items);
+    let mut passes = Vec::with_capacity(reps);
+    for _ in 0..reps {
+        let start = Instant::now();
+        let mut total = 0.0;
+        let mut estimate = 0.0;
+        for _ in 0..OP_CALLS {
+            let mut union = ArrayOfDoublesUnionBuilder::new()
+                .lg_k(LG_K)
+                .num_values(NUM_VALUES)
+                .build()
+                .expect("fixed valid parameters were rejected");
+            union
+                .update(&a)
+                .expect("operands match the union's num_values");
+            union
+                .update(&b)
+                .expect("operands match the union's num_values");
+            estimate = union.get_result(true).get_estimate();
+            total += estimate;
+        }
+        let elapsed = start.elapsed();
+        black_box(total);
+        passes.push(Pass { elapsed, estimate });
+    }
+    report_line("union", items, OP_CALLS, &passes, String::new());
+}
+
+/// As [`bench_union`]: a fresh intersection per iteration, so the figure is
+/// construct + two updates + get_result.
+fn bench_intersect(items: u64, reps: usize) {
+    let (a, b) = build_operands(items);
+    let mut passes = Vec::with_capacity(reps);
+    for _ in 0..reps {
+        let start = Instant::now();
+        let mut total = 0.0;
+        let mut estimate = 0.0;
+        for _ in 0..OP_CALLS {
+            let mut intersection = ArrayOfDoublesIntersection::new(NUM_VALUES)
+                .expect("fixed valid num_values was rejected");
+            intersection
+                .update(&a)
+                .expect("operands match the intersection's num_values");
+            intersection
+                .update(&b)
+                .expect("operands match the intersection's num_values");
+            estimate = intersection
+                .get_result(true)
+                .expect("both operands were non-empty")
+                .get_estimate();
+            total += estimate;
+        }
+        let elapsed = start.elapsed();
+        black_box(total);
+        passes.push(Pass { elapsed, estimate });
+    }
+    report_line("intersect", items, OP_CALLS, &passes, String::new());
+}
+
+/// `array_of_doubles_jaccard_similarity` is a pure function of its two
+/// operands -- no accumulator to rebuild, unlike union and intersection.
+fn bench_jaccard(items: u64, reps: usize) {
+    let (a, b) = build_operands(items);
+    let mut passes = Vec::with_capacity(reps);
+    for _ in 0..reps {
+        let start = Instant::now();
+        let mut total = 0.0;
+        let mut bounds =
+            array_of_doubles_jaccard_similarity(&a, &b).expect("operands agree on num_values");
+        for _ in 0..OP_CALLS {
+            bounds =
+                array_of_doubles_jaccard_similarity(&a, &b).expect("operands agree on num_values");
+            total += bounds.estimate;
+        }
+        let elapsed = start.elapsed();
+        black_box(total);
+        passes.push(JaccardPass {
+            elapsed,
+            lower_bound: bounds.lower_bound,
+            estimate: bounds.estimate,
+            upper_bound: bounds.upper_bound,
+        });
+    }
+    report_jaccard("jaccard", items, OP_CALLS, &passes);
+}
+
 fn main() {
     let (counts, reps) = parse_args();
     for items in counts {
@@ -333,5 +497,8 @@ fn main() {
         bench_hot(items, reps);
         bench_str(items, reps);
         bench_serde(items, reps);
+        bench_union(items, reps);
+        bench_intersect(items, reps);
+        bench_jaccard(items, reps);
     }
 }
