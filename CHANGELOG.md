@@ -14,8 +14,12 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
-`apache-datasketches` only; `apache-datasketches-sys` is untouched and stays at
-0.2.1.
+## [0.2.3] — 2026-08-13
+
+`apache-datasketches` 0.2.3 and `apache-datasketches-sys` 0.2.2. The
+serialize-no-alloc fix below is a breaking change to the sys crate's FFI, so
+`apache-datasketches` raises its dependency requirement to `0.2.2` — without
+that, Cargo could resolve the older sys crate and silently drop the fix.
 
 ### Added
 - **`--reps N` and `--ladder` in every benchmark harness, Rust and C++.** Each
@@ -97,8 +101,73 @@ fact — this file was introduced during 0.2.1.
   counterpart in `benches/cpp_reference/`, and paths that cannot have one (the
   generic Tuple sketch calls back into Rust, which has no C++ equivalent) quote
   the concrete-vs-generic ratio instead of an absolute figure.
+- **A `ser`/`deser` scenario in every harness, Rust and C++, for all four
+  families.** Serialization had no benchmark at all, so a caller doing
+  `sketch.serialize()` on a hot path had nothing to tell them whether it was
+  cheap. Unlike the update scenarios, cost here tracks the serialized *size*,
+  not the item count — at `lg_k = 12` every family saturates well below the
+  ladder's bottom rung, so `ser`/`deser` is measured over a fixed call count
+  (`SER_CALLS`, `DESER_CALLS` in `bench_common.h`) rather than one taken from
+  the command line. The sketch is built once and shared across every rep;
+  serializing does not mutate it, so there is no state a second rep would find
+  already dirtied. Both lines print a `bytes=` field alongside the estimate,
+  since two sides can agree on the estimate while disagreeing on the
+  serialized format or on whether the sketch was compacted ordered.
+- **`union`, `intersect` and `jaccard` scenarios for Theta and
+  ArrayOfDoubles.** HLL and CPC expose only `union.rs` in this crate — no
+  `intersection.rs` or `jaccard.rs` — so there is nothing for those two
+  families to pair against a C++ counterpart here. Two operands are built once
+  outside every timed region, with 50% key overlap, so operand construction
+  lands in setup rather than in the number being measured; `union` and
+  `intersect` build a fresh accumulator on every call inside the timed loop,
+  since reusing one across `OP_CALLS` iterations would have each call merge
+  into an ever-growing result. `jaccard`'s result is a
+  `{lower_bound, estimate, upper_bound}` confidence interval in `[0.0, 1.0]`,
+  not a cardinality estimate, so it prints all three fields to nine decimal
+  places (`report_jaccard`) rather than through the `%.0f` format the other
+  scenarios use, which would round every value to `0`.
 
 ### Changed
+- **`serialize()` no longer copies its output one byte at a time
+  (`apache-datasketches-sys`, breaking).** Every shim built its `rust::Vec<uint8_t>`
+  return value with a `push_back` loop over the C++ side's own buffer.
+  `rust::Vec::push_back` goes through `emplace_back`, which is a non-inlinable
+  `extern "C"` call back into Rust — so a serialized buffer paid two boundary
+  crossings per byte, and that dominated everything else the call did.
+
+  Every `serialize*` shim now returns `std::unique_ptr<std::vector<uint8_t>>`
+  instead, built with one `std::make_unique<std::vector<uint8_t>>(...)` from
+  the buffer C++ already produced. The Rust side does one `.as_slice().to_vec()`
+  memcpy instead of `SIZE` round trips. `deserialize` was never affected — it
+  already took a borrowed slice in, so there was no per-byte loop to remove.
+
+  This is a breaking change to `apache-datasketches-sys`'s public FFI: every
+  `serialize*` bridge fn's return type changes from `Vec<u8>` /
+  `rust::Vec<uint8_t>` to `UniquePtr<CxxVector<u8>>` /
+  `std::unique_ptr<std::vector<uint8_t>>`. `apache-datasketches`'s own public
+  API is unaffected — its `serialize*` methods still return `Vec<u8>`; only the
+  internal conversion changed, and callers see no difference beyond speed.
+
+  Measured on the `ser` scenario (10M items, `lg_k = 12`, macOS release,
+  `--reps 5`; `deser` shown for contrast, since it was never touched by this
+  change):
+
+  | family | scenario | before | after | native C++ | ratio before | ratio after |
+  |---|---|---|---|---|---|---|
+  | HLL | ser | 14641.85 | 191.29 | 97–100 | 150.07x | 1.92x |
+  | Theta | ser | 151494.97 | 1417.81 | 649–666 | 233.58x | 2.13x |
+  | CPC | ser | 9579.50 | 2136.40 | 1994–2004 | 4.78x | 1.07x |
+  | ArrayOfDoubles | ser | 586100.04 | 23335.97 | 13703–14053 | 42.77x | 1.66x |
+  | HLL | deser | 133.79 | 136.13 | 136–164 | 0.82x | 1.00x |
+  | Theta | deser | 727.14 | 1015.31 | 553–625 | 1.31x | 1.62x |
+  | CPC | deser | 9466.22 | 10422.56 | 9736–9911 | 0.97x | 1.05x |
+  | ArrayOfDoubles | deser | 101946.38 | 99306.04 | 98455–100323 | 1.02x | 1.01x |
+
+  Theta's `ser` alone was 233x native C++ before this fix — every family's
+  buffer is small at `lg_k = 12` (a few KB), so at larger `lg_k` or with a
+  larger serialized payload the per-byte cost would only have grown worse.
+  `deser`'s small run-to-run drift above is ordinary variance, not a
+  regression — it was never in the code path this change touches.
 - **`update_str` no longer heap-copies the key on any family.** All six string
   update paths — `HllSketch`, `HllUnion`, `ThetaSketch`, `CpcSketch`,
   `ArrayOfDoublesSketch` and the generic `TupleSketch` — built a `std::string`
