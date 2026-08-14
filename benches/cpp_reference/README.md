@@ -67,6 +67,7 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 | this directory | its Rust counterpart |
 |---|---|
 | `hll_update.cc` | `examples/bench_hll_update.rs` |
+| `hll_union_update.cc` | `examples/bench_hll_union_update.rs` |
 | `theta_update.cc` | `examples/bench_theta_update.rs` |
 | `cpc_update.cc` | `examples/bench_cpc_update.rs` |
 | `array_of_doubles_update.cc` | `examples/bench_tuple_update.rs` |
@@ -91,7 +92,7 @@ definition and the key format.
 to every program — that costs nothing and means adding a benchmark needs no
 change to the include list.
 
-`compare.sh` drives `run.sh` and the four Rust counterparts and hands both
+`compare.sh` drives `run.sh` and the five Rust counterparts and hands both
 outputs to `compare.py`, which parses them with one function: the two harnesses
 print an identical line format precisely so that it can. `compare.py` is not
 meant to be run directly. Adding a benchmark means adding a line to the `pairs`
@@ -102,7 +103,10 @@ rung that exists on only one side is reported rather than quietly skipped.
 
 Each `.cc` mirrors its Rust counterpart exactly: same `lg_k`, same target type
 or `num_values`, same scenarios (`distinct`, `hot`, `str`, `ser`/`deser`, and
-for Theta and ArrayOfDoubles `union`/`intersect`/`jaccard`), same key spaces. If
+for Theta and ArrayOfDoubles `union`/`intersect`/`jaccard`), same key spaces.
+`hll_union` is the exception: it has `distinct`/`hot`/`str`/`ser` but no
+`deser` — a union has no serializable state of its own upstream, only its
+result sketch does, so there is nothing to deserialize *into* a union. If
 you change the parameters on one side, change them on the other or the ratio
 becomes meaningless. Both print the sketch estimate, which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match

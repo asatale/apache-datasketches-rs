@@ -45,7 +45,7 @@ includes=(
 )
 
 # Order matters only for readability of the output: cheapest family first.
-benchmarks=(hll theta cpc array_of_doubles)
+benchmarks=(hll hll_union theta cpc array_of_doubles)
 
 echo "native C++ reference ($($CXX --version | head -1))"
 for bench in "${benchmarks[@]}"; do

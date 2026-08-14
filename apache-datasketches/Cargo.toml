@@ -71,6 +71,10 @@ name = "bench_hll_update"
 required-features = ["hll"]
 
 [[example]]
+name = "bench_hll_union_update"
+required-features = ["hll"]
+
+[[example]]
 name = "bench_theta_update"
 required-features = ["theta"]
 

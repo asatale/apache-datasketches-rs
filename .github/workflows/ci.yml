@@ -180,9 +180,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      # compare.sh runs both sides, so this one step covers the four C++
+      # compare.sh runs both sides, so this one step covers the five C++
       # programs, run.sh itself (the include paths it derives are as likely to
-      # break as the source), and their four Rust counterparts.
+      # break as the source), and their five Rust counterparts.
       #
       # It also gates on the two harnesses agreeing scenario-for-scenario, and
       # that part IS a real assertion rather than a build check: it compares
