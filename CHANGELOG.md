@@ -14,6 +14,67 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
+### Added
+- **`hll_union_update.cc` / `examples/bench_hll_union_update.rs`, closing the
+  other open caveat from 0.2.3.** `HllUnion` had no benchmark on either side,
+  so the no-alloc `update_str` fix applied to it was never measured — only
+  inferred from the identical change to `HllSketch`. The new pair exercises
+  `HllUnion`'s direct-update path (`update_u64`, `update_str`) plus
+  `get_result().serialize_compact()`; there is no `deser` scenario, since a
+  union has no serializable state of its own upstream to deserialize into.
+
+  Measured at 10M items, `lg_max_k = 12`, `--reps 5`:
+
+  | scenario | C++ | Rust | overhead | ratio |
+  |---|---|---|---|---|
+  | distinct | 3.13 | 5.09 | +1.96 | 1.63x |
+  | hot | 3.11 | 5.00 | +1.89 | 1.61x |
+  | str | 6.89 | 9.72 | +2.83 | 1.41x |
+  | ser | 190.20 | 268.93 | +78.73 | 1.41x |
+
+  `update_str`'s +2.83 ns overhead matches `HllSketch::update_str`'s +2.83 ns
+  from the same run almost exactly — consistent with the 0.2.3 caveat's
+  inference that the identical shim fix would carry over. That is not the
+  same claim as measuring the fix's *gain*: this run only exercises the
+  post-fix state, since the pre-fix `update_str` was never benchmarked before
+  the fix landed. The harness now exists, so a future before/after
+  comparison is possible; none was run here.
+
+### Changed
+- **Explained (no code change) the `ArrayOfDoublesSketch::update_str` residue
+  flagged as an open caveat in 0.2.3.** That entry measured +6.13 ns over
+  native C++ for `str`, well above the +1.7–2.4 ns the integer paths cost,
+  and left the gap unexplained. It is not a fixable inefficiency: the shim
+  does no allocation and no extra FFI crossing on this path
+  (`check_values_len` reads a trivial inlined getter; the Rust wrapper's
+  `check_values` reads a cached `num_values: u8` with no crossing at all).
+
+  The reproducible part of the explanation is the `hot` baseline, not the
+  `str` marginal: across two runs at 10M items, `lg_k = 12` (`--reps 9` and
+  `--reps 5`), `ArrayOfDoubles`' `hot` overhead sits at +3.26 to +3.49 ns,
+  roughly 1.4–1.9 ns above every other family's +1.6–2.1 ns. That gap is
+  attributable to a slice every `ArrayOfDoubles` update pays and no other
+  family does — `values: &[f64]` — even on the integer-keyed path.
+
+  Taking `(str_overhead − hot_overhead)` per family — the marginal cost of
+  adding a string-key crossing on top of whatever the family already pays —
+  is noisier than either input on its own, since it differences two already-
+  noisy numbers:
+
+  | family | marginal str cost (`--reps 9`) | marginal str cost (`--reps 5`) |
+  |---|---|---|
+  | HLL | +1.07 | +1.12 |
+  | Theta | +2.08 | +1.79 |
+  | CPC | +2.78 | +0.82 |
+  | ArrayOfDoubles | +2.89 | +2.58 |
+
+  CPC's marginal alone swung by +2 ns between runs, so a single-run "same
+  range as CPC and Theta" claim does not hold up on a rerun. What is stable
+  is that `ArrayOfDoubles`' *absolute* `str` overhead is elevated primarily
+  because its `hot` baseline already runs above the pack — an ordinary,
+  already-understood cost — rather than because the string path itself hides
+  a distinct third cost.
+
 ## [0.2.3] — 2026-08-13
 
 `apache-datasketches` 0.2.3 and `apache-datasketches-sys` 0.2.2. The

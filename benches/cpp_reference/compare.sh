@@ -25,6 +25,7 @@ root="$(cd "$here/../.." && pwd)"
 # calls back into Rust per summary and has no C++ counterpart to compare to.
 pairs=(
   "hll:bench_hll_update:hll"
+  "hll_union:bench_hll_union_update:hll"
   "theta:bench_theta_update:theta"
   "cpc:bench_cpc_update:cpc"
   "array_of_doubles:bench_tuple_update:tuple"
