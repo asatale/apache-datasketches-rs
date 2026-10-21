@@ -38,10 +38,16 @@
 
 // Disabling default features without naming a family leaves nothing behind
 // but `SketchError`. That used to compile silently; say so instead.
-#[cfg(not(any(feature = "hll", feature = "theta", feature = "cpc", feature = "tuple")))]
+#[cfg(not(any(
+    feature = "hll",
+    feature = "theta",
+    feature = "cpc",
+    feature = "tuple",
+    feature = "kll"
+)))]
 compile_error!(
     "apache-datasketches: no sketch family is enabled, so this crate exposes nothing. \
-     Enable at least one of the `hll`, `theta`, `cpc`, or `tuple` features, or drop \
+     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, or `kll` features, or drop \
      `default-features = false`."
 );
 
@@ -58,5 +64,8 @@ pub mod cpc;
 
 #[cfg(feature = "tuple")]
 pub mod tuple;
+
+#[cfg(feature = "kll")]
+pub mod kll;
 
 pub use error::SketchError;
