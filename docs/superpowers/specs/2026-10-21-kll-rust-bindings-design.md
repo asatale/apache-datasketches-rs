@@ -62,9 +62,11 @@ deferred until there is demand.
   `KllDoublesSketchShim`, `KllFloatsSketchShim`, `KllDoublesSortedViewShim`,
   `KllFloatsSortedViewShim` — and the `.cc` explicitly instantiates both
   `T`s. The logic exists once; only the names differ per type.
-- Free functions (constructor, deserialize, static rank error, KS) are thin
-  per-type wrappers over a shared template body, named per the global
-  uniqueness rule below.
+- Only three operations are free functions — constructor, deserialize and
+  the static rank error — thin per-type wrappers named per the global
+  uniqueness rule below. Everything else, including clone and the KS
+  functions, is a method on the shim, which needs no prefix because the
+  receiver type is part of the symbol.
 - `serialize` returns `UniquePtr<CxxVector<u8>>` built from upstream's
   `vector_bytes` in one bulk copy (see commit `7768222` for why not
   byte-by-byte).
@@ -78,7 +80,8 @@ deferred until there is demand.
 declares its sketch shim, its sorted-view shim and its KS functions. Sketch
 and view must share a bridge because the sketch's `get_sorted_view` returns
 the view type. Free-function names carry the type
-(`kll_doubles_new`, `kll_doubles_deserialize`, `kll_floats_ks_delta`, …) so
+(`kll_doubles_new`, `kll_doubles_deserialize`,
+`kll_floats_normalized_rank_error`, …) so
 the two bridges never collide — the `build.rs` duplicate-name check enforces
 this. The two files are identical modulo `f64`↔`f32` and
 `Doubles`↔`Floats`; keep them that way.
@@ -220,19 +223,25 @@ variant instead of a C++ message:
 | bytes that do not parse | `Deserialization` |
 | any other C++ exception | `Cpp` |
 
-KS on an empty sketch is rejected in Rust because upstream would divide by
-`n = 0` in `delta` and by `num_retained = 0` in `threshold`, returning
-NaN/inf rather than throwing.
+KS with an empty operand is rejected in Rust because upstream's answers
+there carry no information: two empty sketches give `delta = 0` and
+`test = false` (upstream's own `kolmogorov-smirnov empty` test pins this),
+one empty sketch gives `delta = 1`, and `threshold` is NaN (`0/0`) or inf.
+The port of upstream's empty-case test asserts `EmptySketch` instead, with a
+comment saying why.
 
 `InvalidConfig` is already the repo's general bad-argument variant (Tuple
 uses it for value-array length mismatches), so no new variant is needed for
 argument validation.
 
-**`f32` bytes deserialized as `KllSketch<f64>` (and vice versa) must return
-`Deserialization`, never a sketch with garbage items.** Upstream's size
-checks are expected to catch it (the item size changes the total byte count);
-a test pins this for empty, single-item, `n ≤ k` and estimation-mode inputs.
-If any case slips through, the shim adds an explicit check.
+**Non-empty `f32` bytes deserialized as `KllSketch<f64>` (and vice versa)
+must return `Deserialization`, never a sketch with garbage items.**
+Upstream's bounds and total-size checks catch it, since the item width
+changes the byte count; a test pins this for single-item, `n ≤ k` and
+estimation-mode inputs. If any case slips through, the shim adds an explicit
+check. *Empty* sketches are the exception by format: the 8-byte empty
+preamble carries no item type (the same holds in Java), so empty `f32` bytes
+deserialize as an empty `KllSketch<f64>`, and a test pins that as correct.
 
 ### `SketchError` changes (breaking)
 
