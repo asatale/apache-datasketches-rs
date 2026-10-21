@@ -310,3 +310,15 @@ required-features = ["kll"]
 [[test]]
 name = "kolmogorov_smirnov_test"
 required-features = ["kll"]
+
+[[test]]
+name = "kll_sketch_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_validation_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_serialization_compat_test"
+required-features = ["kll"]

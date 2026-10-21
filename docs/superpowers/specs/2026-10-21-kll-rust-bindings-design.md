@@ -280,8 +280,10 @@ All in `apache-datasketches/tests/` unless noted. Each case runs for both
   quantities above; bound-based assertions past `k`. Sections exercising
   custom item types, `std::istream` serialization or `header_size_bytes`
   are skipped with a comment naming them.
-- **`kll_validation_test.rs`** — port of `kll_sketch_validation.cpp`, plus
-  every row of the error table above.
+- **`kll_validation_test.rs`** — every row of the error table above. Not a
+  port of upstream `kll_sketch_validation.cpp`: that test only compiles under
+  `-DKLL_VALIDATION`, which replaces the random compaction bit with a
+  deterministic one, and the binding builds without it.
 - **`kll_serialization_compat_test.rs`** — round trips at each size class;
   upstream's checked-in fixture `kll/test/kll_sketch_float_one_item_v1.sk`
   (copied into the test tree); golden bytes for deterministic sketches
