@@ -8,6 +8,18 @@
 
 namespace apache_datasketches_rs {
 
+namespace {
+
+// Written so that NaN fails; upstream casts rank * total_weight to an integer
+// unchecked, which is undefined behaviour for NaN or out-of-range values.
+void check_rank(double rank) {
+  if (!(rank >= 0.0 && rank <= 1.0)) {
+    throw std::invalid_argument("normalized rank must be in [0, 1]");
+  }
+}
+
+}  // namespace
+
 // --- KllSortedViewShim -------------------------------------------------------
 
 template<typename T>
@@ -18,6 +30,7 @@ size_t KllSortedViewShim<T>::size() const { return view_.size(); }
 
 template<typename T>
 T KllSortedViewShim<T>::get_quantile(double rank, bool inclusive) const {
+  check_rank(rank);
   return view_.get_quantile(rank, inclusive);
 }
 
@@ -111,6 +124,7 @@ T KllSketchShim<T>::get_max_item() const { return sketch_.get_max_item(); }
 
 template<typename T>
 T KllSketchShim<T>::get_quantile(double rank, bool inclusive) const {
+  check_rank(rank);
   return sketch_.get_quantile(rank, inclusive);
 }
 

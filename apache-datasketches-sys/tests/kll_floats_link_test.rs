@@ -51,3 +51,20 @@ fn static_rank_error_matches_instance() {
         sketch.get_normalized_rank_error(false)
     );
 }
+
+#[test]
+fn out_of_range_rank_returns_err() {
+    let mut sketch = ffi::kll_floats_new(200).unwrap();
+    for i in 1..=100u8 {
+        sketch.pin_mut().update(f32::from(i));
+    }
+    let view = sketch.sorted_view();
+    for r in [f64::NAN, -0.1, 1.1, f64::INFINITY] {
+        assert!(sketch.get_quantile(r, true).is_err(), "sketch rank {r}");
+        assert!(view.get_quantile(r, true).is_err(), "view rank {r}");
+    }
+    for r in [0.0, 1.0] {
+        assert!(sketch.get_quantile(r, true).is_ok(), "sketch rank {r}");
+        assert!(view.get_quantile(r, true).is_ok(), "view rank {r}");
+    }
+}
