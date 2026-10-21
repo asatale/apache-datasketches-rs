@@ -704,15 +704,86 @@ pub mod ffi {
 
 - [ ] **Step 7: Write the floats bridge**
 
-Create `apache-datasketches-sys/src/kll_floats.rs` as a copy of `kll_doubles.rs` with exactly these substitutions applied everywhere: `kll_sketch<double>` → `kll_sketch<float>`, `kll_floats.rs` ↔ `kll_doubles.rs` in the doc comment, `kll_doubles_` → `kll_floats_`, `KllDoubles` → `KllFloats`, `f64` → `f32` **except** in `kll_floats_normalized_rank_error(..) -> f64`, `ks_delta(..) -> f64`, `ks_threshold(.., p: f64) -> f64`, `ks_test(.., p: f64)`, `get_normalized_rank_error(..) -> f64`, every `rank: f64`, every `get_rank(..) -> Result<f64>`, and every `CxxVector<f64>` returned by `get_pmf`/`get_cdf` — ranks, probabilities and PMF/CDF masses are `double` upstream for both item types. Item-typed positions that become `f32`: `update(.., item)`, `get_min_item`/`get_max_item`/`get_quantile` return types, `get_rank(.., item: f32, ..)`, `split_points: &[f32]`, `retained_items`/`items` element type.
+Create `apache-datasketches-sys/src/kll_floats.rs`. It differs from `kll_doubles.rs` only in names and in item-typed positions (`update`'s item, min/max/quantile returns, `get_rank`'s item, `split_points`, `retained_items`/`items`); ranks, `p`, rank errors and PMF/CDF masses stay `f64` because upstream returns `double` for both item types.
 
-Verify with:
+```rust
+//! cxx bridge for `kll_sketch<float>` and its sorted view.
+//!
+//! Keep identical to `kll_doubles.rs` modulo `f64`/`f32` and
+//! `Doubles`/`Floats`: both declare the one C++ template in
+//! `cpp/kll/kll_sketch_shim.h`. Free functions carry the `kll_floats_`
+//! prefix because cxx keys their symbols on name alone (see AGENTS.md);
+//! methods need no prefix.
 
-```bash
-diff <(sed -e 's/kll_floats/kll_doubles/g; s/KllFloats/KllDoubles/g; s/kll_sketch<float>/kll_sketch<double>/g' apache-datasketches-sys/src/kll_floats.rs) apache-datasketches-sys/src/kll_doubles.rs
+#[cxx::bridge(namespace = "apache_datasketches_rs")]
+pub mod ffi {
+    unsafe extern "C++" {
+        include!("kll_sketch_shim.h");
+
+        type KllFloatsSketchShim;
+        type KllFloatsSortedViewShim;
+
+        fn kll_floats_new(k: u16) -> Result<UniquePtr<KllFloatsSketchShim>>;
+        fn kll_floats_deserialize(bytes: &[u8]) -> Result<UniquePtr<KllFloatsSketchShim>>;
+        fn kll_floats_normalized_rank_error(k: u16, pmf: bool) -> f64;
+
+        fn clone_shim(self: &KllFloatsSketchShim) -> UniquePtr<KllFloatsSketchShim>;
+        fn update(self: Pin<&mut KllFloatsSketchShim>, item: f32);
+        fn merge(self: Pin<&mut KllFloatsSketchShim>, other: &KllFloatsSketchShim);
+
+        fn is_empty(self: &KllFloatsSketchShim) -> bool;
+        fn get_n(self: &KllFloatsSketchShim) -> u64;
+        fn get_k(self: &KllFloatsSketchShim) -> u16;
+        fn get_num_retained(self: &KllFloatsSketchShim) -> u32;
+        fn is_estimation_mode(self: &KllFloatsSketchShim) -> bool;
+        fn get_min_item(self: &KllFloatsSketchShim) -> Result<f32>;
+        fn get_max_item(self: &KllFloatsSketchShim) -> Result<f32>;
+
+        fn get_quantile(self: &KllFloatsSketchShim, rank: f64, inclusive: bool) -> Result<f32>;
+        fn get_rank(self: &KllFloatsSketchShim, item: f32, inclusive: bool) -> Result<f64>;
+        fn get_pmf(
+            self: &KllFloatsSketchShim,
+            split_points: &[f32],
+            inclusive: bool,
+        ) -> Result<UniquePtr<CxxVector<f64>>>;
+        fn get_cdf(
+            self: &KllFloatsSketchShim,
+            split_points: &[f32],
+            inclusive: bool,
+        ) -> Result<UniquePtr<CxxVector<f64>>>;
+        fn get_normalized_rank_error(self: &KllFloatsSketchShim, pmf: bool) -> f64;
+
+        fn serialize(self: &KllFloatsSketchShim) -> UniquePtr<CxxVector<u8>>;
+        fn to_string_summary(self: &KllFloatsSketchShim) -> String;
+
+        fn retained_items(self: &KllFloatsSketchShim) -> UniquePtr<CxxVector<f32>>;
+        fn retained_weights(self: &KllFloatsSketchShim) -> UniquePtr<CxxVector<u64>>;
+        fn sorted_view(self: &KllFloatsSketchShim) -> UniquePtr<KllFloatsSortedViewShim>;
+
+        fn ks_delta(self: &KllFloatsSketchShim, other: &KllFloatsSketchShim) -> f64;
+        fn ks_threshold(self: &KllFloatsSketchShim, other: &KllFloatsSketchShim, p: f64) -> f64;
+        fn ks_test(self: &KllFloatsSketchShim, other: &KllFloatsSketchShim, p: f64) -> bool;
+
+        fn size(self: &KllFloatsSortedViewShim) -> usize;
+        fn get_quantile(self: &KllFloatsSortedViewShim, rank: f64, inclusive: bool)
+            -> Result<f32>;
+        fn get_rank(self: &KllFloatsSortedViewShim, item: f32, inclusive: bool) -> Result<f64>;
+        fn get_pmf(
+            self: &KllFloatsSortedViewShim,
+            split_points: &[f32],
+            inclusive: bool,
+        ) -> Result<UniquePtr<CxxVector<f64>>>;
+        fn get_cdf(
+            self: &KllFloatsSortedViewShim,
+            split_points: &[f32],
+            inclusive: bool,
+        ) -> Result<UniquePtr<CxxVector<f64>>>;
+        fn items(self: &KllFloatsSortedViewShim) -> UniquePtr<CxxVector<f32>>;
+        fn weights(self: &KllFloatsSortedViewShim) -> UniquePtr<CxxVector<u64>>;
+        fn cumulative_weights(self: &KllFloatsSortedViewShim) -> UniquePtr<CxxVector<u64>>;
+    }
+}
 ```
-
-Expected: the only differing lines are the `f32` item-typed positions listed above (and the doc comment's `kll_doubles.rs` cross-reference).
 
 - [ ] **Step 8: Expose the modules**
 
@@ -1409,8 +1480,8 @@ use super::KllItem;
 use crate::error::SketchError;
 use cxx::UniquePtr;
 
-/// Upstream `kll_constants::DEFAULT_K`: about 1.65% single-sided normalized
-/// rank error.
+/// Upstream `kll_constants::DEFAULT_K`: about 1.33% normalized rank error
+/// for rank/quantile/CDF queries, about 1.65% for PMF queries.
 const DEFAULT_K: u16 = 200;
 
 /// A KLL quantiles sketch over `f64` or `f32` items: answers rank, quantile,
@@ -3578,7 +3649,7 @@ use apache_datasketches::kll::{kolmogorov_smirnov_test, KllSketch};
 fn main() {
     // A KLL sketch summarizes a stream of numbers so you can ask for ranks
     // and quantiles (p50, p99, ...) afterwards, in bounded memory. `k` trades
-    // memory for accuracy; 200 gives about 1.65% rank error.
+    // memory for accuracy; 200 gives about 1.33% rank error (1.65% for PMF).
     let mut monday = KllSketch::<f64>::new(200).expect("valid k");
     for i in 0..100_000u32 {
         // A skewed "latency" distribution, in milliseconds.
@@ -3607,7 +3678,7 @@ fn main() {
     let mut tuesday = KllSketch::<f64>::new(200).expect("valid k");
     for i in 0..100_000u32 {
         let x = f64::from(i % 1000) / 1000.0;
-        tuesday.update(5.0 + 260.0 * x * x * x);
+        tuesday.update(5.0 + 400.0 * x * x * x);
     }
     let mut both = monday.clone();
     both.merge(&tuesday);
@@ -3637,7 +3708,7 @@ required-features = ["kll"]
 ```
 
 Run: `cargo run -p apache-datasketches --example kll --features kll`
-Expected: runs to completion and prints each line above; `distribution changed (p = 0.05): true`.
+Expected: runs to completion and prints each line above, including `distribution changed (p = 0.05): true`. (Monday is `5 + 200x³`, Tuesday `5 + 400x³`; their CDFs differ by up to `1 − (1/2)^(1/3) ≈ 0.21`, well above the ≈0.11 threshold at `k = 200`. If it prints `false`, check the arithmetic before suspecting the binding, and do not edit the expected line to match.)
 
 - [ ] **Step 2: Crate docs in `lib.rs`**
 
