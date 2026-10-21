@@ -5,7 +5,7 @@
 Rust bindings for [Apache DataSketches](https://github.com/apache/datasketches-cpp),
 built via the `cxx` crate over a pinned git submodule.
 
-All four sketch families are enabled by default:
+All five sketch families are enabled by default:
 
 ```toml
 [dependencies]
@@ -92,6 +92,7 @@ Standalone runnable demos live under `apache-datasketches/examples/`:
 cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
+cargo run -p apache-datasketches --example kll --features kll
 cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
 ```
@@ -112,6 +113,8 @@ opt-in features:
   collision (ArrayOfDoubles) or a summary type you define in Rust
   (`tuple::generic`), plus set operations: union, intersection, a-not-b,
   and Jaccard similarity.
+- [x] `kll` — quantiles (ranks, quantiles, PMF, CDF) over `f64` or `f32`,
+  with merging, a shareable sorted view, and a Kolmogorov–Smirnov test.
 
 ## Vendored C++ version
 

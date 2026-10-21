@@ -27,6 +27,7 @@ explicitly. Enable one or more of:
   and union C++ types.
 - `tuple` — raw bridge to the Tuple (ArrayOfDoubles) sketch, union,
   intersection, a-not-b, and Jaccard similarity C++ types.
+- `kll` — raw bridge to the KLL quantiles sketch (`kll_sketch<double>` and `kll_sketch<float>`)
 
 ```toml
 [dependencies]
@@ -50,5 +51,5 @@ apache-datasketches-sys = { version = "0.2", features = ["tuple"] }
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple"] }
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple", "kll"] }
 ```

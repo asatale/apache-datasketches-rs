@@ -88,7 +88,8 @@ jobs:
           - "--no-default-features --features theta"
           - "--no-default-features --features cpc"
           - "--no-default-features --features tuple"
-          - "" # default: all four
+          - "--no-default-features --features kll"
+          - "" # default: all five
           - "--all-features"
     steps:
       - uses: actions/checkout@v5
@@ -186,7 +187,9 @@ jobs:
       #
       # It also gates on the two harnesses agreeing scenario-for-scenario, and
       # that part IS a real assertion rather than a build check: it compares
-      # sketch estimates, which are deterministic, so it is immune to the
+      # each scenario's labelled fields (estimates for most families; n, min,
+      # max and retained for KLL, whose estimates are randomized), which are
+      # deterministic, so it is immune to the
       # runner noise that rules out a timing gate. It catches a parameter
       # changed on one side only -- the failure that otherwise shows up as a
       # published ratio nobody can reproduce.

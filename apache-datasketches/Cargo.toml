@@ -54,6 +54,10 @@ required-features = ["tuple"]
 name = "tuple_generic"
 required-features = ["tuple"]
 
+[[example]]
+name = "kll"
+required-features = ["kll"]
+
 # Perf harness for the ArrayOfDoubles update path, deliberately an example
 # rather than a `[[bench]]`: with `harness = false` a bench target is *run* by
 # `cargo test`, which would put a multi-million-item loop in CI. As an example

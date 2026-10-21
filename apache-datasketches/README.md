@@ -4,7 +4,7 @@ Safe, idiomatic Rust bindings for [Apache DataSketches](https://github.com/apach
 built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
-All four sketch families — `hll`, `theta`, `cpc` and `tuple` — are enabled by
+All five sketch families — `hll`, `theta`, `cpc`, `tuple` and `kll` — are enabled by
 default:
 
 ```toml
@@ -268,6 +268,29 @@ Serialization of generic sketches is not supported; use
 See `examples/tuple_generic.rs` (`cargo run -p apache-datasketches --example
 tuple_generic --features tuple`) for a complete runnable demo.
 
+## KLL sketches
+
+The KLL quantiles sketch family (`kll` feature) summarizes a stream of `f64`
+or `f32` values in bounded memory and answers rank, quantile, PMF and CDF
+queries, with merging and a Kolmogorov–Smirnov test between two sketches.
+
+```rust
+use apache_datasketches::kll::KllSketch;
+
+let mut latencies = KllSketch::<f64>::new(200)?;
+for ms in 1..=1000 {
+    latencies.update(f64::from(ms));
+}
+let p99 = latencies.get_quantile(0.99, true)?;
+println!("p99 latency: {p99} ms");
+```
+
+`KllSketch` is `Send` but not `Sync`; call `sorted_view()` to get a
+`KllSortedView` that can be shared across threads.
+
+See `examples/kll.rs` (`cargo run -p apache-datasketches --example kll
+--features kll`) for a complete runnable demo.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
@@ -278,6 +301,7 @@ tuple_generic --features tuple`) for a complete runnable demo.
 - [x] Tuple — `tuple` feature (per-key summaries: fixed-width `f64` arrays
   summed on collision (ArrayOfDoubles), or a summary type you define in Rust
   (`tuple::generic`); union, intersection, a-not-b, Jaccard similarity).
+- [x] KLL — `kll` feature (quantiles over `f64`/`f32`, merge, sorted view, Kolmogorov–Smirnov test).
 
 ## License
 

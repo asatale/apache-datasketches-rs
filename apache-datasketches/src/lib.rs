@@ -2,7 +2,7 @@
 //! built via the `cxx` crate over the raw
 //! [`apache-datasketches-sys`](https://docs.rs/apache-datasketches-sys) bridge.
 //!
-//! All four sketch families are enabled by default. To compile only the ones
+//! All five sketch families are enabled by default. To compile only the ones
 //! you need, disable default features and name them:
 //!
 //! ```toml
@@ -26,9 +26,12 @@
 //!   key (summed on collision); the generic form in `tuple::generic` carries
 //!   a summary type you define in Rust. Both support union, intersection,
 //!   a-not-b, and Jaccard similarity.
+//! - `kll` (feature `kll`) — KLL quantiles sketches over `f64` or `f32`:
+//!   ranks, quantiles, PMF and CDF, merging, a shareable sorted view, and a
+//!   Kolmogorov–Smirnov test between two sketches.
 //!
 //! (Module-level docs for each feature are only linked above when built
-//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple` in the
+//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll` in the
 //! sidebar.)
 //!
 //! See each module's documentation for usage examples, or the crate's
