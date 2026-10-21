@@ -27,6 +27,7 @@ pub(crate) mod sealed {
     /// seals [`KllItem`](super::KllItem).
     pub trait Sealed: Sized {
         type Sketch: cxx::memory::UniquePtrTarget;
+        type View: cxx::memory::UniquePtrTarget;
 
         fn is_nan_item(item: Self) -> bool;
 
@@ -61,13 +62,33 @@ pub(crate) mod sealed {
         fn to_string_summary(s: &Self::Sketch) -> String;
         fn retained_items(s: &Self::Sketch) -> Vec<Self>;
         fn retained_weights(s: &Self::Sketch) -> Vec<u64>;
+
+        fn sorted_view(s: &Self::Sketch) -> UniquePtr<Self::View>;
+        fn view_size(v: &Self::View) -> usize;
+        fn view_get_quantile(v: &Self::View, rank: f64, inclusive: bool)
+            -> Result<Self, Exception>;
+        fn view_get_rank(v: &Self::View, item: Self, inclusive: bool) -> Result<f64, Exception>;
+        fn view_get_pmf(
+            v: &Self::View,
+            split_points: &[Self],
+            inclusive: bool,
+        ) -> Result<Vec<f64>, Exception>;
+        fn view_get_cdf(
+            v: &Self::View,
+            split_points: &[Self],
+            inclusive: bool,
+        ) -> Result<Vec<f64>, Exception>;
+        fn view_items(v: &Self::View) -> Vec<Self>;
+        fn view_weights(v: &Self::View) -> Vec<u64>;
+        fn view_cumulative_weights(v: &Self::View) -> Vec<u64>;
     }
 }
 
 macro_rules! impl_sealed {
-    ($t:ty, $m:ident, $sketch:ident, $new:ident, $deser:ident, $rank_err:ident) => {
+    ($t:ty, $m:ident, $sketch:ident, $view:ident, $new:ident, $deser:ident, $rank_err:ident) => {
         impl sealed::Sealed for $t {
             type Sketch = $m::$sketch;
+            type View = $m::$view;
 
             fn is_nan_item(item: Self) -> bool {
                 item.is_nan()
@@ -154,6 +175,52 @@ macro_rules! impl_sealed {
             fn retained_weights(s: &Self::Sketch) -> Vec<u64> {
                 s.retained_weights().as_slice().to_vec()
             }
+
+            fn sorted_view(s: &Self::Sketch) -> UniquePtr<Self::View> {
+                s.sorted_view()
+            }
+            fn view_size(v: &Self::View) -> usize {
+                v.size()
+            }
+            fn view_get_quantile(
+                v: &Self::View,
+                rank: f64,
+                inclusive: bool,
+            ) -> Result<Self, Exception> {
+                v.get_quantile(rank, inclusive)
+            }
+            fn view_get_rank(
+                v: &Self::View,
+                item: Self,
+                inclusive: bool,
+            ) -> Result<f64, Exception> {
+                v.get_rank(item, inclusive)
+            }
+            fn view_get_pmf(
+                v: &Self::View,
+                split_points: &[Self],
+                inclusive: bool,
+            ) -> Result<Vec<f64>, Exception> {
+                v.get_pmf(split_points, inclusive)
+                    .map(|r| r.as_slice().to_vec())
+            }
+            fn view_get_cdf(
+                v: &Self::View,
+                split_points: &[Self],
+                inclusive: bool,
+            ) -> Result<Vec<f64>, Exception> {
+                v.get_cdf(split_points, inclusive)
+                    .map(|r| r.as_slice().to_vec())
+            }
+            fn view_items(v: &Self::View) -> Vec<Self> {
+                v.items().as_slice().to_vec()
+            }
+            fn view_weights(v: &Self::View) -> Vec<u64> {
+                v.weights().as_slice().to_vec()
+            }
+            fn view_cumulative_weights(v: &Self::View) -> Vec<u64> {
+                v.cumulative_weights().as_slice().to_vec()
+            }
         }
     };
 }
@@ -162,6 +229,7 @@ impl_sealed!(
     f64,
     doubles,
     KllDoublesSketchShim,
+    KllDoublesSortedViewShim,
     kll_doubles_new,
     kll_doubles_deserialize,
     kll_doubles_normalized_rank_error
@@ -170,6 +238,7 @@ impl_sealed!(
     f32,
     floats,
     KllFloatsSketchShim,
+    KllFloatsSortedViewShim,
     kll_floats_new,
     kll_floats_deserialize,
     kll_floats_normalized_rank_error

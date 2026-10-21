@@ -1,5 +1,6 @@
 use super::checks::{check_item, check_k, check_rank, check_split_points};
 use super::KllItem;
+use super::KllSortedView;
 use crate::error::SketchError;
 use cxx::UniquePtr;
 
@@ -232,6 +233,16 @@ impl<T: KllItem> KllSketch<T> {
         let items = T::retained_items(&self.inner);
         let weights = T::retained_weights(&self.inner);
         items.into_iter().zip(weights)
+    }
+
+    /// A sorted, immutable snapshot of the retained items, answering the
+    /// same queries as this sketch. Build one when running many queries
+    /// against a sketch that is no longer changing, or to share query access
+    /// between threads (the view is `Sync`; the sketch is not). An empty
+    /// sketch gives an empty view, whose queries return
+    /// [`SketchError::EmptySketch`].
+    pub fn sorted_view(&self) -> KllSortedView<T> {
+        KllSortedView::from_inner(T::sorted_view(&self.inner))
     }
 
     fn require_non_empty(&self) -> Result<(), SketchError> {

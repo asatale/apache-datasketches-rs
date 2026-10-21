@@ -17,10 +17,15 @@
 //!
 //! - [`KllSketch`] — the sketch, generic over [`KllItem`] (`f64` or `f32`).
 //!   Merge sketches with [`KllSketch::merge`].
+//! - [`KllSortedView`] / [`SortedViewEntry`] — an immutable sorted snapshot
+//!   of a sketch, from [`KllSketch::sorted_view`]; `Sync`, so it is how to
+//!   share query access across threads.
 
 mod checks;
 mod item;
 mod sketch;
+mod sorted_view;
 
 pub use item::KllItem;
 pub use sketch::KllSketch;
+pub use sorted_view::{KllSortedView, SortedViewEntry};
