@@ -6,7 +6,7 @@
 //! you need, disable default features and name them:
 //!
 //! ```toml
-//! apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+//! apache-datasketches = { version = "0.3", default-features = false, features = ["hll"] }
 //! ```
 //!
 //! Unused families cost nothing at runtime — the linker drops what you do not

@@ -39,7 +39,7 @@ cargo test -p apache-datasketches --features theta
 cargo test -p apache-datasketches --features cpc
 cargo test -p apache-datasketches --features tuple
 cargo test -p apache-datasketches --features kll
-cargo test --workspace --features hll,theta,cpc,tuple
+cargo test --workspace --features hll,theta,cpc,tuple,kll
 
 # Run a single test
 cargo test -p apache-datasketches --features hll hll_sketch_test::some_test_name

@@ -9,14 +9,14 @@ default:
 
 ```toml
 [dependencies]
-apache-datasketches = "0.2"
+apache-datasketches = "0.3"
 ```
 
 To compile only what you need, disable default features and name the families:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+apache-datasketches = { version = "0.3", default-features = false, features = ["hll"] }
 ```
 
 Unused families cost nothing at runtime — the linker drops what you do not

@@ -14,7 +14,48 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
+`apache-datasketches` 0.3.0 and `apache-datasketches-sys` 0.2.3, both crates.
+
+### Breaking (`apache-datasketches`)
+- `SketchError` is now `#[non_exhaustive]`, and gains a variant,
+  `SketchError::EmptySketch`. A `match` on `SketchError` needs a wildcard arm
+  (`_ => ...`); this is the last time adding a variant will break you.
+
 ### Added
+- **KLL quantiles sketch family** (`kll` feature, on by default):
+  `KllSketch<T>` for `T = f64` or `f32` — rank, quantile, PMF and CDF
+  queries, `merge`, serialization compatible with the Java and Python
+  `KllDoublesSketch`/`KllFloatsSketch`, `iter()` over retained items, and
+  `normalized_rank_error_for_k`. `KllSortedView<T>` is an immutable sorted
+  snapshot answering the same queries. `kolmogorov_smirnov_delta`,
+  `_threshold` and `_test` compare two sketches' distributions.
+
+  Sharp edges, documented and tested: `KllSketch` is `Send` but not `Sync`,
+  because upstream caches a sorted view inside the sketch on query — share a
+  `KllSortedView` (which is `Sync`) across threads instead. Compaction is
+  randomized upstream and cannot be seeded, so sketches fed identical input
+  can give slightly different answers once past `k` items. Queries on an
+  empty sketch, including the Kolmogorov–Smirnov functions, return
+  `EmptySketch` rather than upstream's NaN/sentinel values.
+  `KllSketch::merge` panics (documented under `# Panics`) if the combined `n`
+  would reach 2^63; upstream C++ loops forever or overflows its work arrays
+  beyond that. Only repeated self-merges (about 63 doublings) or crafted
+  bytes can reach it; no real stream can.
+
+  `KllSketch::deserialize` validates the serialized level layout before
+  upstream reads it, because upstream's deserialize trusts its input. Bytes
+  whose level boundaries are inconsistent with `n`, that claim more levels
+  than `n` allows, that carry `n >= 2^63`, NaN items, or (when non-empty)
+  `k < 8` are rejected with `SketchError::Deserialization`. Without this,
+  such bytes deserialized successfully and a later `merge` aborted the
+  process or corrupted the heap.
+- `apache-datasketches-sys`: `kll` feature with the `kll_doubles` and
+  `kll_floats` bridges. The shim's `get_quantile` (sketch and sorted view)
+  rejects a NaN or out-of-range rank with an error instead of passing it to
+  upstream, where it was undefined behaviour.
+- `examples/bench_kll_update.rs` / `benches/cpp_reference/kll_update.cc`.
+  The pair cross-checks `n`, `min`, `max` and `retained` instead of an
+  estimate, since KLL's estimates are randomized.
 - **`hll_union_update.cc` / `examples/bench_hll_union_update.rs`, closing the
   other open caveat from 0.2.3.** `HllUnion` had no benchmark on either side,
   so the no-alloc `update_str` fix applied to it was never measured — only

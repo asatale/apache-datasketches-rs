@@ -9,14 +9,14 @@ All five sketch families are enabled by default:
 
 ```toml
 [dependencies]
-apache-datasketches = "0.2"
+apache-datasketches = "0.3"
 ```
 
 To compile only some of them, opt out and name the ones you want:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+apache-datasketches = { version = "0.3", default-features = false, features = ["hll"] }
 ```
 
 (The `apache-datasketches-sys` crate keeps `default = []`; it is not meant to
