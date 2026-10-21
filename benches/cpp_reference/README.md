@@ -70,6 +70,7 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 | `hll_union_update.cc` | `examples/bench_hll_union_update.rs` |
 | `theta_update.cc` | `examples/bench_theta_update.rs` |
 | `cpc_update.cc` | `examples/bench_cpc_update.rs` |
+| `kll_update.cc` | `examples/bench_kll_update.rs` |
 | `array_of_doubles_update.cc` | `examples/bench_tuple_update.rs` |
 
 `examples/bench_tuple_generic_update.rs` deliberately has no counterpart: the
@@ -186,6 +187,22 @@ value would round to `0`. `report_jaccard()`/`bench::report_jaccard()` print
 all three fields to 9 decimal places instead, and `compare.py` picks up
 `lower=`, `estimate=` and `upper=` the same way it picks up `estimate=`
 elsewhere — no changes to `compare.py` were needed.
+
+## The KLL pair checks fields, not an estimate
+
+KLL compaction keeps a random half of each level it compacts, using a
+`thread_local` engine seeded from the clock that upstream offers no way to
+seed. Two correct runs over identical input therefore report different
+quantiles, so `kll_update.cc` and `bench_kll_update.rs` cannot use an
+estimate as their cross-check. They print `n`, `min`, `max` and `retained`
+instead (and `bytes` on `ser`/`deser`): which items survive is random, but
+how many survive at each level depends only on the input size and `k`, so
+those must match exactly. `compare.py` compares every labelled field
+generically, so it needed no change.
+
+The `quantile` scenario times `get_quantile` on a filled sketch, per call
+over a fixed `QUERY_CALLS`, after one untimed call has built the sketch's
+cached sorted view.
 
 ## Reading the numbers
 

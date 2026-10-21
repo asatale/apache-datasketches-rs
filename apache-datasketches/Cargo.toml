@@ -83,6 +83,10 @@ required-features = ["theta"]
 name = "bench_cpc_update"
 required-features = ["cpc"]
 
+[[example]]
+name = "bench_kll_update"
+required-features = ["kll"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

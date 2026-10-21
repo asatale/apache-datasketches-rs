@@ -23,11 +23,14 @@ root="$(cd "$here/../.." && pwd)"
 # Each C++ benchmark paired with the Rust example and feature that mirror it.
 # bench_tuple_generic_update is deliberately absent: the generic Tuple sketch
 # calls back into Rust per summary and has no C++ counterpart to compare to.
+# bench_kll_update cross-checks n/min/max/retained instead of an estimate:
+# KLL compaction is randomized, so its estimates legitimately differ run to run.
 pairs=(
   "hll:bench_hll_update:hll"
   "hll_union:bench_hll_union_update:hll"
   "theta:bench_theta_update:theta"
   "cpc:bench_cpc_update:cpc"
+  "kll:bench_kll_update:kll"
   "array_of_doubles:bench_tuple_update:tuple"
 )
 
