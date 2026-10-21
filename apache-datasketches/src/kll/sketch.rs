@@ -7,6 +7,24 @@ use cxx::UniquePtr;
 /// for rank/quantile/CDF queries, about 1.65% for PMF queries.
 const DEFAULT_K: u16 = 200;
 
+/// The first merged `n` upstream merge cannot handle: merges must keep `n`
+/// strictly below 2^63.
+///
+/// Upstream `merge` sums the two `n`s in a plain `uint64_t` and passes the
+/// result to `kll_helper::ub_on_num_levels` (kll_sketch_impl.hpp:779, in
+/// `merge_higher_levels`). That calls `floor_of_log2_of_fraction(n, 1)`
+/// (kll_helper_impl.hpp:38-51), which doubles a `uint64_t` until it exceeds
+/// `n`; for `n >= 2^63` the doubling wraps to 0 and it loops forever, and a
+/// wrapped sum would undersize merge's work arrays (a heap overflow in
+/// `populate_work_arrays`).
+///
+/// Below 2^63 the level count also stays within the 61 levels upstream's
+/// capacity math allows (`int_cap_aux` rejects depth > 60): a level `j` is
+/// only created by compacting at least `m` = 8 items one level down, leaving
+/// at least 4 items of weight 2^j, so 4 * 2^j <= n < 2^63 gives j <= 60.
+/// The deserializer enforces the same bound on incoming bytes.
+const MERGED_N_LIMIT: u64 = 1 << 63;
+
 /// A KLL quantiles sketch over `f64` or `f32` items: answers rank, quantile,
 /// PMF and CDF queries over a stream using bounded memory, with an error
 /// bound set by `k` (see [`Self::get_normalized_rank_error`]).
@@ -87,7 +105,25 @@ impl<T: KllItem> KllSketch<T> {
 
     /// Merges `other` into this sketch. `other` may have a different `k`;
     /// the result's error is then governed by the smaller `k`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the merged `n` (`self.get_n() + other.get_n()`) would reach
+    /// 2^63, which upstream cannot handle: its merge then loops forever or
+    /// overflows its work arrays. No real stream gets near this (it takes
+    /// over 9.2 quintillion items); it is reachable in practice only by
+    /// repeatedly merging a sketch into itself.
     pub fn merge(&mut self, other: &KllSketch<T>) {
+        let fits = self
+            .get_n()
+            .checked_add(other.get_n())
+            .is_some_and(|n| n < MERGED_N_LIMIT);
+        assert!(
+            fits,
+            "KLL merge would make n reach 2^63 ({} + {}), which upstream cannot handle",
+            self.get_n(),
+            other.get_n()
+        );
         T::merge(self.inner.pin_mut(), &other.inner);
     }
 

@@ -366,3 +366,88 @@ fn small_k_fails<T: TestItem>() {
     ));
 }
 for_both_types!(small_k_fails_t, small_k_fails);
+
+/// A k=200 sketch with 61 levels whose eight items all sit in the top level
+/// (weight 2^60 each), so n = 8 * 2^60 = 2^63. Self-consistent, and within
+/// the 61-level cap, but n is past what upstream merge can handle.
+fn n_2_pow_63_bytes<T: TestItem>() -> Vec<u8> {
+    let real = filled::<T>(200, 8).serialize();
+    assert_eq!(real[NUM_LEVELS_OFFSET], 1);
+    let num_levels = 61u8;
+    let capacity = total_capacity(200, num_levels);
+    let mut bytes = real[..N_OFFSET].to_vec();
+    bytes.extend_from_slice(&(1u64 << 63).to_le_bytes());
+    bytes.extend_from_slice(&real[N_OFFSET + 8..NUM_LEVELS_OFFSET]);
+    bytes.extend_from_slice(&[num_levels, 0]);
+    for _ in 0..num_levels {
+        bytes.extend_from_slice(&(capacity - 8).to_le_bytes());
+    }
+    // min, max and the eight items, unchanged.
+    bytes.extend_from_slice(&real[LEVELS_OFFSET + 4..]);
+    bytes
+}
+
+fn n_at_2_pow_63_fails<T: TestItem>() {
+    // Assert on deserialize only: merging this sketch hangs upstream.
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&n_2_pow_63_bytes::<T>()),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+for_both_types!(n_at_2_pow_63_fails_t, n_at_2_pow_63_fails);
+
+/// Self-merging a clone doubles n each time; after 62 rounds n = 2^62, and
+/// the 63rd would make n = 2^63, which the guard in `merge` must refuse
+/// before upstream (which would loop forever) sees it.
+fn self_merge_doubling_hits_guard<T: TestItem>() {
+    let mut sketch = filled::<T>(8, 1);
+    for _ in 0..64 {
+        assert!(sketch.get_n() < 1u64 << 63);
+        let copy = sketch.clone();
+        sketch.merge(&copy);
+    }
+}
+mod self_merge_doubling_hits_guard_t {
+    #[test]
+    #[should_panic(expected = "KLL merge would make n reach 2^63")]
+    fn as_f64() {
+        super::self_merge_doubling_hits_guard::<f64>();
+    }
+    #[test]
+    #[should_panic(expected = "KLL merge would make n reach 2^63")]
+    fn as_f32() {
+        super::self_merge_doubling_hits_guard::<f32>();
+    }
+}
+
+/// Merging powers of two 2^0..=2^62 lands exactly on n = 2^63 - 1, the
+/// largest n merge accepts; one more item is refused.
+fn largest_n<T: TestItem>() -> KllSketch<T> {
+    let mut power = filled::<T>(8, 1);
+    let mut acc = power.clone();
+    for _ in 1..63 {
+        let copy = power.clone();
+        power.merge(&copy);
+        acc.merge(&power);
+    }
+    acc
+}
+
+fn merge_up_to_largest_n_succeeds<T: TestItem>() {
+    let acc = largest_n::<T>();
+    assert_eq!(acc.get_n(), (1u64 << 63) - 1);
+    // Still a working sketch.
+    assert_eq!(acc.get_min_item().unwrap().to_f64(), 1.0);
+    assert!(acc.get_quantile(0.5, true).is_ok());
+}
+for_both_types!(
+    merge_up_to_largest_n_succeeds_t,
+    merge_up_to_largest_n_succeeds
+);
+
+#[test]
+#[should_panic(expected = "KLL merge would make n reach 2^63")]
+fn merge_one_past_largest_n_panics() {
+    let mut acc = largest_n::<f64>();
+    acc.merge(&filled::<f64>(8, 1));
+}

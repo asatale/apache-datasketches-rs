@@ -252,6 +252,13 @@ void validate_kll_layout(const uint8_t* data, size_t size) {
         + std::to_string(num_levels));
   }
   if (n == 0) throw std::invalid_argument("KLL sketch is flagged non-empty but has n = 0");
+  // kll_helper::ub_on_num_levels(n) never returns for n >= 2^63 (the
+  // doubling in floor_of_log2_of_fraction wraps to 0), and upstream merge
+  // calls it on the merged n (kll_sketch_impl.hpp:779). No real stream gets
+  // there, so refuse such sketches outright; the safe merge guards the sum.
+  if (n >= (uint64_t(1) << 63)) {
+    throw std::invalid_argument("KLL sketch n = " + std::to_string(n) + " is not below 2^63");
+  }
 
   // Upstream derives the capacity from k (not min_k), m and num_levels.
   const uint32_t capacity = datasketches::kll_helper::compute_total_capacity(k, m, num_levels);
@@ -288,9 +295,8 @@ void validate_kll_layout(const uint8_t* data, size_t size) {
   // merge sizes its work arrays by ub_on_num_levels(n) and writes one entry
   // per source level, so such a sketch makes merge throw or overflow the
   // heap (populate_work_arrays). Genuine sketches never exceed this bound.
-  // ub_on_num_levels(n) loops forever for n >= 2^63 (its doubling wraps to
-  // 0); any such n has a bound of 64, above MAX_NUM_LEVELS, so skip it.
-  if (n < (uint64_t(1) << 63) && num_levels > datasketches::kll_helper::ub_on_num_levels(n)) {
+  // (n < 2^63 is checked above, so this call terminates.)
+  if (num_levels > datasketches::kll_helper::ub_on_num_levels(n)) {
     throw std::invalid_argument("KLL sketch has " + std::to_string(num_levels)
         + " levels, more than n = " + std::to_string(n) + " allows");
   }
