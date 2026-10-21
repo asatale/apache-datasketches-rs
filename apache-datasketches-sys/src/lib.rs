@@ -49,3 +49,8 @@ pub mod tuple_generic_intersection;
 pub mod tuple_generic_jaccard;
 #[cfg(feature = "tuple")]
 pub mod tuple_generic_union;
+
+#[cfg(feature = "kll")]
+pub mod kll_doubles;
+#[cfg(feature = "kll")]
+pub mod kll_floats;

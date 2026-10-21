@@ -124,3 +124,11 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_jaccard_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "kll_doubles_link_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_floats_link_test"
+required-features = ["kll"]
