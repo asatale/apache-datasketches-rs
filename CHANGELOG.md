@@ -39,8 +39,9 @@ fact — this file was introduced during 0.2.1.
   `EmptySketch` rather than upstream's NaN/sentinel values.
   `KllSketch::merge` panics (documented under `# Panics`) if the combined `n`
   would reach 2^63; upstream C++ loops forever or overflows its work arrays
-  beyond that. Only repeated self-merges (about 63 doublings) or crafted
-  bytes can reach it; no real stream can.
+  beyond that. Only repeatedly merging a clone of a sketch into it (about 63
+  doublings) or crafted bytes (two sketches near 2^62) can reach it; no real
+  stream can.
 
   `KllSketch::deserialize` validates the serialized level layout before
   upstream reads it, because upstream's deserialize trusts its input. Bytes
@@ -50,9 +51,12 @@ fact — this file was introduced during 0.2.1.
   such bytes deserialized successfully and a later `merge` aborted the
   process or corrupted the heap.
 - `apache-datasketches-sys`: `kll` feature with the `kll_doubles` and
-  `kll_floats` bridges. The shim's `get_quantile` (sketch and sorted view)
-  rejects a NaN or out-of-range rank with an error instead of passing it to
-  upstream, where it was undefined behaviour.
+  `kll_floats` bridges. On the sketch, upstream's `get_quantile` already
+  rejected out-of-range ranks but let NaN through to an unchecked
+  float-to-integer cast; on the sorted view neither NaN nor out-of-range
+  ranks were checked. The shim now rejects both, with an error, on both
+  paths. `kll_doubles_deserialize`/`kll_floats_deserialize` validate the
+  serialized layout before upstream reads it.
 - `examples/bench_kll_update.rs` / `benches/cpp_reference/kll_update.cc`.
   The pair cross-checks `n`, `min`, `max` and `retained` instead of an
   estimate, since KLL's estimates are randomized.

@@ -131,6 +131,10 @@ bridges (`kll_doubles.rs`, `kll_floats.rs`) declare the concrete aliases.
 Keep those two bridge files identical modulo type. On the safe side, the
 sealed `KllItem` trait in `src/kll/item.rs` is the only per-type code; add an
 item type by adding an instantiation, a bridge and one `impl_sealed!` line.
+Item types must be arithmetic (the sorted view stores items by value, which
+`KllSortedView`'s lifetime-free design relies on), and floating-point
+assumptions exist in `is_nan_item` and the shim's `std::isnan` NaN check, so
+a non-float type needs those revisited.
 KLL compaction is randomized and unseedable, so tests may assert quantiles
 exactly only while `n <= k`, and its bench pair cross-checks
 `n`/`min`/`max`/`retained` rather than an estimate. The shim validates

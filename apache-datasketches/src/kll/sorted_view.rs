@@ -29,7 +29,11 @@ pub struct KllSortedView<T: KllItem> {
 
 // SAFETY: upstream quantiles_sorted_view has no mutable state — every query
 // is a const binary search over entries fixed at construction — so shared
-// and cross-thread access are both sound.
+// and cross-thread access are both sound. The view is also independent of
+// the sketch's lifetime (hence no lifetime parameter) because upstream
+// quantiles_sorted_view stores arithmetic items (f64/f32) by value; for
+// non-arithmetic types it would store pointers into the sketch, so this impl
+// and the absence of a lifetime are only sound for arithmetic `KllItem`s.
 unsafe impl<T: KllItem> Send for KllSortedView<T> {}
 unsafe impl<T: KllItem> Sync for KllSortedView<T> {}
 

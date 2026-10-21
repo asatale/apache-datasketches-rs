@@ -204,6 +204,10 @@ The `quantile` scenario times `get_quantile` on a filled sketch, per call
 over a fixed `QUERY_CALLS`, after one untimed call has built the sketch's
 cached sorted view.
 
+The Rust `deser` scenario also pays for the shim's layout validation and NaN
+scan, which the C++ side does not, so a `deser` gap is binding cost but not
+FFI overhead alone. Say so before quoting a `deser` ratio.
+
 ## Reading the numbers
 
 Prefer the **absolute** difference (Rust minus C++, in ns/op) to the ratio. The

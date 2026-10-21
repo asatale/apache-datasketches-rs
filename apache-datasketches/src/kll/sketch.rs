@@ -85,6 +85,13 @@ impl<T: KllItem> KllSketch<T> {
     /// An empty sketch's bytes carry no item type, so they deserialize as
     /// either `f64` or `f32`; non-empty bytes of the other item type are
     /// rejected.
+    ///
+    /// Bytes are rejected with [`SketchError::Deserialization`] when their
+    /// level boundaries are inconsistent with `n`, they claim more levels
+    /// than `n` allows, they carry `n >= 2^63`, they contain NaN items, or
+    /// (when non-empty) `k < 8`. The bytes' internal sortedness and `min_k`
+    /// are not validated, so crafted-but-consistent bytes can yield wrong
+    /// answers (never memory unsafety).
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = T::sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
@@ -113,7 +120,8 @@ impl<T: KllItem> KllSketch<T> {
     /// 2^63, which upstream cannot handle: its merge then loops forever or
     /// overflows its work arrays. No real stream gets near this (it takes
     /// over 9.2 quintillion items); it is reachable in practice only by
-    /// repeatedly merging a sketch into itself.
+    /// repeatedly merging a clone of a sketch into it, or via crafted bytes
+    /// (two sketches near 2^62).
     pub fn merge(&mut self, other: &KllSketch<T>) {
         let fits = self
             .get_n()
