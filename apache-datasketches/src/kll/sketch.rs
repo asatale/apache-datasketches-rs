@@ -42,8 +42,11 @@ pub struct KllSketch<T: KllItem> {
 }
 
 // SAFETY: the shim owns its kll_sketch outright and holds no thread-affine
-// state, so moving it to another thread is sound. It is deliberately not
-// Sync: see the type-level docs.
+// state, so moving it to another thread is sound. The random state upstream
+// uses for compaction is not owned by the sketch: it lives in namespace-level
+// `thread_local` engines (common_defs.hpp), so a moved sketch simply draws
+// from the new thread's engine. It is deliberately not Sync: see the
+// type-level docs.
 unsafe impl<T: KllItem> Send for KllSketch<T> {}
 
 impl<T: KllItem> KllSketch<T> {

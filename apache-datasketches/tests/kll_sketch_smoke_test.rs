@@ -156,3 +156,80 @@ fn to_string_summary_mentions_k<T: TestItem>() {
     assert!(summary.contains("200"), "summary was: {summary}");
 }
 for_both_types!(to_string_summary_mentions_k_t, to_string_summary_mentions_k);
+
+// Byte offsets in the full (estimation/exact, n > 1) serialized layout.
+const N_OFFSET: usize = 8;
+const NUM_LEVELS_OFFSET: usize = 18;
+const LEVELS_OFFSET: usize = 20;
+
+fn estimation_bytes<T: TestItem>() -> Vec<u8> {
+    let sketch = filled::<T>(200, 1000);
+    assert!(sketch.is_estimation_mode());
+    let bytes = sketch.serialize();
+    assert!(bytes[NUM_LEVELS_OFFSET] >= 2, "need several levels");
+    bytes
+}
+
+fn read_level(bytes: &[u8], i: usize) -> u32 {
+    let at = LEVELS_OFFSET + 4 * i;
+    u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap())
+}
+
+fn tampered_n_fails<T: TestItem>() {
+    let mut bytes = estimation_bytes::<T>();
+    bytes[N_OFFSET..N_OFFSET + 8].copy_from_slice(&5000u64.to_le_bytes());
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+for_both_types!(tampered_n_fails_t, tampered_n_fails);
+
+fn decreasing_levels_fail<T: TestItem>() {
+    // levels[0] raised above levels[1].
+    let mut bytes = estimation_bytes::<T>();
+    let bigger = read_level(&bytes, 1) + 1;
+    bytes[LEVELS_OFFSET..LEVELS_OFFSET + 4].copy_from_slice(&bigger.to_le_bytes());
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes),
+        Err(SketchError::Deserialization(_))
+    ));
+    // levels[1] dropped below levels[0]; levels[0] (and so the item count and
+    // byte length) is untouched, so only a layout check can catch this.
+    let mut bytes = estimation_bytes::<T>();
+    let level0 = read_level(&bytes, 0);
+    assert!(level0 > 0, "need room below levels[0]");
+    let at = LEVELS_OFFSET + 4;
+    bytes[at..at + 4].copy_from_slice(&(level0 - 1).to_le_bytes());
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+for_both_types!(decreasing_levels_fail_t, decreasing_levels_fail);
+
+fn truncated_levels_fail<T: TestItem>() {
+    let bytes = estimation_bytes::<T>();
+    // Cut mid-way through the second level entry.
+    let cut = LEVELS_OFFSET + 4 + 2;
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes[..cut]),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+for_both_types!(truncated_levels_fail_t, truncated_levels_fail);
+
+fn untampered_estimation_roundtrip_merges<T: TestItem>() {
+    let restored = KllSketch::<T>::deserialize(&estimation_bytes::<T>()).unwrap();
+    assert_eq!(restored.get_n(), 1000);
+    let mut target = filled::<T>(200, 1000);
+    target.merge(&restored);
+    assert_eq!(target.get_n(), 2000);
+    let mut other = KllSketch::<T>::default();
+    other.merge(&restored);
+    assert_eq!(other.get_n(), 1000);
+}
+for_both_types!(
+    untampered_estimation_roundtrip_merges_t,
+    untampered_estimation_roundtrip_merges
+);
