@@ -233,3 +233,136 @@ for_both_types!(
     untampered_estimation_roundtrip_merges_t,
     untampered_estimation_roundtrip_merges
 );
+
+/// Mirror of upstream `kll_helper::int_cap_aux_aux` / `int_cap_aux`.
+fn int_cap_aux_aux(k: u64, depth: u32) -> u64 {
+    let twok = k << 1;
+    let tmp = (twok << depth) / 3u64.pow(depth);
+    (tmp + 1) >> 1
+}
+
+fn int_cap_aux(k: u64, depth: u32) -> u64 {
+    if depth <= 30 {
+        return int_cap_aux_aux(k, depth);
+    }
+    let half = depth / 2;
+    int_cap_aux_aux(int_cap_aux_aux(k, half), depth - half)
+}
+
+/// Mirror of upstream `kll_helper::compute_total_capacity` with m = 8.
+fn total_capacity(k: u16, num_levels: u8) -> u32 {
+    (0..u32::from(num_levels))
+        .map(|depth| int_cap_aux(u64::from(k), depth).max(8) as u32)
+        .sum()
+}
+
+/// A k=200, n=3 sketch re-encoded with `num_levels` levels: all three items
+/// in level 0, every higher level empty. The layout is self-consistent
+/// (levels non-decreasing, weights sum to n) but has far more levels than
+/// n = 3 could ever produce.
+fn n3_bytes_with_levels<T: TestItem>(num_levels: u8) -> Vec<u8> {
+    let real = filled::<T>(200, 3).serialize();
+    assert_eq!(real[NUM_LEVELS_OFFSET], 1);
+    let capacity = total_capacity(200, num_levels);
+    let mut bytes = real[..NUM_LEVELS_OFFSET].to_vec();
+    bytes.extend_from_slice(&[num_levels, 0]);
+    bytes.extend_from_slice(&(capacity - 3).to_le_bytes());
+    for _ in 1..num_levels {
+        bytes.extend_from_slice(&capacity.to_le_bytes());
+    }
+    // min, max and the three items, unchanged.
+    bytes.extend_from_slice(&real[LEVELS_OFFSET + 4..]);
+    bytes
+}
+
+fn excess_levels_fail<T: TestItem>() {
+    // Sanity: the builder reproduces the real encoding at one level.
+    assert_eq!(
+        n3_bytes_with_levels::<T>(1),
+        filled::<T>(200, 3).serialize()
+    );
+    for num_levels in [10, 61] {
+        // Assert on deserialize only: merging such a sketch aborts (10) or
+        // overflows the heap (61) in upstream.
+        assert!(
+            matches!(
+                KllSketch::<T>::deserialize(&n3_bytes_with_levels::<T>(num_levels)),
+                Err(SketchError::Deserialization(_))
+            ),
+            "num_levels = {num_levels}"
+        );
+    }
+}
+for_both_types!(excess_levels_fail_t, excess_levels_fail);
+
+fn genuine_sketches_roundtrip_and_merge<T: TestItem>() {
+    for k in [8u16, 200] {
+        for n in [1u32, 2, 3, 199, 200, 201, 1000, 10_000, 100_000] {
+            let sketch = filled::<T>(k, n);
+            let restored = KllSketch::<T>::deserialize(&sketch.serialize())
+                .unwrap_or_else(|e| panic!("k={k} n={n}: {e:?}"));
+            assert_eq!(restored.get_n(), u64::from(n));
+            let mut small = filled::<T>(k, 1);
+            small.merge(&restored);
+            assert_eq!(small.get_n(), u64::from(n) + 1);
+            let mut target = restored.clone();
+            target.merge(&filled::<T>(k, 1));
+            assert_eq!(target.get_n(), u64::from(n) + 1);
+            let mut both = restored.clone();
+            both.merge(&restored);
+            assert_eq!(both.get_n(), 2 * u64::from(n));
+        }
+    }
+}
+for_both_types!(
+    genuine_sketches_roundtrip_and_merge_t,
+    genuine_sketches_roundtrip_and_merge
+);
+
+fn nan_bytes(width: usize) -> Vec<u8> {
+    match width {
+        8 => f64::NAN.to_le_bytes().to_vec(),
+        4 => f32::NAN.to_le_bytes().to_vec(),
+        _ => panic!("unexpected item width {width}"),
+    }
+}
+
+fn nan_items_fail<T: TestItem>() {
+    // Single-item layout: 8-byte header, then the one item.
+    let mut bytes = filled::<T>(200, 1).serialize();
+    let width = bytes.len() - 8;
+    bytes[8..].copy_from_slice(&nan_bytes(width));
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes),
+        Err(SketchError::Deserialization(_))
+    ));
+
+    // Full layout, n = 10, one level: header + levels[0], then min, max and
+    // ten items.
+    let real = filled::<T>(200, 10).serialize();
+    let width = (real.len() - (LEVELS_OFFSET + 4)) / 12;
+    let items_at = LEVELS_OFFSET + 4 + 2 * width;
+    // A retained item, then the min field, set to NaN.
+    for at in [items_at + 5 * width, LEVELS_OFFSET + 4] {
+        let mut bytes = real.clone();
+        bytes[at..at + width].copy_from_slice(&nan_bytes(width));
+        assert!(
+            matches!(
+                KllSketch::<T>::deserialize(&bytes),
+                Err(SketchError::Deserialization(_))
+            ),
+            "NaN at byte {at}"
+        );
+    }
+}
+for_both_types!(nan_items_fail_t, nan_items_fail);
+
+fn small_k_fails<T: TestItem>() {
+    let mut bytes = filled::<T>(200, 1).serialize();
+    bytes[4..6].copy_from_slice(&7u16.to_le_bytes());
+    assert!(matches!(
+        KllSketch::<T>::deserialize(&bytes),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+for_both_types!(small_k_fails_t, small_k_fails);

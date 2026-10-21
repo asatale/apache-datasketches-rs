@@ -1,6 +1,7 @@
 #include "kll_sketch_shim.h"
 #include "kolmogorov_smirnov.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -228,9 +229,16 @@ void validate_kll_layout(const uint8_t* data, size_t size) {
   constexpr uint8_t IS_SINGLE_ITEM_BIT = 2;
   const bool is_empty = flags & (1 << IS_EMPTY_BIT);
   const bool is_single_item = flags & (1 << IS_SINGLE_ITEM_BIT);
-  if (is_empty || is_single_item) return;
+  if (is_empty) return;
 
+  // Upstream checks k only in the constructor, not on this path.
   const auto k = read_at<uint16_t>(data, size, 4, "k");
+  if (k < datasketches::kll_constants::MIN_K) {
+    throw std::invalid_argument("KLL sketch k must be at least "
+        + std::to_string(datasketches::kll_constants::MIN_K) + ": " + std::to_string(k));
+  }
+  if (is_single_item) return;
+
   const auto m = read_at<uint8_t>(data, size, 6, "m");
   const auto n = read_at<uint64_t>(data, size, 8, "n");
   const auto num_levels = read_at<uint8_t>(data, size, 18, "num_levels");
@@ -274,13 +282,39 @@ void validate_kll_layout(const uint8_t* data, size_t size) {
     throw std::invalid_argument("KLL sketch levels hold total weight " + std::to_string(total)
         + " but n is " + std::to_string(n));
   }
+
+  // A consistent layout can still carry more levels than n items could ever
+  // produce (e.g. n = 3 in level 0 with nine empty levels above). Upstream
+  // merge sizes its work arrays by ub_on_num_levels(n) and writes one entry
+  // per source level, so such a sketch makes merge throw or overflow the
+  // heap (populate_work_arrays). Genuine sketches never exceed this bound.
+  // ub_on_num_levels(n) loops forever for n >= 2^63 (its doubling wraps to
+  // 0); any such n has a bound of 64, above MAX_NUM_LEVELS, so skip it.
+  if (n < (uint64_t(1) << 63) && num_levels > datasketches::kll_helper::ub_on_num_levels(n)) {
+    throw std::invalid_argument("KLL sketch has " + std::to_string(num_levels)
+        + " levels, more than n = " + std::to_string(n) + " allows");
+  }
+}
+
+// NaN items break the ordering every query relies on; upstream's update()
+// drops them, but deserialize accepts them. Checked on the decoded sketch
+// (retained items plus min/max) rather than by re-parsing items from bytes,
+// so item width and the min/max position need no second encoding of the
+// format.
+template<typename T>
+void reject_nan_items(const datasketches::kll_sketch<T>& sketch) {
+  if (sketch.is_empty()) return;
+  bool has_nan = std::isnan(sketch.get_min_item()) || std::isnan(sketch.get_max_item());
+  for (auto pair : sketch) has_nan = has_nan || std::isnan(pair.first);
+  if (has_nan) throw std::invalid_argument("KLL sketch bytes contain a NaN item");
 }
 
 template<typename T>
 std::unique_ptr<KllSketchShim<T>> kll_deserialize(rust::Slice<const uint8_t> bytes) {
   validate_kll_layout(bytes.data(), bytes.size());
-  return std::make_unique<KllSketchShim<T>>(
-      datasketches::kll_sketch<T>::deserialize(bytes.data(), bytes.size()));
+  auto sketch = datasketches::kll_sketch<T>::deserialize(bytes.data(), bytes.size());
+  reject_nan_items(sketch);
+  return std::make_unique<KllSketchShim<T>>(std::move(sketch));
 }
 
 } // namespace
