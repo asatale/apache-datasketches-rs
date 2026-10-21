@@ -81,6 +81,10 @@ pub(crate) mod sealed {
         fn view_items(v: &Self::View) -> Vec<Self>;
         fn view_weights(v: &Self::View) -> Vec<u64>;
         fn view_cumulative_weights(v: &Self::View) -> Vec<u64>;
+
+        fn ks_delta(a: &Self::Sketch, b: &Self::Sketch) -> f64;
+        fn ks_threshold(a: &Self::Sketch, b: &Self::Sketch, p: f64) -> f64;
+        fn ks_test(a: &Self::Sketch, b: &Self::Sketch, p: f64) -> bool;
     }
 }
 
@@ -220,6 +224,16 @@ macro_rules! impl_sealed {
             }
             fn view_cumulative_weights(v: &Self::View) -> Vec<u64> {
                 v.cumulative_weights().as_slice().to_vec()
+            }
+
+            fn ks_delta(a: &Self::Sketch, b: &Self::Sketch) -> f64 {
+                a.ks_delta(b)
+            }
+            fn ks_threshold(a: &Self::Sketch, b: &Self::Sketch, p: f64) -> f64 {
+                a.ks_threshold(b, p)
+            }
+            fn ks_test(a: &Self::Sketch, b: &Self::Sketch, p: f64) -> bool {
+                a.ks_test(b, p)
             }
         }
     };

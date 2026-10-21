@@ -55,3 +55,13 @@ pub(crate) fn check_split_points<T: KllItem>(split_points: &[T]) -> Result<(), S
     }
     Ok(())
 }
+
+pub(crate) fn check_p(p: f64) -> Result<(), SketchError> {
+    // Written as a negated conjunction so NaN is rejected too.
+    if !(p > 0.0 && p < 1.0) {
+        return Err(SketchError::InvalidConfig(format!(
+            "p must be in (0, 1), got {p}"
+        )));
+    }
+    Ok(())
+}

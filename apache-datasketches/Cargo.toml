@@ -306,3 +306,7 @@ required-features = ["kll"]
 [[test]]
 name = "kll_concurrency_test"
 required-features = ["kll"]
+
+[[test]]
+name = "kolmogorov_smirnov_test"
+required-features = ["kll"]

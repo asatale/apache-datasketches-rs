@@ -245,6 +245,11 @@ impl<T: KllItem> KllSketch<T> {
         KllSortedView::from_inner(T::sorted_view(&self.inner))
     }
 
+    /// The shim, for the sibling `kolmogorov_smirnov` module.
+    pub(crate) fn shim(&self) -> &T::Sketch {
+        &self.inner
+    }
+
     fn require_non_empty(&self) -> Result<(), SketchError> {
         if self.is_empty() {
             return Err(SketchError::EmptySketch);
