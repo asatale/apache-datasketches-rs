@@ -2,7 +2,7 @@
 //! built via the `cxx` crate over the raw
 //! [`apache-datasketches-sys`](https://docs.rs/apache-datasketches-sys) bridge.
 //!
-//! All five sketch families are enabled by default. To compile only the ones
+//! All six sketch families are enabled by default. To compile only the ones
 //! you need, disable default features and name them:
 //!
 //! ```toml
@@ -29,10 +29,13 @@
 //! - `kll` (feature `kll`) — KLL quantiles sketches over `f64` or `f32`:
 //!   ranks, quantiles, PMF and CDF, merging, a shareable sorted view, and a
 //!   Kolmogorov–Smirnov test between two sketches.
+//! - `req` (feature `req`) — REQ relative-error quantiles sketches over `f64`
+//!   or `f32`, accurate at one end of the rank domain: ranks, quantiles, PMF
+//!   and CDF, merging, and a shareable sorted view.
 //!
 //! (Module-level docs for each feature are only linked above when built
-//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll` in the
-//! sidebar.)
+//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll`/`req` in
+//! the sidebar.)
 //!
 //! See each module's documentation for usage examples, or the crate's
 //! `examples/` directory for complete runnable demos.
@@ -46,11 +49,12 @@
     feature = "theta",
     feature = "cpc",
     feature = "tuple",
-    feature = "kll"
+    feature = "kll",
+    feature = "req"
 )))]
 compile_error!(
     "apache-datasketches: no sketch family is enabled, so this crate exposes nothing. \
-     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, or `kll` features, or drop \
+     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, `kll`, or `req` features, or drop \
      `default-features = false`."
 );
 
@@ -70,5 +74,8 @@ pub mod tuple;
 
 #[cfg(feature = "kll")]
 pub mod kll;
+
+#[cfg(feature = "req")]
+pub mod req;
 
 pub use error::SketchError;

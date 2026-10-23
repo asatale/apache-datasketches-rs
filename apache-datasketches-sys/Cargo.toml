@@ -21,6 +21,7 @@ theta = []
 cpc = []
 tuple = []
 kll = []
+req = []
 
 [dependencies]
 cxx = "1"
@@ -132,3 +133,11 @@ required-features = ["kll"]
 [[test]]
 name = "kll_floats_link_test"
 required-features = ["kll"]
+
+[[test]]
+name = "req_doubles_link_test"
+required-features = ["req"]
+
+[[test]]
+name = "req_floats_link_test"
+required-features = ["req"]
