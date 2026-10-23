@@ -114,11 +114,11 @@ result sketch does, so there is nothing to deserialize *into* a union. `kll`
 is the other exception: it is parameterized by `k` rather than `lg_k`, has no
 string update and so no `str`, and adds a `quantile` scenario — `distinct`/
 `hot`/`quantile`/`ser`/`deser`. `req` follows the same scenario set as `kll`
-(`k` rather than `lg_k`, no `str`, adds `quantile`). If you change the parameters on one side,
-change them on the other or the ratio becomes meaningless. Both print the
-sketch estimate (KLL: `n`/`min`/`max`/`retained`), which is the cheap check
-that the two harnesses really are doing the same work — the numbers should match
-exactly, since both feed identical keys to identical hashing.
+(`k` rather than `lg_k`, no `str`, adds `quantile`). If you change the
+parameters on one side, change them on the other or the ratio becomes
+meaningless. Both print the sketch estimate (KLL and REQ:
+`n`/`min`/`max`/`retained`), which is the cheap check that the two harnesses
+really are doing the same work — the numbers should match exactly, since both feed identical keys to identical hashing.
 
 ## The `str` scenario
 
@@ -221,9 +221,9 @@ The `quantile` scenario times `get_quantile` on a filled sketch, per call
 over a fixed `QUERY_CALLS`, after one untimed call has built the sketch's
 cached sorted view.
 
-The Rust `deser` scenario also pays for the shim's layout validation (and, for
-KLL, a NaN scan), which the C++ side does not, so a `deser` gap is binding cost but not
-FFI overhead alone. Say so before quoting a `deser` ratio.
+The Rust `deser` scenario also pays for the shim's layout validation and NaN
+scan (in both KLL and REQ), which the C++ side does not, so a `deser` gap is
+binding cost but not FFI overhead alone. Say so before quoting a `deser` ratio.
 
 ## Reading the numbers
 

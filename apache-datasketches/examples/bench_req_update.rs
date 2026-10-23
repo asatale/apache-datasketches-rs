@@ -7,8 +7,8 @@
 //! Accepts `[ITEMS] [--reps N] [--ladder]`, like every other harness. Pair
 //! with `benches/cpp_reference/req_update.cc` via `compare.sh`.
 //!
-//! Fixed parameters so runs are comparable: `k = 12`, high-rank accuracy. Keep them in sync with
-//! the C++ counterpart.
+//! Fixed parameters so runs are comparable: `k = 12`, high-rank accuracy. Keep
+//! them in sync with the C++ counterpart.
 //!
 //! REQ compaction is randomized, so unlike the other harnesses this one
 //! cannot cross-check an estimate. It prints `n`, `min`, `max` and
