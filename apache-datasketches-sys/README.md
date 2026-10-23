@@ -29,6 +29,8 @@ explicitly. Enable one or more of:
   intersection, a-not-b, and Jaccard similarity C++ types.
 - `kll` — raw bridge to the KLL quantiles sketch and its sorted view C++
   types, for `double` and `float` items, plus the Kolmogorov–Smirnov test.
+- `req` — raw bridge to the REQ quantiles sketch and its sorted view C++
+  types, for `double` and `float` items.
 
 ```toml
 [dependencies]
@@ -57,5 +59,10 @@ apache-datasketches-sys = { version = "0.2", features = ["kll"] }
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple", "kll"] }
+apache-datasketches-sys = { version = "0.2", features = ["req"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple", "kll", "req"] }
 ```

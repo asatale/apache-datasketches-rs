@@ -10,8 +10,8 @@ built via the `cxx` crate over a pinned git submodule. Two-crate workspace:
 - `apache-datasketches-sys` — raw `cxx` FFI bridge. Unstable, low-level; not meant to be used directly.
 - `apache-datasketches` — safe, idiomatic Rust API that wraps `-sys`. This is what consumers depend on.
 
-There are five sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`, `kll`.
-`apache-datasketches` enables all five by default; `apache-datasketches-sys` has `default = []`
+There are six sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`, `kll`, `req`.
+`apache-datasketches` enables all six by default; `apache-datasketches-sys` has `default = []`
 and gets its features turned on by the safe crate. Consumers opt out with `default-features = false`
 plus the families they want — naming none is a `compile_error!`.
 
@@ -39,7 +39,8 @@ cargo test -p apache-datasketches --features theta
 cargo test -p apache-datasketches --features cpc
 cargo test -p apache-datasketches --features tuple
 cargo test -p apache-datasketches --features kll
-cargo test --workspace --features hll,theta,cpc,tuple,kll
+cargo test -p apache-datasketches --features req
+cargo test --workspace --features hll,theta,cpc,tuple,kll,req
 
 # Run a single test
 cargo test -p apache-datasketches --features hll hll_sketch_test::some_test_name
@@ -54,6 +55,7 @@ cargo run -p apache-datasketches --example cpc --features cpc
 cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
 cargo run -p apache-datasketches --example kll --features kll
+cargo run -p apache-datasketches --example req --features req
 
 # Throughput harness for the ArrayOfDoubles update path — the one hot loop
 # where shim overhead is measurable. --release is not optional: a debug build
@@ -64,6 +66,7 @@ cargo run --release -p apache-datasketches --example bench_cpc_update --features
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple
 cargo run --release -p apache-datasketches --example bench_tuple_generic_update --features tuple
 cargo run --release -p apache-datasketches --example bench_kll_update --features kll
+cargo run --release -p apache-datasketches --example bench_req_update --features req
 # All take an optional trailing item count (default 10M):
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
@@ -141,6 +144,16 @@ exactly only while `n <= k`, and its bench pair cross-checks
 serialized bytes before upstream sees them (`validate_kll_layout` in
 `kll_sketch_shim.cc`), because upstream deserialize trusts its input.
 
+The `req` feature mirrors KLL's design: a template shim, sealed `ReqItem`
+trait and two identical-modulo-type bridges, with its own types deliberately
+not shared with `kll` so the two features stay independent. Its shim
+validates serialized bytes too (`validate_req_layout` in
+`req_sketch_shim.cc`), and the committed `req_deserialize_fuzz_test` guards
+that. `ReqSketch::merge` returns `Result` because mixing `RankAccuracy` is a
+caller error, and `ReqSketch::new` caps `k` at 254 because upstream 5.2.0's
+constructor truncates it to 8 bits. Its bench pair cross-checks the
+deterministic `n`/`min`/`max`/`retained` fields like KLL's.
+
 ### `cxx::bridge` names must be globally unique across the sys crate
 
 Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique
@@ -158,7 +171,7 @@ on a duplicate definition — see the comment there for what it does and does no
 - `vendor/datasketches-cpp` (repo root) — the git submodule, pinned to a tag (see its `README.md`).
   This is the source of truth when bumping the pinned version.
 - `apache-datasketches-sys/vendor/datasketches-cpp` — a **manual copy** of just the headers actually
-  compiled (`common/`, `hll/`, `theta/`, `cpc/`, `tuple/`, `kll/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
+  compiled (`common/`, `hll/`, `theta/`, `cpc/`, `tuple/`, `kll/`, `req/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
   what `build.rs` actually builds against, and what ships in the published `-sys` crate tarball,
   because `cargo package` only includes files inside the crate's own directory (a `../` path escaping
   it would be missing from the published package).
@@ -225,9 +238,10 @@ Do not run them separately and subtract by hand — use
 **exits non-zero if any scenario's sketch estimates disagree**. They are
 deterministic and must match exactly, since identical keys go through identical
 hashing, so a disagreement means a parameter was changed on one side only and
-the overhead column is meaningless. KLL is the exception: its compaction is
-randomized, so its pair cross-checks the deterministic `n`/`min`/`max`/
-`retained` fields instead of an estimate, with the same exactness.
+the overhead column is meaningless. KLL and REQ are the exception: their
+compaction is randomized, so their pairs cross-check the deterministic
+`n`/`min`/`max`/`retained` fields instead of an estimate, with the same
+exactness.
 
 The `benchmark harnesses run` CI job runs `compare.sh` at a tiny item count so
 the harnesses cannot rot silently and so a one-sided parameter change is caught

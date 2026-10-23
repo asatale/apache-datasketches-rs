@@ -4,8 +4,8 @@ Safe, idiomatic Rust bindings for [Apache DataSketches](https://github.com/apach
 built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
-All five sketch families — `hll`, `theta`, `cpc`, `tuple` and `kll` — are
-enabled by default:
+All six sketch families — `hll`, `theta`, `cpc`, `tuple`, `kll` and `req` —
+are enabled by default:
 
 ```toml
 [dependencies]
@@ -22,7 +22,7 @@ apache-datasketches = { version = "0.3", default-features = false, features = ["
 Unused families cost nothing at runtime — the linker drops what you do not
 call — so opting out buys C++ compile time, not a smaller binary. Cold debug
 builds of the FFI layer run about 4.5s with no families and about 20s with the
-four families that predate `kll` (not re-measured with all five); `theta` and
+four families that predate `kll` (not re-measured with all six); `theta` and
 `tuple` account for nearly all of the difference.
 
 Disabling default features without naming at least one family is a compile
@@ -337,6 +337,89 @@ See `examples/kll.rs` (`cargo run -p apache-datasketches --example kll
 PMF buckets, merging, the Kolmogorov–Smirnov test, a shared sorted view,
 and serialize/deserialize round-tripping.
 
+## REQ sketches
+
+The REQ (Relative Error Quantiles) sketch family (`req` feature) summarizes
+a stream of `f64` or `f32` values in bounded memory and answers rank,
+quantile, PMF and CDF queries, like KLL, but with error relative to the
+rank: it stays accurate at one end of the distribution — the high ranks by
+default — which suits tail latencies.
+
+```rust
+use apache_datasketches::req::{RankAccuracy, ReqSketch};
+
+let mut latencies = ReqSketch::<f64>::new(12, RankAccuracy::High)?;
+for ms in 1..=100_000 {
+    latencies.update(f64::from(ms));
+}
+let p999 = latencies.get_quantile(0.999, true)?;
+println!("p99.9 latency: {p999} ms");
+```
+
+- `ReqSketch<T>` — the sketch, generic over the sealed `ReqItem` trait
+  (`f64` or `f32`). Build with `ReqSketch::new(k, accuracy)` (`k` even, in
+  `4..=254`) or `ReqSketch::default()` (`k = 12`, `RankAccuracy::High`).
+  `RankAccuracy::High` or `RankAccuracy::Low` picks which end of the rank
+  domain gets the relative-error guarantee. Supports `update`, `merge`,
+  `get_quantile`/`get_rank`/`get_pmf`/`get_cdf`, `get_min_item`/
+  `get_max_item`, `get_n`/`get_k`/`get_num_retained`/`is_estimation_mode`/
+  `rank_accuracy`, `get_rank_lower_bound`/`get_rank_upper_bound`, the
+  a-priori `ReqSketch::a_priori_rank_error`, `iter()` over the retained
+  `(item, weight)` pairs, `serialize`/`ReqSketch::deserialize`, and
+  `to_string_summary`. There is no separate union type — `merge` is the
+  union, and accepts a sketch with a different `k`.
+- `ReqSortedView<T>` / `ReqSortedViewEntry<T>` — an immutable, sorted
+  snapshot built by `ReqSketch::sorted_view()`. It answers the same rank,
+  quantile, PMF and CDF queries with identical results, does not change when
+  the sketch is later updated, and iterates entries as `{ item, weight,
+  cumulative_weight }`.
+
+Serialized `f32` bytes are compatible with the Java `ReqSketch` and the
+Python float REQ sketch; `f64` bytes are C++-only. An empty sketch's bytes
+carry no item type, so they deserialize as either; non-empty bytes of the
+other item type are rejected. Upstream's deserialize trusts its input, so
+the binding validates the serialized layout first and returns
+`SketchError::Deserialization` for corrupt bytes rather than accepting a
+sketch that would crash a later `merge`.
+
+Five things differ from the other families:
+
+- **Relative error.** Accuracy is concentrated at one end of the rank
+  domain, chosen by `RankAccuracy`. `get_rank_lower_bound`/
+  `get_rank_upper_bound` give confidence bounds at 1, 2 or 3 standard
+  deviations, and `a_priori_rank_error` gives the expected one-standard-
+  deviation rank error for a `k`, rank, accuracy and `n` before building
+  anything. Upstream's `get_RSE` actually returns a rank lower bound rather
+  than an error, so the binding computes the error it implies and names it
+  `a_priori_rank_error`.
+- **`merge` returns `Result`.** It rejects a sketch with a different
+  `RankAccuracy`, and a merged `n` that would reach `2^63` (beyond which
+  upstream cannot cope), with `SketchError::InvalidConfig`, leaving the
+  receiver unchanged.
+- **Thread safety.** `ReqSketch` is `Send` but not `Sync`: upstream's
+  queries are logically read-only but build and cache a sorted view inside
+  the sketch. To share query access across threads, build a
+  `ReqSortedView` once and share that — it is `Sync`.
+- **Randomized compaction.** Upstream picks a random half of each section it
+  compacts, from an engine it does not let you seed, so once the sketch is
+  in estimation mode two sketches fed identical input can give slightly
+  different (equally valid) answers. Results are exact while the sketch has
+  not compacted.
+- **Empty sketches, NaN and `k`.** Queries on an empty sketch or view return
+  `SketchError::EmptySketch`; `get_min_item`/`get_max_item` return `None`,
+  and `iter()` yields nothing (upstream reads past the end when iterating an
+  empty sketch, so the shim guards it). NaN updates are silently ignored, as
+  upstream does, and NaN is rejected as a rank, a `get_rank` item or a split
+  point. `new` accepts only even `k` in `4..=254`, because upstream 5.2.0's
+  constructor truncates `k` to 8 bits and rounds an odd `k` silently;
+  non-empty deserialized bytes may carry `k` up to 1024.
+
+See `examples/req.rs` (`cargo run -p apache-datasketches --example req
+--features req`) for a complete runnable demo covering tail quantiles and
+rank bounds, the a-priori error, merging (including the rejected mixed-
+accuracy merge), a shared sorted view, and serialize/deserialize
+round-tripping.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
@@ -349,6 +432,8 @@ and serialize/deserialize round-tripping.
   (`tuple::generic`); union, intersection, a-not-b, Jaccard similarity).
 - [x] KLL — `kll` feature (quantiles over `f64`/`f32`: rank, quantile, PMF,
   CDF; merge, sorted view, Kolmogorov–Smirnov test).
+- [x] REQ — `req` feature (relative-error quantiles over `f64`/`f32`; merge,
+  sorted view).
 
 ## License
 

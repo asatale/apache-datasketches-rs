@@ -22,6 +22,27 @@ fact — this file was introduced during 0.2.1.
   (`_ => ...`); this is the last time adding a variant will break you.
 
 ### Added
+- **REQ quantiles sketch family** (`req` feature, on by default):
+  `ReqSketch<T>` for `T = f64` or `f32` — relative-error rank, quantile, PMF
+  and CDF queries that stay accurate at the high ranks (or the low ranks,
+  with `RankAccuracy::Low`), rank bounds and an a-priori
+  `a_priori_rank_error`, `merge`, serialization, `iter()`, and a
+  shareable `ReqSortedView<T>`. `f32` bytes are compatible with Java's
+  `ReqSketch` and Python's float REQ sketch; `f64` bytes are C++-only.
+
+  Sharp edges, documented and tested: `merge` returns `Result` and rejects
+  sketches with different `RankAccuracy` (or an overflowing `n`);
+  `ReqSketch` is `Send` but not `Sync` — share a `ReqSortedView` instead;
+  compaction is randomized and cannot be seeded; `k` must be even and in
+  `4..=254` for `new` — upstream 5.2.0's constructor truncates `k` to 8 bits
+  and silently rounds an odd `k`. `deserialize` validates
+  the serialized layout before upstream reads it, so corrupt bytes return
+  `SketchError::Deserialization`; a committed fuzz test guards this.
+
+  Upstream bugs found and worked around: the 8-bit `k` truncation above;
+  iterating an empty sketch reads past the end (guarded in the shim); and
+  `get_RSE` returns a rank lower bound rather than an error, which is why
+  the binding exposes the error it implies as `a_priori_rank_error`.
 - **KLL quantiles sketch family** (`kll` feature, on by default):
   `KllSketch<T>` for `T = f64` or `f32` — rank, quantile, PMF and CDF
   queries, `merge`, serialization compatible with the Java and Python
@@ -50,6 +71,8 @@ fact — this file was introduced during 0.2.1.
   `k < 8` are rejected with `SketchError::Deserialization`. Without this,
   such bytes deserialized successfully and a later `merge` aborted the
   process or corrupted the heap.
+- `apache-datasketches-sys`: `req` feature with the `req_doubles` and
+  `req_floats` bridges.
 - `apache-datasketches-sys`: `kll` feature with the `kll_doubles` and
   `kll_floats` bridges. On the sketch, upstream's `get_quantile` already
   rejected out-of-range ranks but let NaN through to an unchecked

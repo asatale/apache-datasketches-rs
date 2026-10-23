@@ -89,7 +89,8 @@ jobs:
           - "--no-default-features --features cpc"
           - "--no-default-features --features tuple"
           - "--no-default-features --features kll"
-          - "" # default: all five
+          - "--no-default-features --features req"
+          - "" # default: all six
           - "--all-features"
     steps:
       - uses: actions/checkout@v5
