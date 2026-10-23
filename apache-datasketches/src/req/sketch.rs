@@ -1,4 +1,6 @@
-use super::checks::{check_item, check_k, check_num_std_dev, check_rank, check_split_points};
+use super::checks::{
+    check_item, check_k, check_k_static, check_num_std_dev, check_rank, check_split_points,
+};
 use super::ReqItem;
 use super::ReqSortedView;
 use crate::error::SketchError;
@@ -36,7 +38,7 @@ impl RankAccuracy {
 
 /// A REQ (Relative Error Quantiles) sketch over `f64` or `f32` items.
 ///
-/// Like a REQ sketch it answers rank, quantile, PMF and CDF queries in
+/// Like a KLL sketch it answers rank, quantile, PMF and CDF queries in
 /// bounded memory, but its error is *relative* to the rank, so it stays
 /// accurate at one end of the distribution — the high ranks by default (see
 /// [`RankAccuracy`]). Merging is a method ([`Self::merge`]); there is no
@@ -79,6 +81,11 @@ impl<T: ReqItem> ReqSketch<T> {
     /// Creates an empty sketch. `k` must be even and in `4..=254`; larger `k`
     /// means smaller error and more memory. [`Default`] uses `k = 12` and
     /// [`RankAccuracy::High`].
+    ///
+    /// Upstream documents `k` up to 1024, but its 5.2.0 constructor truncates
+    /// `k` to 8 bits, so a larger `k` would silently become a different one
+    /// (256 becomes 4, 300 becomes 44); this crate rejects it instead.
+    /// Non-empty sketches deserialized from bytes may carry `k` up to 1024.
     pub fn new(k: u16, accuracy: RankAccuracy) -> Result<Self, SketchError> {
         check_k(k)?;
         let inner = T::sketch_new(k, accuracy.is_high())
@@ -149,18 +156,25 @@ impl<T: ReqItem> ReqSketch<T> {
         Ok(T::rank_upper_bound(&self.inner, rank, num_std_dev))
     }
 
-    /// An a-priori estimate of the relative standard error (in `[0, 1]`) at
-    /// normalized `rank` for a sketch with this `k` and `accuracy` after `n`
-    /// items. Upstream `get_RSE`.
-    pub fn relative_standard_error(
+    /// The a-priori one-standard-deviation error of a rank estimate at
+    /// normalized `rank`, for a sketch with this `k` and `accuracy` after `n`
+    /// items, in `[0, rank]` units of normalized rank.
+    ///
+    /// It is `0.0` where upstream treats the rank as exact (for small `n`,
+    /// e.g. `n <= 36` at `k = 12`). `k` must be even and in `4..=1024`.
+    ///
+    /// Upstream's `get_RSE` is misnamed: it returns the 1-sigma rank *lower
+    /// bound* (about 0.4946 at rank 0.5), not an error. This returns
+    /// `rank - get_RSE(..)`, the error that bound implies.
+    pub fn a_priori_rank_error(
         k: u16,
         rank: f64,
         accuracy: RankAccuracy,
         n: u64,
     ) -> Result<f64, SketchError> {
-        check_k(k)?;
+        check_k_static(k)?;
         check_rank(rank)?;
-        Ok(T::rse(k, rank, accuracy.is_high(), n))
+        Ok(rank - T::rse(k, rank, accuracy.is_high(), n))
     }
 
     /// Returns `true` if no items have been added.
@@ -258,9 +272,9 @@ impl<T: ReqItem> ReqSketch<T> {
     /// The items are copied out once when this is called, so the iterator
     /// does not borrow the sketch.
     pub fn iter(&self) -> impl Iterator<Item = (T, u64)> {
-        // Upstream's iterator is unsound on an empty sketch (its end() is never
-        // reached from begin(), so iteration dereferences a past-the-end
-        // item), hence the guard.
+        // Upstream's iterator reads past the end on an empty sketch. The shim
+        // guards `retained_items`/`retained_weights` too; this keeps the
+        // safe layer independent of that.
         let (items, weights) = if self.is_empty() {
             (Vec::new(), Vec::new())
         } else {

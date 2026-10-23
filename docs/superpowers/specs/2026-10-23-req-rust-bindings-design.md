@@ -34,7 +34,17 @@ Checked against the vendored `req/include/` (datasketches-cpp 5.2.0):
 
 - `req_sketch(uint16_t k, bool hra = true)`. The doc says `k` "must be even
   and in the range [4, 1024]", but the constructor silently rounds an odd `k`
-  down and clamps below 4, and never checks the upper bound.
+  down and clamps below 4, and never checks the upper bound. Worse, it computes
+  `std::max<uint8_t>(k & -2, MIN_K)`, truncating `k` to 8 bits (256 becomes 4,
+  300 becomes 44), so only even `k` in `4..=254` survives construction.
+  Deserialization and the static error math do not truncate, so `k` up to 1024
+  is valid there.
+- `get_RSE(k, rank, hra, n)` is misnamed: it returns `get_rank_lb(k, 2, rank,
+  1, n, hra)`, a 1-sigma rank lower bound (about 0.4946 at rank 0.5), not an
+  error; it returns `rank` itself where the rank is treated as exact.
+- Iterating an empty `req_sketch` (`begin()`/`end()`) reads past the end of
+  its single empty compactor; the shim and safe layer must not iterate an
+  empty sketch.
 - `hra` (high rank accuracy, default `true`) concentrates accuracy at high
   ranks; `false` (LRA) at low ranks. `merge` throws `std::invalid_argument`
   when the two sketches' modes differ, and adds `n_ += other.n_` unchecked.
@@ -153,7 +163,7 @@ impl<T: ReqItem> ReqSketch<T> {
 
     pub fn get_rank_lower_bound(&self, rank: f64, num_std_dev: u8) -> Result<f64, SketchError>;
     pub fn get_rank_upper_bound(&self, rank: f64, num_std_dev: u8) -> Result<f64, SketchError>;
-    pub fn relative_standard_error(k: u16, rank: f64, accuracy: RankAccuracy, n: u64)
+    pub fn a_priori_rank_error(k: u16, rank: f64, accuracy: RankAccuracy, n: u64)
         -> Result<f64, SketchError>;
 
     pub fn serialize(&self) -> Vec<u8>;
@@ -187,9 +197,9 @@ pub struct ReqSortedViewEntry<T> {
 
 Notes:
 
-- **`k`** is validated in Rust: even and in `4..=1024`, else
-  `InvalidConfig` — upstream's documented contract, rather than its silent
-  rounding. **`Default`** uses `k = 12` (Java's and Python's default; about
+- **`k`** passed to `new` is validated in Rust: even and in `4..=254`, else
+  `InvalidConfig` (the cap is upstream's 8-bit truncation, see Upstream
+  facts); deserialized sketches may carry `k` up to 1024. **`Default`** uses `k = 12` (Java's and Python's default; about
   1% relative error at 95% confidence) and `RankAccuracy::High` (upstream's
   `hra = true` default).
 - **`RankAccuracy`** is a named enum rather than upstream's `bool`, for the
@@ -204,7 +214,9 @@ Notes:
   `2^63`), that limit is enforced here too, still as an `Err`.
 - **`get_rank_lower_bound`/`get_rank_upper_bound`** validate `rank` in
   `[0, 1]` and `num_std_dev` in `1..=3`, and return `EmptySketch` on an empty
-  sketch. **`relative_standard_error`** validates `k` and `rank`.
+  sketch. **`a_priori_rank_error`** validates `k` (even, `4..=1024`) and `rank`, and
+  returns `rank - get_RSE(..)`: the one-standard-deviation rank error, `0.0`
+  where upstream treats the rank as exact.
 - **NaN** updates are silently ignored (upstream `check_update_item`).
 - **`iter()`** and **`sorted_view()`** behave exactly as KLL's: copy-out,
   internal order vs sorted, the view is a snapshot.
@@ -221,7 +233,7 @@ data and outlives the sketch safely.
 
 | Condition | Error |
 |---|---|
-| `k` odd or outside `4..=1024` | `InvalidConfig` |
+| `k` odd or outside `4..=254` (`new`) / `4..=1024` (`a_priori_rank_error`) | `InvalidConfig` |
 | `rank` NaN or outside `[0, 1]` | `InvalidConfig` |
 | `num_std_dev` outside `1..=3` | `InvalidConfig` |
 | NaN item passed to `get_rank` | `InvalidConfig` |

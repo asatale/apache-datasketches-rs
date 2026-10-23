@@ -158,19 +158,27 @@ fn rank_bounds<T: TestItem>() {
 }
 for_both_types!(rank_bounds_t, rank_bounds);
 
-fn relative_standard_error<T: TestItem>() {
-    let rse = ReqSketch::<T>::relative_standard_error(12, 0.5, RankAccuracy::High, 1000).unwrap();
-    assert!(rse.is_finite() && rse > 0.0);
+fn a_priori_rank_error<T: TestItem>() {
+    let err = ReqSketch::<T>::a_priori_rank_error(12, 0.5, RankAccuracy::High, 1000).unwrap();
+    let expected = (0.0512_f64 / 3.0).sqrt() / 12.0 * 0.5;
+    assert!((err - expected).abs() < 1e-9, "{err} vs {expected}");
+    assert_eq!(
+        ReqSketch::<T>::a_priori_rank_error(12, 0.5, RankAccuracy::High, 10).unwrap(),
+        0.0
+    );
+    assert!(ReqSketch::<T>::a_priori_rank_error(1024, 0.5, RankAccuracy::High, 1000).is_ok());
+    for k in [13, 1026] {
+        assert!(matches!(
+            ReqSketch::<T>::a_priori_rank_error(k, 0.5, RankAccuracy::High, 1000),
+            Err(SketchError::InvalidConfig(_))
+        ));
+    }
     assert!(matches!(
-        ReqSketch::<T>::relative_standard_error(13, 0.5, RankAccuracy::High, 1000),
-        Err(SketchError::InvalidConfig(_))
-    ));
-    assert!(matches!(
-        ReqSketch::<T>::relative_standard_error(12, f64::NAN, RankAccuracy::High, 1000),
+        ReqSketch::<T>::a_priori_rank_error(12, f64::NAN, RankAccuracy::High, 1000),
         Err(SketchError::InvalidConfig(_))
     ));
 }
-for_both_types!(relative_standard_error_t, relative_standard_error);
+for_both_types!(a_priori_rank_error_t, a_priori_rank_error);
 
 fn serialize_roundtrip<T: TestItem>() {
     for accuracy in [RankAccuracy::High, RankAccuracy::Low] {

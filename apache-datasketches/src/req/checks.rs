@@ -25,6 +25,18 @@ pub(crate) fn check_k(k: u16) -> Result<(), SketchError> {
     Ok(())
 }
 
+/// `k` for the static error math and for deserialized sketches: even and in
+/// the documented `4..=1024`. Neither path goes through the truncating
+/// constructor, so the full documented range is valid here.
+pub(crate) fn check_k_static(k: u16) -> Result<(), SketchError> {
+    if !(MIN_K..=1024).contains(&k) || !k.is_multiple_of(2) {
+        return Err(SketchError::InvalidConfig(format!(
+            "k must be even and in {MIN_K}..=1024, got {k}"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) fn check_rank(rank: f64) -> Result<(), SketchError> {
     // `contains` is false for NaN, so this rejects it too.
     if !(0.0..=1.0).contains(&rank) {

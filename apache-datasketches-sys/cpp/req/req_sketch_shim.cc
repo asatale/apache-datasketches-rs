@@ -174,6 +174,8 @@ rust::String ReqSketchShim<T>::to_string_summary() const {
 template<typename T>
 std::unique_ptr<std::vector<T>> ReqSketchShim<T>::retained_items() const {
   auto out = std::make_unique<std::vector<T>>();
+  // Upstream's iterator reads past the end on an empty sketch.
+  if (sketch_.is_empty()) return out;
   out->reserve(sketch_.get_num_retained());
   for (auto pair : sketch_) out->push_back(pair.first);
   return out;
@@ -182,6 +184,8 @@ std::unique_ptr<std::vector<T>> ReqSketchShim<T>::retained_items() const {
 template<typename T>
 std::unique_ptr<std::vector<uint64_t>> ReqSketchShim<T>::retained_weights() const {
   auto out = std::make_unique<std::vector<uint64_t>>();
+  // Upstream's iterator reads past the end on an empty sketch.
+  if (sketch_.is_empty()) return out;
   out->reserve(sketch_.get_num_retained());
   for (auto pair : sketch_) out->push_back(pair.second);
   return out;

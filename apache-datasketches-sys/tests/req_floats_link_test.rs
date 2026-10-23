@@ -76,3 +76,10 @@ fn rse_is_finite_and_positive() {
     let rse = ffi::req_floats_rse(12, 0.5, true, 1000);
     assert!(rse.is_finite() && rse > 0.0, "rse was {rse}");
 }
+
+#[test]
+fn empty_sketch_retained_items_and_weights_are_empty() {
+    let sketch = ffi::req_floats_new(12, true).unwrap();
+    assert!(sketch.retained_items().as_slice().is_empty());
+    assert!(sketch.retained_weights().as_slice().is_empty());
+}
