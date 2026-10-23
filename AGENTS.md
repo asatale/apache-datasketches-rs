@@ -225,7 +225,9 @@ Do not run them separately and subtract by hand — use
 **exits non-zero if any scenario's sketch estimates disagree**. They are
 deterministic and must match exactly, since identical keys go through identical
 hashing, so a disagreement means a parameter was changed on one side only and
-the overhead column is meaningless.
+the overhead column is meaningless. KLL is the exception: its compaction is
+randomized, so its pair cross-checks the deterministic `n`/`min`/`max`/
+`retained` fields instead of an estimate, with the same exactness.
 
 The `benchmark harnesses run` CI job runs `compare.sh` at a tiny item count so
 the harnesses cannot rot silently and so a one-sided parameter change is caught

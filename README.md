@@ -92,15 +92,16 @@ Standalone runnable demos live under `apache-datasketches/examples/`:
 cargo run -p apache-datasketches --example hll --features hll
 cargo run -p apache-datasketches --example theta --features theta
 cargo run -p apache-datasketches --example cpc --features cpc
-cargo run -p apache-datasketches --example kll --features kll
 cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
+cargo run -p apache-datasketches --example kll --features kll
 ```
 
 ## Sketch families
 
-`default = []` for both crates; enable one or more of the following
-opt-in features:
+`apache-datasketches` enables all of these by default (opt out with
+`default-features = false` and name the ones you want);
+`apache-datasketches-sys` has `default = []`:
 
 - [x] `hll` (HyperLogLog) — cardinality estimation (sketch + union).
 - [x] `theta` — cardinality estimation plus set operations: union,

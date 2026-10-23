@@ -32,10 +32,12 @@ hll                   10000000 str           6.50     9.63     +3.13  1.48x
 theta                 10000000 str           5.77     9.99     +4.22  1.73x
 ```
 
-It also **fails** if the two sides disagree on any scenario's sketch estimate.
-That is the check worth having: running the two halves by hand and subtracting
-works fine right up until a parameter is changed on one side only, and then it
-produces a confident-looking ratio that means nothing. Estimates are
+It also **fails** if the two sides disagree on any scenario's sketch estimate
+(for KLL, on its deterministic `n`/`min`/`max`/`retained` fields instead —
+see "The KLL pair checks fields, not an estimate" below). That is the check
+worth having: running the two halves by hand and subtracting works fine right
+up until a parameter is changed on one side only, and then it produces a
+confident-looking ratio that means nothing. The checked values are
 deterministic, so the check is exact — see "Keeping them in sync" below.
 
 `run.sh` runs only the C++ side, and is what `compare.sh` calls:
@@ -93,7 +95,7 @@ definition and the key format.
 to every program — that costs nothing and means adding a benchmark needs no
 change to the include list.
 
-`compare.sh` drives `run.sh` and the five Rust counterparts and hands both
+`compare.sh` drives `run.sh` and the six Rust counterparts and hands both
 outputs to `compare.py`, which parses them with one function: the two harnesses
 print an identical line format precisely so that it can. `compare.py` is not
 meant to be run directly. Adding a benchmark means adding a line to the `pairs`
@@ -107,9 +109,12 @@ or `num_values`, same scenarios (`distinct`, `hot`, `str`, `ser`/`deser`, and
 for Theta and ArrayOfDoubles `union`/`intersect`/`jaccard`), same key spaces.
 `hll_union` is the exception: it has `distinct`/`hot`/`str`/`ser` but no
 `deser` — a union has no serializable state of its own upstream, only its
-result sketch does, so there is nothing to deserialize *into* a union. If
-you change the parameters on one side, change them on the other or the ratio
-becomes meaningless. Both print the sketch estimate, which is the cheap check
+result sketch does, so there is nothing to deserialize *into* a union. `kll`
+is the other exception: it is parameterized by `k` rather than `lg_k`, has no
+string update and so no `str`, and adds a `quantile` scenario — `distinct`/
+`hot`/`quantile`/`ser`/`deser`. If you change the parameters on one side,
+change them on the other or the ratio becomes meaningless. Both print the
+sketch estimate (KLL: `n`/`min`/`max`/`retained`), which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match
 exactly, since both feed identical keys to identical hashing.
 
@@ -136,9 +141,11 @@ looking at it.
 ## The `ser` and `deser` scenarios
 
 These are the one place where the item count is not the divisor. Serialization
-cost tracks the serialized *size*, and at `lg_k = 12` every family saturates
-well below the ladder's bottom rung — the same buffer comes out at 1M items as
-at 100M. The printed `ns/op` is therefore per serialize call, over a call count
+cost tracks the serialized *size*, and at `lg_k = 12` every hashing family
+saturates well below the ladder's bottom rung — the same buffer comes out at
+1M items as at 100M. KLL's size instead grows with the number of levels, about
+logarithmically in `n`, so its `bytes=` and timing creep up slightly across
+the rungs. The printed `ns/op` is therefore per serialize call, over a call count
 fixed in `bench_common.h` (`SER_CALLS`, `DESER_CALLS`) rather than taken from
 the command line; a count that moved with `--ladder` would make the number mean
 something different at each rung. The `items` column still says what the sketch
@@ -229,5 +236,5 @@ list and CPC is still changing flavour. `str`, by contrast, is flat across all
 three rungs.
 
 Each rep rebuilds its sketch, and the harness aborts if the per-rep estimates
-disagree — these workloads are deterministic, so a disagreement means the reps
-are not running the same thing.
+(KLL: deterministic fields) disagree — these workloads are deterministic, so a
+disagreement means the reps are not running the same thing.
