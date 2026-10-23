@@ -141,6 +141,9 @@ fn fuzz<T: TestItem>() {
     let corpus = corpus::<T>(&mut rng);
     let high = genuine::<T>(12, RankAccuracy::High, 1_000, &mut rng);
     let low = genuine::<T>(12, RankAccuracy::Low, 1_000, &mut rng);
+    // Partners with a different k, so merges also cross section sizes.
+    let high_254 = genuine::<T>(254, RankAccuracy::High, 1_000, &mut rng);
+    let low_254 = genuine::<T>(254, RankAccuracy::Low, 1_000, &mut rng);
     for bytes in &corpus {
         let s = ReqSketch::<T>::deserialize(bytes).expect("genuine bytes deserialize");
         let partner = if s.rank_accuracy() == RankAccuracy::High {
@@ -158,21 +161,34 @@ fn fuzz<T: TestItem>() {
             accepted += 1;
             // Merge against a partner of the same accuracy (the other gives
             // InvalidConfig before reaching upstream) and, now and then, the
-            // other one too.
-            let same = if s.rank_accuracy() == RankAccuracy::High {
-                &high
-            } else {
-                &low
+            // other one too. Half the partners have k = 254 instead of 12.
+            let wide = rng.below(2) == 0;
+            let same_high = s.rank_accuracy() == RankAccuracy::High;
+            let pick = |high_side: bool| match (high_side, wide) {
+                (true, false) => &high,
+                (false, false) => &low,
+                (true, true) => &high_254,
+                (false, true) => &low_254,
             };
-            let partner = if rng.below(8) == 0 {
-                if std::ptr::eq(same, &high) {
-                    &low
-                } else {
-                    &high
+            let partner = pick(if rng.below(8) == 0 {
+                !same_high
+            } else {
+                same_high
+            });
+            // Every 16th accepted sketch is also fed enough updates to run
+            // its compaction paths.
+            if accepted.is_multiple_of(16) {
+                let mut busy = s.clone();
+                for _ in 0..300 {
+                    busy.update(T::from_f64((rng.next_u64() % (1 << 20)) as f64));
                 }
-            } else {
-                same
-            };
+                let _ = busy.get_quantile(0.5, true);
+                let _ = busy.merge(partner);
+                // The re-deserialize is not asserted: a sketch accepted here
+                // can legitimately grow into bytes the validator rejects
+                // (see `ReqSketch::deserialize`).
+                let _ = ReqSketch::<T>::deserialize(&busy.serialize());
+            }
             exercise(&s, partner, &mut rng);
         }
     }

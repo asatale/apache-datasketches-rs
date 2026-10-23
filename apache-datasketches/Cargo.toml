@@ -347,3 +347,15 @@ required-features = ["req"]
 [[test]]
 name = "req_deserialize_fuzz_test"
 required-features = ["req"]
+
+[[test]]
+name = "req_sketch_test"
+required-features = ["req"]
+
+[[test]]
+name = "req_validation_test"
+required-features = ["req"]
+
+[[test]]
+name = "req_serialization_compat_test"
+required-features = ["req"]

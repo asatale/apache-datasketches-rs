@@ -132,7 +132,9 @@ impl<T: ReqItem> ReqSketch<T> {
     ///
     /// The levels' internal sortedness (and min/max against the items) is
     /// not validated, so crafted-but-consistent bytes can yield wrong
-    /// answers (never memory unsafety).
+    /// answers (never memory unsafety). The compaction-state and `n` bounds
+    /// are safety margins, so a sketch accepted here can, after enough merges
+    /// or updates, serialize to bytes this validator rejects.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = T::sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
