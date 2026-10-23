@@ -77,6 +77,14 @@ fn main() {
         }
     }
 
+    if cfg!(feature = "req") {
+        // Two bridges over one shim, as for kll.
+        for path in ["src/req_doubles.rs", "src/req_floats.rs"] {
+            require_exists(path);
+            bridges.push(path);
+        }
+    }
+
     check_bridge_name_uniqueness(&bridges);
 
     if bridges.is_empty() {
@@ -112,12 +120,14 @@ fn main() {
         .include(vendor_dir.join("cpc/include"))
         .include(vendor_dir.join("tuple/include"))
         .include(vendor_dir.join("kll/include"))
+        .include(vendor_dir.join("req/include"))
         .include("cpp")
         .include("cpp/hll")
         .include("cpp/theta")
         .include("cpp/cpc")
         .include("cpp/tuple")
         .include("cpp/kll")
+        .include("cpp/req")
         .include(generated_header_dir)
         .flag_if_supported("-std=c++17")
         // Upstream datasketches-cpp declares virtual destructors on a couple
@@ -174,6 +184,12 @@ fn main() {
 
     if cfg!(feature = "kll") {
         let path = "cpp/kll/kll_sketch_shim.cc";
+        require_exists(path);
+        build.file(path);
+    }
+
+    if cfg!(feature = "req") {
+        let path = "cpp/req/req_sketch_shim.cc";
         require_exists(path);
         build.file(path);
     }
@@ -255,6 +271,10 @@ fn main() {
     println!("cargo:rerun-if-changed=src/kll_floats.rs");
     println!("cargo:rerun-if-changed=cpp/kll/kll_sketch_shim.h");
     println!("cargo:rerun-if-changed=cpp/kll/kll_sketch_shim.cc");
+    println!("cargo:rerun-if-changed=src/req_doubles.rs");
+    println!("cargo:rerun-if-changed=src/req_floats.rs");
+    println!("cargo:rerun-if-changed=cpp/req/req_sketch_shim.h");
+    println!("cargo:rerun-if-changed=cpp/req/req_sketch_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on

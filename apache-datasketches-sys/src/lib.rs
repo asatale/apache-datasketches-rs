@@ -54,3 +54,8 @@ pub mod tuple_generic_union;
 pub mod kll_doubles;
 #[cfg(feature = "kll")]
 pub mod kll_floats;
+
+#[cfg(feature = "req")]
+pub mod req_doubles;
+#[cfg(feature = "req")]
+pub mod req_floats;
