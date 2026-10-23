@@ -92,6 +92,10 @@ required-features = ["cpc"]
 name = "bench_kll_update"
 required-features = ["kll"]
 
+[[example]]
+name = "bench_req_update"
+required-features = ["req"]
+
 [[test]]
 name = "concurrency_test"
 required-features = ["hll"]

@@ -73,6 +73,7 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 | `theta_update.cc` | `examples/bench_theta_update.rs` |
 | `cpc_update.cc` | `examples/bench_cpc_update.rs` |
 | `kll_update.cc` | `examples/bench_kll_update.rs` |
+| `req_update.cc` | `examples/bench_req_update.rs` |
 | `array_of_doubles_update.cc` | `examples/bench_tuple_update.rs` |
 
 `examples/bench_tuple_generic_update.rs` deliberately has no counterpart: the
@@ -95,7 +96,7 @@ definition and the key format.
 to every program — that costs nothing and means adding a benchmark needs no
 change to the include list.
 
-`compare.sh` drives `run.sh` and the six Rust counterparts and hands both
+`compare.sh` drives `run.sh` and the seven Rust counterparts and hands both
 outputs to `compare.py`, which parses them with one function: the two harnesses
 print an identical line format precisely so that it can. `compare.py` is not
 meant to be run directly. Adding a benchmark means adding a line to the `pairs`
@@ -112,7 +113,8 @@ for Theta and ArrayOfDoubles `union`/`intersect`/`jaccard`), same key spaces.
 result sketch does, so there is nothing to deserialize *into* a union. `kll`
 is the other exception: it is parameterized by `k` rather than `lg_k`, has no
 string update and so no `str`, and adds a `quantile` scenario — `distinct`/
-`hot`/`quantile`/`ser`/`deser`. If you change the parameters on one side,
+`hot`/`quantile`/`ser`/`deser`. `req` follows the same scenario set as `kll`
+(`k` rather than `lg_k`, no `str`, adds `quantile`). If you change the parameters on one side,
 change them on the other or the ratio becomes meaningless. Both print the
 sketch estimate (KLL: `n`/`min`/`max`/`retained`), which is the cheap check
 that the two harnesses really are doing the same work — the numbers should match
@@ -195,7 +197,7 @@ all three fields to 9 decimal places instead, and `compare.py` picks up
 `lower=`, `estimate=` and `upper=` the same way it picks up `estimate=`
 elsewhere — no changes to `compare.py` were needed.
 
-## The KLL pair checks fields, not an estimate
+## The KLL and REQ pairs check fields, not an estimate
 
 KLL compaction keeps a random half of each level it compacts, using a
 `thread_local` engine seeded from the clock that upstream offers no way to
@@ -207,12 +209,20 @@ how many survive at each level depends only on the input size and `k`, so
 those must match exactly. `compare.py` compares every labelled field
 generically, so it needed no change.
 
+REQ is the same story: its compactors flip coins from a randomly seeded
+source, so `req_update.cc` and `bench_req_update.rs` print the same fields.
+For a fixed input and `k` (12, high-rank accuracy) `retained` and `bytes` were
+identical across 20 repeated builds, over both 1 000 000 distinct items and
+1 000 000 items cycling over 1 024 keys, so they are cross-checked alongside
+`n`, `min` and `max`. As with KLL, which items survive is random but how many
+do is not.
+
 The `quantile` scenario times `get_quantile` on a filled sketch, per call
 over a fixed `QUERY_CALLS`, after one untimed call has built the sketch's
 cached sorted view.
 
-The Rust `deser` scenario also pays for the shim's layout validation and NaN
-scan, which the C++ side does not, so a `deser` gap is binding cost but not
+The Rust `deser` scenario also pays for the shim's layout validation (and, for
+KLL, a NaN scan), which the C++ side does not, so a `deser` gap is binding cost but not
 FFI overhead alone. Say so before quoting a `deser` ratio.
 
 ## Reading the numbers
@@ -236,5 +246,5 @@ list and CPC is still changing flavour. `str`, by contrast, is flat across all
 three rungs.
 
 Each rep rebuilds its sketch, and the harness aborts if the per-rep estimates
-(KLL: deterministic fields) disagree — these workloads are deterministic, so a
+(KLL and REQ: deterministic fields) disagree — these workloads are deterministic, so a
 disagreement means the reps are not running the same thing.

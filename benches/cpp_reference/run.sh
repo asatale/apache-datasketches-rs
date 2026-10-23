@@ -43,10 +43,11 @@ includes=(
   -I"$vendor/hll/include"
   -I"$vendor/cpc/include"
   -I"$vendor/kll/include"
+  -I"$vendor/req/include"
 )
 
 # Order matters only for readability of the output: cheapest family first.
-benchmarks=(hll hll_union theta cpc kll array_of_doubles)
+benchmarks=(hll hll_union theta cpc kll req array_of_doubles)
 
 echo "native C++ reference ($($CXX --version | head -1))"
 for bench in "${benchmarks[@]}"; do
