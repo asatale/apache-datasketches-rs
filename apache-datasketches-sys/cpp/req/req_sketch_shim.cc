@@ -470,8 +470,11 @@ std::unique_ptr<ReqDoublesSketchShim> req_doubles_deserialize(rust::Slice<const 
   return req_deserialize<double>(bytes);
 }
 
-double req_doubles_rse(uint16_t k, double rank, bool hra, uint64_t n) {
-  return datasketches::req_sketch<double>::get_RSE(k, rank, hra, n);
+double req_doubles_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n) {
+  // Upstream 5.2.0's get_RSE returns a rank lower bound; 5.3.0 changed it to
+  // return the error directly, so when upgrading, return get_RSE(...)
+  // unchanged here.
+  return rank - datasketches::req_sketch<double>::get_RSE(k, rank, hra, n);
 }
 
 std::unique_ptr<ReqFloatsSketchShim> req_floats_new(uint16_t k, bool hra) {
@@ -482,8 +485,11 @@ std::unique_ptr<ReqFloatsSketchShim> req_floats_deserialize(rust::Slice<const ui
   return req_deserialize<float>(bytes);
 }
 
-double req_floats_rse(uint16_t k, double rank, bool hra, uint64_t n) {
-  return datasketches::req_sketch<float>::get_RSE(k, rank, hra, n);
+double req_floats_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n) {
+  // Upstream 5.2.0's get_RSE returns a rank lower bound; 5.3.0 changed it to
+  // return the error directly, so when upgrading, return get_RSE(...)
+  // unchanged here.
+  return rank - datasketches::req_sketch<float>::get_RSE(k, rank, hra, n);
 }
 
 } // namespace apache_datasketches_rs

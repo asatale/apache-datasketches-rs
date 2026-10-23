@@ -16,7 +16,7 @@ pub mod ffi {
 
         fn req_doubles_new(k: u16, hra: bool) -> Result<UniquePtr<ReqDoublesSketchShim>>;
         fn req_doubles_deserialize(bytes: &[u8]) -> Result<UniquePtr<ReqDoublesSketchShim>>;
-        fn req_doubles_rse(k: u16, rank: f64, hra: bool, n: u64) -> f64;
+        fn req_doubles_a_priori_rank_error(k: u16, rank: f64, hra: bool, n: u64) -> f64;
 
         fn clone_shim(self: &ReqDoublesSketchShim) -> UniquePtr<ReqDoublesSketchShim>;
         fn update(self: Pin<&mut ReqDoublesSketchShim>, item: f64);

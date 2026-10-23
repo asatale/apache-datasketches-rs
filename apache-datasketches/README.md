@@ -388,7 +388,7 @@ Five things differ from the other families:
   domain, chosen by `RankAccuracy`. `get_rank_lower_bound`/
   `get_rank_upper_bound` give confidence bounds at 1, 2 or 3 standard
   deviations, and `a_priori_rank_error` gives the expected one-standard-
-  deviation rank error for a `k`, rank, accuracy and `n` before building
+  deviation rank error (`k` even, `4..=1024`) for a `k`, rank, accuracy and `n` before building
   anything. Upstream's `get_RSE` actually returns a rank lower bound rather
   than an error, so the binding computes the error it implies and names it
   `a_priori_rank_error`.

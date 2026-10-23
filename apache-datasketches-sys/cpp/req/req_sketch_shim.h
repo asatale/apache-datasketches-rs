@@ -78,10 +78,10 @@ using ReqFloatsSortedViewShim = ReqSortedViewShim<float>;
 
 std::unique_ptr<ReqDoublesSketchShim> req_doubles_new(uint16_t k, bool hra);
 std::unique_ptr<ReqDoublesSketchShim> req_doubles_deserialize(rust::Slice<const uint8_t> bytes);
-double req_doubles_rse(uint16_t k, double rank, bool hra, uint64_t n);
+double req_doubles_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n);
 
 std::unique_ptr<ReqFloatsSketchShim> req_floats_new(uint16_t k, bool hra);
 std::unique_ptr<ReqFloatsSketchShim> req_floats_deserialize(rust::Slice<const uint8_t> bytes);
-double req_floats_rse(uint16_t k, double rank, bool hra, uint64_t n);
+double req_floats_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n);
 
 } // namespace apache_datasketches_rs

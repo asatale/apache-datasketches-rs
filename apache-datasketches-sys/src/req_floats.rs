@@ -16,7 +16,7 @@ pub mod ffi {
 
         fn req_floats_new(k: u16, hra: bool) -> Result<UniquePtr<ReqFloatsSketchShim>>;
         fn req_floats_deserialize(bytes: &[u8]) -> Result<UniquePtr<ReqFloatsSketchShim>>;
-        fn req_floats_rse(k: u16, rank: f64, hra: bool, n: u64) -> f64;
+        fn req_floats_a_priori_rank_error(k: u16, rank: f64, hra: bool, n: u64) -> f64;
 
         fn clone_shim(self: &ReqFloatsSketchShim) -> UniquePtr<ReqFloatsSketchShim>;
         fn update(self: Pin<&mut ReqFloatsSketchShim>, item: f32);

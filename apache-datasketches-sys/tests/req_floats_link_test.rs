@@ -72,9 +72,9 @@ fn out_of_range_rank_returns_err() {
 }
 
 #[test]
-fn rse_is_finite_and_positive() {
-    let rse = ffi::req_floats_rse(12, 0.5, true, 1000);
-    assert!(rse.is_finite() && rse > 0.0, "rse was {rse}");
+fn a_priori_rank_error_is_finite_and_positive() {
+    let err = ffi::req_floats_a_priori_rank_error(12, 0.5, true, 1000);
+    assert!(err.is_finite() && err > 0.0, "error was {err}");
 }
 
 #[test]

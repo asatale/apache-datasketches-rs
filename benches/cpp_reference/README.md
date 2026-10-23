@@ -118,7 +118,10 @@ string update and so no `str`, and adds a `quantile` scenario — `distinct`/
 parameters on one side, change them on the other or the ratio becomes
 meaningless. Both print the sketch estimate (KLL and REQ:
 `n`/`min`/`max`/`retained`), which is the cheap check that the two harnesses
-really are doing the same work — the numbers should match exactly, since both feed identical keys to identical hashing.
+really are doing the same work — the numbers should match exactly. The hashing
+families feed identical keys through identical hashing; KLL and REQ do not
+hash, they feed identical items, and their checked fields depend only on the
+input and `k`.
 
 ## The `str` scenario
 

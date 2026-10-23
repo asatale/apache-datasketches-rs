@@ -210,7 +210,7 @@ impl<T: ReqItem> ReqSketch<T> {
     ) -> Result<f64, SketchError> {
         check_k_static(k)?;
         check_rank(rank)?;
-        Ok(rank - T::rse(k, rank, accuracy.is_high(), n))
+        Ok(T::a_priori_rank_error(k, rank, accuracy.is_high(), n))
     }
 
     /// Returns `true` if no items have been added.

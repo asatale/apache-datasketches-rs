@@ -162,6 +162,20 @@ fn a_priori_rank_error<T: TestItem>() {
     let err = ReqSketch::<T>::a_priori_rank_error(12, 0.5, RankAccuracy::High, 1000).unwrap();
     let expected = (0.0512_f64 / 3.0).sqrt() / 12.0 * 0.5;
     assert!((err - expected).abs() < 1e-9, "{err} vs {expected}");
+    // Asymmetric rank: High and Low differ. For k = 12, n = 1_000_000 the exact
+    // threshold is 36 / n = 3.6e-5, so rank 0.9 is not exact for either.
+    // relative = sqrt(0.0512 / 3) / 12 * (High ? 0.1 : 0.9) ~= 0.00108866 / 0.00979794;
+    // fixed = 0.084 / 12 = 0.007; error = min(relative, fixed).
+    let unit = (0.0512_f64 / 3.0).sqrt() / 12.0;
+    let high = ReqSketch::<T>::a_priori_rank_error(12, 0.9, RankAccuracy::High, 1_000_000).unwrap();
+    let low = ReqSketch::<T>::a_priori_rank_error(12, 0.9, RankAccuracy::Low, 1_000_000).unwrap();
+    let (exp_high, exp_low) = (
+        (unit * 0.1).min(0.084 / 12.0),
+        (unit * 0.9).min(0.084 / 12.0),
+    );
+    assert!((high - exp_high).abs() < 1e-9, "{high} vs {exp_high}");
+    assert!((low - exp_low).abs() < 1e-9, "{low} vs {exp_low}");
+    assert!(high < low, "{high} !< {low}");
     assert_eq!(
         ReqSketch::<T>::a_priori_rank_error(12, 0.5, RankAccuracy::High, 10).unwrap(),
         0.0

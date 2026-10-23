@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Error type shared across all sketch families (HLL, Theta, CPC, Tuple,
-/// KLL) in this crate — there is no per-family error type.
+/// KLL, REQ) in this crate — there is no per-family error type.
 ///
 /// Marked `#[non_exhaustive]` so a new family can add a variant without a
 /// breaking release: a `match` on it needs a wildcard arm.

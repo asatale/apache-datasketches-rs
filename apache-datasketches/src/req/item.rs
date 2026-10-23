@@ -32,7 +32,7 @@ pub(crate) mod sealed {
 
         fn sketch_new(k: u16, hra: bool) -> Result<UniquePtr<Self::Sketch>, Exception>;
         fn sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<Self::Sketch>, Exception>;
-        fn rse(k: u16, rank: f64, hra: bool, n: u64) -> f64;
+        fn a_priori_rank_error(k: u16, rank: f64, hra: bool, n: u64) -> f64;
 
         fn clone_shim(s: &Self::Sketch) -> UniquePtr<Self::Sketch>;
         fn update(s: Pin<&mut Self::Sketch>, item: Self);
@@ -86,7 +86,7 @@ pub(crate) mod sealed {
 }
 
 macro_rules! impl_sealed {
-    ($t:ty, $m:ident, $sketch:ident, $view:ident, $new:ident, $deser:ident, $rse:ident) => {
+    ($t:ty, $m:ident, $sketch:ident, $view:ident, $new:ident, $deser:ident, $apre:ident) => {
         impl sealed::Sealed for $t {
             type Sketch = $m::$sketch;
             type View = $m::$view;
@@ -101,8 +101,8 @@ macro_rules! impl_sealed {
             fn sketch_deserialize(bytes: &[u8]) -> Result<UniquePtr<Self::Sketch>, Exception> {
                 $m::$deser(bytes)
             }
-            fn rse(k: u16, rank: f64, hra: bool, n: u64) -> f64 {
-                $m::$rse(k, rank, hra, n)
+            fn a_priori_rank_error(k: u16, rank: f64, hra: bool, n: u64) -> f64 {
+                $m::$apre(k, rank, hra, n)
             }
 
             fn clone_shim(s: &Self::Sketch) -> UniquePtr<Self::Sketch> {
@@ -239,7 +239,7 @@ impl_sealed!(
     ReqDoublesSortedViewShim,
     req_doubles_new,
     req_doubles_deserialize,
-    req_doubles_rse
+    req_doubles_a_priori_rank_error
 );
 impl_sealed!(
     f32,
@@ -248,5 +248,5 @@ impl_sealed!(
     ReqFloatsSortedViewShim,
     req_floats_new,
     req_floats_deserialize,
-    req_floats_rse
+    req_floats_a_priori_rank_error
 );
