@@ -1,6 +1,6 @@
 [package]
 name = "apache-datasketches"
-version = "0.2.3"
+version = "0.3.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -17,19 +17,20 @@ categories = ["data-structures", "algorithms"]
 # `default-features = false` plus the families you want. Note that Cargo
 # unifies features across a dependency graph, so opting out only holds if no
 # other crate in the graph pulls this one with default features.
-default = ["hll", "theta", "cpc", "tuple"]
+default = ["hll", "theta", "cpc", "tuple", "kll"]
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 cpc = ["apache-datasketches-sys/cpc"]
 tuple = ["apache-datasketches-sys/tuple"]
+kll = ["apache-datasketches-sys/kll"]
 
 [package.metadata.docs.rs]
 # Explicit rather than implicit: docs.rs should keep building every family
 # even if the default set changes again.
-features = ["hll", "theta", "cpc", "tuple"]
+features = ["hll", "theta", "cpc", "tuple", "kll"]
 
 [dependencies]
-apache-datasketches-sys = { version = "0.2.2", path = "../apache-datasketches-sys", default-features = false }
+apache-datasketches-sys = { version = "0.2.3", path = "../apache-datasketches-sys", default-features = false }
 cxx = "1"
 thiserror = "1"
 
@@ -52,6 +53,10 @@ required-features = ["tuple"]
 [[example]]
 name = "tuple_generic"
 required-features = ["tuple"]
+
+[[example]]
+name = "kll"
+required-features = ["kll"]
 
 # Perf harness for the ArrayOfDoubles update path, deliberately an example
 # rather than a `[[bench]]`: with `harness = false` a bench target is *run* by
@@ -81,6 +86,10 @@ required-features = ["theta"]
 [[example]]
 name = "bench_cpc_update"
 required-features = ["cpc"]
+
+[[example]]
+name = "bench_kll_update"
+required-features = ["kll"]
 
 [[test]]
 name = "concurrency_test"
@@ -293,3 +302,31 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_concurrency_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "kll_sketch_smoke_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_sorted_view_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_concurrency_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kolmogorov_smirnov_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_sketch_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_validation_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_serialization_compat_test"
+required-features = ["kll"]

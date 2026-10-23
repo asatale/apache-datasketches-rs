@@ -1,6 +1,6 @@
 [package]
 name = "apache-datasketches-sys"
-version = "0.2.2"
+version = "0.2.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -20,6 +20,7 @@ hll = []
 theta = []
 cpc = []
 tuple = []
+kll = []
 
 [dependencies]
 cxx = "1"
@@ -123,3 +124,11 @@ required-features = ["tuple"]
 [[test]]
 name = "tuple_generic_jaccard_link_test"
 required-features = ["tuple"]
+
+[[test]]
+name = "kll_doubles_link_test"
+required-features = ["kll"]
+
+[[test]]
+name = "kll_floats_link_test"
+required-features = ["kll"]

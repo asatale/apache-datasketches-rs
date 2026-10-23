@@ -2,9 +2,13 @@
 
 use thiserror::Error;
 
-/// Error type shared across all sketch families (HLL, Theta, CPC) in this
-/// crate — there is no per-family error type.
+/// Error type shared across all sketch families (HLL, Theta, CPC, Tuple,
+/// KLL) in this crate — there is no per-family error type.
+///
+/// Marked `#[non_exhaustive]` so a new family can add a variant without a
+/// breaking release: a `match` on it needs a wildcard arm.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SketchError {
     /// A builder or constructor was given an out-of-range configuration
     /// value (e.g. `lg_k`/`lg_config_k` outside its valid bounds, or a
@@ -28,6 +32,11 @@ pub enum SketchError {
     /// `ThetaIntersection::get_result()` was called before any `update()`.
     #[error("intersection has no result: no update() call has been made yet")]
     EmptyIntersection,
+
+    /// A query that needs data (a quantile, rank, PMF/CDF, or a
+    /// Kolmogorov–Smirnov test) was made against an empty sketch.
+    #[error("operation is undefined for an empty sketch")]
+    EmptySketch,
 }
 
 impl From<cxx::Exception> for SketchError {

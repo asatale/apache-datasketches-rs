@@ -2,11 +2,11 @@
 //! built via the `cxx` crate over the raw
 //! [`apache-datasketches-sys`](https://docs.rs/apache-datasketches-sys) bridge.
 //!
-//! All four sketch families are enabled by default. To compile only the ones
+//! All five sketch families are enabled by default. To compile only the ones
 //! you need, disable default features and name them:
 //!
 //! ```toml
-//! apache-datasketches = { version = "0.2", default-features = false, features = ["hll"] }
+//! apache-datasketches = { version = "0.3", default-features = false, features = ["hll"] }
 //! ```
 //!
 //! Unused families cost nothing at runtime — the linker drops what you do not
@@ -26,9 +26,12 @@
 //!   key (summed on collision); the generic form in `tuple::generic` carries
 //!   a summary type you define in Rust. Both support union, intersection,
 //!   a-not-b, and Jaccard similarity.
+//! - `kll` (feature `kll`) — KLL quantiles sketches over `f64` or `f32`:
+//!   ranks, quantiles, PMF and CDF, merging, a shareable sorted view, and a
+//!   Kolmogorov–Smirnov test between two sketches.
 //!
 //! (Module-level docs for each feature are only linked above when built
-//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple` in the
+//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll` in the
 //! sidebar.)
 //!
 //! See each module's documentation for usage examples, or the crate's
@@ -38,10 +41,16 @@
 
 // Disabling default features without naming a family leaves nothing behind
 // but `SketchError`. That used to compile silently; say so instead.
-#[cfg(not(any(feature = "hll", feature = "theta", feature = "cpc", feature = "tuple")))]
+#[cfg(not(any(
+    feature = "hll",
+    feature = "theta",
+    feature = "cpc",
+    feature = "tuple",
+    feature = "kll"
+)))]
 compile_error!(
     "apache-datasketches: no sketch family is enabled, so this crate exposes nothing. \
-     Enable at least one of the `hll`, `theta`, `cpc`, or `tuple` features, or drop \
+     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, or `kll` features, or drop \
      `default-features = false`."
 );
 
@@ -58,5 +67,8 @@ pub mod cpc;
 
 #[cfg(feature = "tuple")]
 pub mod tuple;
+
+#[cfg(feature = "kll")]
+pub mod kll;
 
 pub use error::SketchError;

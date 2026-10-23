@@ -216,6 +216,31 @@ inline void report_jaccard(const char* label, uint64_t items, std::vector<double
          upper_bounds[0]);
 }
 
+// As report, but for a family whose estimates are randomized (KLL draws a
+// random bit at every compaction, from an engine seeded off the clock), so
+// two correct runs disagree and an estimate cannot be the cross-check. The
+// caller passes the deterministic fields instead -- n, min, max, retained --
+// pre-formatted as " name=value" pairs, one string per rep. Level sizes depend
+// only on n and k, never on the random bit, so these must match exactly
+// across reps and across languages.
+inline void report_fields(const char* label, uint64_t items, std::vector<double> ns_per_op,
+                          const std::vector<std::string>& fields) {
+  for (size_t i = 1; i < fields.size(); ++i) {
+    if (fields[i] != fields[0]) {
+      fprintf(stderr,
+              "error: %s rep %zu reported '%s' but rep 0 reported '%s'; the reps are not "
+              "running the same workload\n",
+              label, i, fields[i].c_str(), fields[0].c_str());
+      exit(1);
+    }
+  }
+  std::sort(ns_per_op.begin(), ns_per_op.end());
+  const double median = ns_per_op[(ns_per_op.size() - 1) / 2];
+  printf("%-9s %12llu items  %7.2f ns/op  min %7.2f  max %7.2f  %8.1f M/s  reps=%zu%s\n",
+         label, static_cast<unsigned long long>(items), median, ns_per_op.front(),
+         ns_per_op.back(), 1000.0 / median, ns_per_op.size(), fields[0].c_str());
+}
+
 } // namespace bench
 
 #endif // APACHE_DATASKETCHES_RS_BENCH_COMMON_H
