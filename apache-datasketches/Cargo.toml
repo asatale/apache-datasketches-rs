@@ -17,17 +17,18 @@ categories = ["data-structures", "algorithms"]
 # `default-features = false` plus the families you want. Note that Cargo
 # unifies features across a dependency graph, so opting out only holds if no
 # other crate in the graph pulls this one with default features.
-default = ["hll", "theta", "cpc", "tuple", "kll"]
+default = ["hll", "theta", "cpc", "tuple", "kll", "req"]
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 cpc = ["apache-datasketches-sys/cpc"]
 tuple = ["apache-datasketches-sys/tuple"]
 kll = ["apache-datasketches-sys/kll"]
+req = ["apache-datasketches-sys/req"]
 
 [package.metadata.docs.rs]
 # Explicit rather than implicit: docs.rs should keep building every family
 # even if the default set changes again.
-features = ["hll", "theta", "cpc", "tuple", "kll"]
+features = ["hll", "theta", "cpc", "tuple", "kll", "req"]
 
 [dependencies]
 apache-datasketches-sys = { version = "0.2.3", path = "../apache-datasketches-sys", default-features = false }
@@ -330,3 +331,15 @@ required-features = ["kll"]
 [[test]]
 name = "kll_serialization_compat_test"
 required-features = ["kll"]
+
+[[test]]
+name = "req_sketch_smoke_test"
+required-features = ["req"]
+
+[[test]]
+name = "req_sorted_view_test"
+required-features = ["req"]
+
+[[test]]
+name = "req_concurrency_test"
+required-features = ["req"]

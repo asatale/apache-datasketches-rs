@@ -46,11 +46,12 @@
     feature = "theta",
     feature = "cpc",
     feature = "tuple",
-    feature = "kll"
+    feature = "kll",
+    feature = "req"
 )))]
 compile_error!(
     "apache-datasketches: no sketch family is enabled, so this crate exposes nothing. \
-     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, or `kll` features, or drop \
+     Enable at least one of the `hll`, `theta`, `cpc`, `tuple`, `kll`, or `req` features, or drop \
      `default-features = false`."
 );
 
@@ -70,5 +71,8 @@ pub mod tuple;
 
 #[cfg(feature = "kll")]
 pub mod kll;
+
+#[cfg(feature = "req")]
+pub mod req;
 
 pub use error::SketchError;

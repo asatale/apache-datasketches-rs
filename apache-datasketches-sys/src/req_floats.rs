@@ -1,6 +1,6 @@
 //! cxx bridge for `req_sketch<float>` and its sorted view.
 //!
-//! Keep identical to `req_floats.rs` modulo `f64`/`f32` and
+//! Keep identical to `req_doubles.rs` modulo `f64`/`f32` and
 //! `Doubles`/`Floats`: both declare the one C++ template in
 //! `cpp/req/req_sketch_shim.h`. Free functions carry the `req_floats_`
 //! prefix because cxx keys their symbols on name alone (see AGENTS.md);
