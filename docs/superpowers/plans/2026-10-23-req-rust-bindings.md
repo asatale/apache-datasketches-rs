@@ -20,7 +20,8 @@
 - Every public item in `apache-datasketches` needs a `///`/`//!` doc comment; `#![warn(missing_docs)]` must stay clean.
 - cxx bridge free-function names and opaque type names must be unique across the whole sys crate; prefix free functions `req_doubles_` / `req_floats_`. Methods need no prefix.
 - `req_doubles.rs` and `req_floats.rs` stay identical modulo `f64`↔`f32` and `Doubles`↔`Floats`; ranks, rank bounds, RSE and PMF/CDF masses are `f64` in both.
-- `k` must be even and in `4..=1024`; `Default` is `k = 12`, `RankAccuracy::High`.
+- `k` must be even: `4..=254` for `ReqSketch::new` (upstream 5.2.0's constructor truncates `k` to 8 bits), `4..=1024` for `a_priori_rank_error` and for non-empty deserialized bytes; empty bytes with `k > 254` are rejected (they would go through the truncating constructor). `Default` is `k = 12`, `RankAccuracy::High`.
+- `ReqSketch::relative_standard_error` was renamed during Task 3 to `ReqSketch::a_priori_rank_error(k, rank, accuracy, n)`, returning `rank - get_RSE(..)` (upstream's `get_RSE` actually returns a rank lower bound). Use the new name everywhere below.
 - Errors: bad arguments (incl. `merge` accuracy mismatch / `n` overflow) → `SketchError::InvalidConfig`; query or rank bound on empty → `SketchError::EmptySketch`; bad bytes → `SketchError::Deserialization`; anything else → `SketchError::Cpp`.
 - `ReqSketch` is `Send`, **not** `Sync`. `ReqSortedView` is `Send + Sync`.
 - REQ compaction is randomized (time-seeded, unseedable). Never assert an exact quantile/rank once `is_estimation_mode()` is true; assert within upstream's bounds. `n`, `k`, min, max and every result while not in estimation mode are deterministic.
@@ -1068,7 +1069,7 @@ Add to `apache-datasketches/tests/req_sketch_smoke_test.rs` (for both types, via
 1. **Non-empty, one level, zero items** — header `[2, 1, 17, flags = (1<<3), 12, 0, 1, 0]` then one compactor with `num_items = 0`: `deserialize` must return `Err(SketchError::Deserialization(_))`. (Today this is UB; it may crash the test binary — record what happens in the RED step.)
 2. **Compactor `num_items` larger than the remaining bytes** (e.g. `u32::MAX`): `Err(Deserialization)`, without first allocating `num_items * sizeof(T)`.
 3. **`num_levels > 1` with `n` inconsistent with the compactor weights** (sum over compactor `i` of `num_items << lg_weight` ≠ `n`): `Err(Deserialization)`.
-4. **Odd `k`, `k < 4` and `k > 1024`** in otherwise-valid non-empty bytes: `Err(Deserialization)`.
+4. **Odd `k`, `k < 4` and `k > 1024`** in otherwise-valid non-empty bytes, and **empty bytes with `k > 254`**: `Err(Deserialization)`. Non-empty bytes with an even `k` in `256..=1024` must still deserialize with that exact `k` (`get_k()` matches).
 5. **NaN item** in a raw-items sketch and in a compactor: `Err(Deserialization)`.
 6. **Untampered round trips** for `n` in `{1, 4, 5, 12, 100, 10_000, 1_000_000}` and both accuracies still deserialize and then `merge` both ways and answer queries.
 
@@ -1082,7 +1083,7 @@ Expected: cases 1–5 fail (or crash); case 6 passes. Record the observed failur
 In `req_sketch_shim.cc`, add a bounds-checked parser in the anonymous namespace (use a `read_at` helper with `memcpy` and an explicit length check, as `kll_sketch_shim.cc`'s `validate_kll_layout` does — read that function first and follow its style). It must reject (throw `std::invalid_argument` with a clear message) at least:
 
 - buffer shorter than the 8-byte header; unknown flag bits set (bits 0–1 or 6–7);
-- `k` odd, `< 4` or `> 1024` (any sketch, empty or not — an empty sketch with a bad `k` would otherwise be silently rounded by the constructor);
+- `k` odd, `< 4` or `> 1024` (any sketch); and, for an **empty** sketch, `k > 254` — upstream rebuilds empty sketches through its constructor, which truncates `k` to 8 bits, so the returned sketch's `k` would not match the bytes;
 - non-empty with `num_levels == 0`;
 - `RAW_ITEMS` set but `num_levels != 1`, or `num_raw_items == 0`, or `num_raw_items > 4`, or the remaining bytes ≠ `num_raw_items * sizeof(T)`;
 - for each compactor: header truncated; `num_items` such that `num_items * sizeof(T)` exceeds the remaining bytes; `lg_weight` ≠ the compactor's level index (upstream's `grow()` assigns `lg_weight = level`); `num_sections == 0`; `section_size_raw` not finite or `< 1`;
@@ -1172,7 +1173,7 @@ Translation rules: `req_sketch<float> s(12)` → `ReqSketch::<T>::new(12, RankAc
 
 - [ ] **Step 3: Validation test**
 
-Create `apache-datasketches/tests/req_validation_test.rs` covering every row of the spec's error table for both types: `k` ∈ {0, 2, 3, 5, 13, 1023, 1025, 2048} rejected and {4, 6, 12, 1024} accepted (in `new` and `relative_standard_error`); rank ∈ {−0.0001, 1.0001, NaN, ∞} rejected in `get_quantile` (sketch and view), `get_rank_lower_bound`, `get_rank_upper_bound` and `relative_standard_error`; `num_std_dev` ∈ {0, 4, 255} rejected; NaN `get_rank` item rejected; split points `[NaN]`, `[1, NaN]`, `[2, 1]`, `[1, 1]` rejected in `get_pmf`/`get_cdf`, and `&[]` accepted giving `[1.0]` from `get_cdf`; `merge` with differing accuracy rejected in both directions; emptiness reported before a bad argument (`get_quantile(2.0, true)` on an empty sketch → `EmptySketch`). Use KLL's `tests/kll_validation_test.rs` as the style reference.
+Create `apache-datasketches/tests/req_validation_test.rs` covering every row of the spec's error table for both types: `k` ∈ {0, 2, 3, 5, 13, 1023, 1025, 2048} rejected and {4, 6, 12, 254} accepted in `new` (which also rejects {256, 1024} — the truncation cap); `a_priori_rank_error` rejects {0, 2, 3, 5, 13, 1023, 1025, 2048} and accepts {4, 6, 12, 254, 256, 1024}; rank ∈ {−0.0001, 1.0001, NaN, ∞} rejected in `get_quantile` (sketch and view), `get_rank_lower_bound`, `get_rank_upper_bound` and `a_priori_rank_error`; `num_std_dev` ∈ {0, 4, 255} rejected; NaN `get_rank` item rejected; split points `[NaN]`, `[1, NaN]`, `[2, 1]`, `[1, 1]` rejected in `get_pmf`/`get_cdf`, and `&[]` accepted giving `[1.0]` from `get_cdf`; `merge` with differing accuracy rejected in both directions; emptiness reported before a bad argument (`get_quantile(2.0, true)` on an empty sketch → `EmptySketch`). Use KLL's `tests/kll_validation_test.rs` as the style reference.
 
 - [ ] **Step 4: Wire-format compatibility test**
 
@@ -1222,7 +1223,8 @@ Add, with the same derivation discipline:
 - `golden_one_level_exact`: an `f32` sketch with 5 items `1.0..=5.0` (`n > 4`, so not raw, but one level): preamble 2, header, then one compactor block (`state`, `section_size_raw`, `lg_weight = 0`, `num_sections`, padding, `num_items = 5`, items). Derive `state`/`section_size_raw`/`num_sections` from the `req_compactor` constructor `grow()` calls (`section_size_raw = k`, `num_sections = INIT_NUM_SECTIONS = 3`, `state = 0` — verify).
 - `empty_bytes_deserialize_as_either_type`.
 - `non_empty_bytes_of_the_other_type_are_rejected` for `n` ∈ {1, 3, 5, 10 000}, both directions.
-- `roundtrip_preserves_accuracy_and_k` for both accuracies and `k` ∈ {4, 12, 1024}.
+- `roundtrip_preserves_accuracy_and_k` for both accuracies and `k` ∈ {4, 12, 254}.
+- `nonempty_bytes_with_large_k_keep_their_k`: hand-build valid single-item (raw) bytes with `k = 1024` and assert they deserialize with `get_k() == 1024`; and empty bytes with `k = 1024` are rejected.
 
 If a golden assertion fails, re-derive from the upstream source and record the correction in the report.
 
@@ -1312,7 +1314,7 @@ use apache_datasketches::req::{RankAccuracy, ReqSketch};
 fn main() {
     // REQ keeps its error relative to the rank, so with high-rank accuracy the
     // extreme tail (p99.9, p99.99) stays accurate even though the sketch is
-    // small. `k` (even, 4..=1024) trades memory for accuracy; 12 gives about
+    // small. `k` (even, 4..=254 here) trades memory for accuracy; 12 gives about
     // 1% relative error at 95% confidence.
     let mut latencies = ReqSketch::<f64>::new(12, RankAccuracy::High).expect("valid k");
     for i in 0..1_000_000u32 {
@@ -1330,9 +1332,9 @@ fn main() {
     }
 
     // A-priori error estimate for planning a k.
-    let rse = ReqSketch::<f64>::relative_standard_error(12, 0.999, RankAccuracy::High, 1_000_000)
+    let err = ReqSketch::<f64>::a_priori_rank_error(12, 0.999, RankAccuracy::High, 1_000_000)
         .unwrap();
-    println!("expected relative standard error at p99.9 with k = 12: {rse:.4}");
+    println!("expected 1-sigma rank error at p99.9 with k = 12: {err:.6}");
 
     // Merging requires the same RankAccuracy.
     let mut other = ReqSketch::<f64>::new(12, RankAccuracy::High).expect("valid k");
@@ -1382,7 +1384,7 @@ Under `## [Unreleased]` → `### Added`, add before the existing KLL bullet:
   `ReqSketch<T>` for `T = f64` or `f32` — relative-error rank, quantile, PMF
   and CDF queries that stay accurate at the high ranks (or the low ranks,
   with `RankAccuracy::Low`), rank bounds and an a-priori
-  `relative_standard_error`, `merge`, serialization, `iter()`, and a
+  `a_priori_rank_error`, `merge`, serialization, `iter()`, and a
   shareable `ReqSortedView<T>`. `f32` bytes are compatible with Java's
   `ReqSketch` and Python's float REQ sketch; `f64` bytes are C++-only.
 
@@ -1390,7 +1392,8 @@ Under `## [Unreleased]` → `### Added`, add before the existing KLL bullet:
   sketches with different `RankAccuracy` (or an overflowing `n`);
   `ReqSketch` is `Send` but not `Sync` — share a `ReqSortedView` instead;
   compaction is randomized and cannot be seeded; `k` must be even and in
-  `4..=1024` (upstream silently rounds an odd `k`). `deserialize` validates
+  `4..=254` for `new` — upstream 5.2.0's constructor truncates `k` to 8 bits
+  and silently rounds an odd `k`. `deserialize` validates
   the serialized layout before upstream reads it, so corrupt bytes return
   `SketchError::Deserialization`; a committed fuzz test guards this.
 ```
