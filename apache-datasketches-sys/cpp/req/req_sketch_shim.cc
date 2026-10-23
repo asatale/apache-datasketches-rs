@@ -203,13 +203,271 @@ template class ReqSketchShim<float>;
 
 // --- free functions ----------------------------------------------------------
 
+namespace {
+
+// Reads a native-endian value with memcpy (the bytes need not be aligned),
+// after checking it lies within the buffer. This matches upstream, whose
+// copy_from_mem also memcpys native values (little-endian on every platform
+// this crate builds for).
+template<typename V>
+V read_at(const uint8_t* data, size_t size, size_t offset, const char* what) {
+  if (offset > size || size - offset < sizeof(V)) {
+    throw std::invalid_argument(std::string("REQ sketch bytes too short to hold ") + what);
+  }
+  V value;
+  std::memcpy(&value, data + offset, sizeof(V));
+  return value;
+}
+
+[[noreturn]] void reject(const std::string& why) {
+  throw std::invalid_argument("REQ sketch bytes rejected: " + why);
+}
+
+// Same formula as upstream's private req_compactor::nearest_even
+// (req_compactor_impl.hpp:325). Only called on values already checked to lie
+// in (0, 1024], so the cast is defined.
+uint32_t nearest_even(float value) {
+  return static_cast<uint32_t>(std::round(value / 2)) << 1;
+}
+
+// Upstream req_sketch::deserialize trusts its input: it reads each 20-byte
+// compactor header after checking for only 8 bytes, allocates num_items
+// items before checking they fit, derives a single-level sketch's min/max by
+// dereferencing begin() even when the level is empty, and never relates n to
+// the levels. Everything a later update/merge/query relies on is therefore
+// checked here, against the invariants upstream's own code maintains.
+//
+// Byte layout, from req_sketch::serialize and req_compactor::serialize (all
+// little-endian): 0 preamble_ints, 1 serial_version, 2 family, 3 flags, 4-5 k,
+// 6 num_levels, 7 num_raw_items; if num_levels > 1, n u64 then min and max;
+// then either num_raw_items raw items or, per level, state u64,
+// section_size_raw f32, lg_weight u8, num_sections u8, 2 padding bytes,
+// num_items u32 and num_items items.
+template<typename T>
+void validate_req_layout(rust::Slice<const uint8_t> bytes) {
+  const uint8_t* data = bytes.data();
+  const size_t size = bytes.size();
+  constexpr size_t HEADER_SIZE = 8;
+  if (size < HEADER_SIZE) reject("shorter than the 8-byte header");
+
+  const auto preamble_ints = read_at<uint8_t>(data, size, 0, "preamble_ints");
+  const auto serial_version = read_at<uint8_t>(data, size, 1, "the serial version");
+  const auto family = read_at<uint8_t>(data, size, 2, "the family");
+  const auto flags = read_at<uint8_t>(data, size, 3, "the flags");
+  const auto k = read_at<uint16_t>(data, size, 4, "k");
+  const auto num_levels = read_at<uint8_t>(data, size, 6, "num_levels");
+  const auto num_raw_items = read_at<uint8_t>(data, size, 7, "num_raw_items");
+
+  // Upstream checks these three too (req_sketch_impl.hpp:532-534); checking
+  // them first keeps the message right for bytes of another family.
+  if (family != 17) reject("family is " + std::to_string(family) + ", not 17 (REQ)");
+  if (serial_version != 1) reject("serial version " + std::to_string(serial_version));
+  if (preamble_ints != (num_levels > 1 ? 4 : 2)) {
+    reject("preamble_ints " + std::to_string(preamble_ints) + " does not match "
+        + std::to_string(num_levels) + " levels");
+  }
+
+  // req_sketch's private `enum flags { RESERVED1, RESERVED2, IS_EMPTY,
+  // IS_HIGH_RANK, RAW_ITEMS, IS_LEVEL_ZERO_SORTED }` (req_sketch.hpp:437).
+  constexpr uint8_t IS_EMPTY = 1 << 2;
+  constexpr uint8_t IS_HIGH_RANK = 1 << 3;
+  constexpr uint8_t RAW_ITEMS = 1 << 4;
+  constexpr uint8_t IS_LEVEL_ZERO_SORTED = 1 << 5;
+  constexpr uint8_t KNOWN_FLAGS = IS_EMPTY | IS_HIGH_RANK | RAW_ITEMS | IS_LEVEL_ZERO_SORTED;
+  if (flags & ~KNOWN_FLAGS) reject("unknown flag bits set: " + std::to_string(flags));
+
+  // Upstream documents k as even and in [4, 1024] but checks neither, on any
+  // path. Empty bytes are rebuilt through the constructor, which truncates k
+  // to 8 bits (req_sketch_impl.hpp:32, 538), so there k must survive that.
+  constexpr uint16_t MIN_K = datasketches::req_constants::MIN_K;
+  constexpr uint16_t MAX_K = 1024;
+  constexpr uint16_t MAX_CONSTRUCTOR_K = 254;
+  if (k % 2 != 0 || k < MIN_K || k > MAX_K) {
+    reject("k = " + std::to_string(k) + " is not even and in [4, 1024]");
+  }
+  if (flags & IS_EMPTY) {
+    if (k > MAX_CONSTRUCTOR_K) {
+      reject("empty sketch has k = " + std::to_string(k)
+          + "; upstream would rebuild it with a truncated k");
+    }
+    // Genuine empty bytes are exactly the header (they also set RAW_ITEMS,
+    // since upstream writes it whenever n <= 4, so no raw-item rule applies).
+    if (size != HEADER_SIZE) reject("trailing bytes after an empty sketch's header");
+    return;
+  }
+
+  // A non-empty sketch with no levels has no compactor 0 for upstream to
+  // index, and no min/max (deserialize derives those only for one level).
+  if (num_levels == 0) reject("non-empty sketch has no levels");
+
+  size_t offset = HEADER_SIZE;
+  uint64_t n = 0;
+  if (num_levels > 1) {
+    n = read_at<uint64_t>(data, size, offset, "n");
+    offset += sizeof(uint64_t);
+    read_at<T>(data, size, offset, "the min item");
+    read_at<T>(data, size, offset + sizeof(T), "the max item");
+    offset += 2 * sizeof(T);
+  }
+
+  if (flags & RAW_ITEMS) {
+    // Upstream writes raw items only when n <= MIN_K (req_sketch_impl.hpp:416),
+    // which also means a single level; with more levels it would take n,
+    // min and max from the header but items from the raw block only.
+    if (num_levels != 1) reject("raw items with " + std::to_string(num_levels) + " levels");
+    if (num_raw_items == 0 || num_raw_items > MIN_K) {
+      reject(std::to_string(num_raw_items) + " raw items, not 1 to 4");
+    }
+    const size_t items_size = size_t(num_raw_items) * sizeof(T);
+    if (size - offset < items_size) {
+      reject("buffer does not hold " + std::to_string(num_raw_items) + " raw items");
+    }
+    // For 2 to 4 raw items, upstream's byte serialize sizes the buffer as if
+    // it held a compactor (get_serialized_size_bytes, req_sketch_impl.hpp:340
+    // -344) but writes only the raw items (line 436), leaving the 20-byte
+    // compactor header's worth of zeros at the end. Accept exactly that.
+    const size_t trailing = size - offset - items_size;
+    constexpr size_t PHANTOM_COMPACTOR_HEADER = 20;
+    bool trailing_ok = trailing == 0;
+    if (trailing == PHANTOM_COMPACTOR_HEADER) {
+      trailing_ok = true;
+      for (size_t i = size - trailing; i < size; ++i) trailing_ok = trailing_ok && data[i] == 0;
+    }
+    if (!trailing_ok) reject("unexpected trailing bytes after the raw items");
+    return;
+  }
+
+  // Upstream keeps 1ULL << (num_sections - 1) defined only while
+  // num_sections <= 64, and num_sections only ever starts at
+  // INIT_NUM_SECTIONS = 3 and doubles (req_compactor_impl.hpp:44, 304-307),
+  // so the valid counts are 3, 6, 12, 24 and 48; the next, 96, already makes
+  // that shift undefined.
+  constexpr uint64_t COMPACTOR_HEADER_SIZE = 20;
+  // num_sections reaches 96 only when a level with 48 sections has state
+  // >= 2^47 (req_compactor_impl.hpp:304); merge ORs states (line 249) and
+  // then doubles num_sections in a loop, so a huge state merged into a large-k
+  // sketch drives the count past 48 until the uint8_t wraps to 0 and the
+  // nominal capacity with it (then compact() throws "compaction range error"
+  // out of update, an abort across the FFI). state counts compactions of one
+  // level and grows by one per compaction (line 292), so a cap of 2^46 sits
+  // far above any real sketch and leaves about 2^46 compactions of margin.
+  constexpr uint64_t MAX_STATE = uint64_t(1) << 46;
+  uint64_t total_weight = 0;
+  uint64_t total_items = 0;
+  uint64_t total_nom_capacity = 0;
+  for (unsigned level = 0; level < num_levels; ++level) {
+    const auto state = read_at<uint64_t>(data, size, offset, "a compactor's state");
+    const auto section_size_raw = read_at<float>(data, size, offset + 8, "a compactor's section size");
+    const auto lg_weight = read_at<uint8_t>(data, size, offset + 12, "a compactor's lg_weight");
+    const auto num_sections = read_at<uint8_t>(data, size, offset + 13, "a compactor's num_sections");
+    const auto num_items = read_at<uint32_t>(data, size, offset + 16, "a compactor's num_items");
+    offset += COMPACTOR_HEADER_SIZE;
+    const std::string where = "level " + std::to_string(level) + ": ";
+
+    // Before upstream allocates num_items items (req_compactor_impl.hpp:478).
+    if (uint64_t(num_items) > (size - offset) / sizeof(T)) {
+      reject(where + std::to_string(num_items) + " items do not fit in the buffer");
+    }
+    offset += size_t(num_items) * sizeof(T);
+
+    // grow() gives each new level lg_weight = its index
+    // (req_sketch_impl.hpp:592), and merge requires the weights to match.
+    if (lg_weight != level) reject(where + "lg_weight is " + std::to_string(lg_weight));
+    // Every compaction leaves at least nom_capacity / 2 items behind
+    // (req_compactor_impl.hpp:316) and promotes at least one, so no level of
+    // a non-empty sketch is ever empty. Upstream's iterator
+    // (req_sketch_impl.hpp:754-768) dereferences an empty level and then
+    // never reaches end(); a single empty level also makes deserialize
+    // dereference begin() of an empty range (line 583).
+    if (num_items == 0) reject(where + "no items");
+    if (num_sections != 3 && num_sections != 6 && num_sections != 12
+        && num_sections != 24 && num_sections != 48) {
+      reject(where + std::to_string(num_sections) + " sections");
+    }
+    // The section size starts at k and only shrinks while nearest_even of
+    // the result stays >= MIN_K (req_compactor_impl.hpp:42, 302-305). A
+    // section size of at least MIN_K is what keeps compact()'s range at
+    // least 2 (line 277) and so keeps update, which cannot report an error
+    // across the FFI, from throwing. Written so that NaN fails.
+    if (!(section_size_raw > 0.0f && section_size_raw <= static_cast<float>(k))
+        || nearest_even(section_size_raw) < MIN_K) {
+      reject(where + "section size " + std::to_string(section_size_raw)
+          + " is not in [3, k] (k = " + std::to_string(k) + ")");
+    }
+    if (state >= MAX_STATE) reject(where + "state " + std::to_string(state) + " is not below 2^46");
+
+    // Overflow-checked before shifting (lg_weight == level may exceed 63).
+    if (lg_weight >= 64 || uint64_t(num_items) > (UINT64_MAX >> lg_weight)
+        || (uint64_t(num_items) << lg_weight) > UINT64_MAX - total_weight) {
+      reject("level weights overflow u64");
+    }
+    total_weight += uint64_t(num_items) << lg_weight;
+    total_items += num_items;
+    total_nom_capacity += uint64_t(2) * num_sections * nearest_even(section_size_raw);
+  }
+  if (offset != size) reject("trailing bytes after the last compactor");
+
+  // Upstream compresses on update only when the retained count *equals* the
+  // total nominal capacity (req_sketch_impl.hpp:182), and every compress
+  // leaves each level below its own capacity (lines 615-627), so a genuine
+  // sketch always retains fewer. One at or past it would never compact again
+  // and grow without bound.
+  if (total_items >= total_nom_capacity) {
+    reject("retains " + std::to_string(total_items) + " items, not fewer than its capacity "
+        + std::to_string(total_nom_capacity));
+  }
+
+  if (num_levels > 1) {
+    // Compaction and merge conserve total weight, so it always equals n.
+    if (total_weight != n) {
+      reject("levels hold total weight " + std::to_string(total_weight) + " but n is "
+          + std::to_string(n));
+    }
+    // serialize writes n raw items from level 0 whenever n <= MIN_K
+    // (req_sketch_impl.hpp:416, 436), reading past level 0 if other levels
+    // hold some of them. A genuine sketch reaches a second level only by
+    // compacting a full level 0 (at least 2 * 3 * MIN_K = 24 items), so it
+    // never has more than one level at n <= MIN_K.
+    if (n <= MIN_K) reject("n = " + std::to_string(n) + " with " + std::to_string(num_levels) + " levels");
+  }
+  // The sorted view's get_quantile casts rank * n to uint64_t
+  // (quantiles_sorted_view_impl.hpp:78), undefined once the double rounds to
+  // 2^64. 2^63 is a round bound well below that; the safe merge keeps the
+  // sum below the same limit.
+  if (total_weight >= (uint64_t(1) << 63)) {
+    reject("n = " + std::to_string(total_weight) + " is not below 2^63");
+  }
+}
+
+// NaN items break the ordering every query relies on (and std::sort's
+// comparator contract); upstream's update() drops them, but deserialize
+// accepts them. Checked on the decoded sketch (retained items plus min/max)
+// rather than by re-parsing items from bytes. validate_req_layout has made
+// every level non-empty, so upstream's iterator is safe here.
+template<typename T>
+void reject_nan_items(const datasketches::req_sketch<T>& sketch) {
+  if (sketch.is_empty()) return;
+  bool has_nan = std::isnan(sketch.get_min_item()) || std::isnan(sketch.get_max_item());
+  for (auto pair : sketch) has_nan = has_nan || std::isnan(pair.first);
+  if (has_nan) reject("a NaN item");
+}
+
+template<typename T>
+std::unique_ptr<ReqSketchShim<T>> req_deserialize(rust::Slice<const uint8_t> bytes) {
+  validate_req_layout<T>(bytes);
+  auto sketch = datasketches::req_sketch<T>::deserialize(bytes.data(), bytes.size());
+  reject_nan_items(sketch);
+  return std::make_unique<ReqSketchShim<T>>(std::move(sketch));
+}
+
+}  // namespace
+
 std::unique_ptr<ReqDoublesSketchShim> req_doubles_new(uint16_t k, bool hra) {
   return std::make_unique<ReqDoublesSketchShim>(k, hra);
 }
 
 std::unique_ptr<ReqDoublesSketchShim> req_doubles_deserialize(rust::Slice<const uint8_t> bytes) {
-  return std::make_unique<ReqDoublesSketchShim>(
-      datasketches::req_sketch<double>::deserialize(bytes.data(), bytes.size()));
+  return req_deserialize<double>(bytes);
 }
 
 double req_doubles_rse(uint16_t k, double rank, bool hra, uint64_t n) {
@@ -221,8 +479,7 @@ std::unique_ptr<ReqFloatsSketchShim> req_floats_new(uint16_t k, bool hra) {
 }
 
 std::unique_ptr<ReqFloatsSketchShim> req_floats_deserialize(rust::Slice<const uint8_t> bytes) {
-  return std::make_unique<ReqFloatsSketchShim>(
-      datasketches::req_sketch<float>::deserialize(bytes.data(), bytes.size()));
+  return req_deserialize<float>(bytes);
 }
 
 double req_floats_rse(uint16_t k, double rank, bool hra, uint64_t n) {

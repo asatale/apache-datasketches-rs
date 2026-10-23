@@ -40,8 +40,8 @@ Checked against the vendored `req/include/` (datasketches-cpp 5.2.0):
   Deserialization and the static error math do not truncate, so `k` up to 1024
   is valid there.
 - `get_RSE(k, rank, hra, n)` is misnamed: it returns `get_rank_lb(k, 2, rank,
-  1, n, hra)`, a 1-sigma rank lower bound (about 0.4946 at rank 0.5), not an
-  error; it returns `rank` itself where the rank is treated as exact.
+  1, n, hra)`, a 1-sigma rank lower bound (about 0.4946 at rank 0.5 for
+  k = 12, HRA and n = 1000), not an error; it returns `rank` itself where the rank is treated as exact.
 - Iterating an empty `req_sketch` (`begin()`/`end()`) reads past the end of
   its single empty compactor; the shim and safe layer must not iterate an
   empty sketch.

@@ -343,3 +343,7 @@ required-features = ["req"]
 [[test]]
 name = "req_concurrency_test"
 required-features = ["req"]
+
+[[test]]
+name = "req_deserialize_fuzz_test"
+required-features = ["req"]

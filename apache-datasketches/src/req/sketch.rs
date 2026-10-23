@@ -10,6 +10,15 @@ use cxx::UniquePtr;
 /// confidence.
 const DEFAULT_K: u16 = 12;
 
+/// The merged `n` must stay below this. Upstream's
+/// `quantiles_sorted_view::get_quantile` (quantiles_sorted_view_impl.hpp:78)
+/// casts `rank * n` to `uint64_t`, which is undefined behaviour once the
+/// `double` rounds to 2^64 (n within about 2^10 of `u64::MAX`), and upstream's
+/// `merge` adds `n_ += other.n_` unchecked (req_sketch_impl.hpp:204). 2^63 is
+/// a round bound well below that, matching KLL's. The deserializer enforces
+/// the same bound on incoming bytes.
+const MERGED_N_LIMIT: u64 = 1 << 63;
+
 /// Which end of the rank domain gets REQ's relative-error guarantee.
 ///
 /// Upstream calls this `hra` (high rank accuracy), a `bool` defaulting to
@@ -104,6 +113,26 @@ impl<T: ReqItem> ReqSketch<T> {
     /// An empty sketch's bytes carry no item type, so they deserialize as
     /// either `f64` or `f32`; non-empty bytes of the other item type are
     /// rejected.
+    ///
+    /// Bytes are rejected with [`SketchError::Deserialization`] when they:
+    ///
+    /// - are truncated, have trailing bytes, or set unknown flag bits;
+    /// - carry a `k` that is odd or outside `4..=1024`, or, for an empty
+    ///   sketch, above 254 (upstream rebuilds empty sketches through its
+    ///   constructor, which truncates `k` to 8 bits);
+    /// - claim raw items with more than one level or other than 1 to 4 of
+    ///   them;
+    /// - have no levels, an empty level, a level whose weight is not
+    ///   `2^index`, a section count or section size upstream could never
+    ///   produce, or a compaction state of `2^46` or more;
+    /// - retain as many items as their total nominal capacity;
+    /// - have `n` different from the levels' total weight, `n >= 2^63`, or
+    ///   more than one level at `n <= 4`;
+    /// - contain NaN items.
+    ///
+    /// The levels' internal sortedness (and min/max against the items) is
+    /// not validated, so crafted-but-consistent bytes can yield wrong
+    /// answers (never memory unsafety).
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = T::sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
@@ -119,7 +148,7 @@ impl<T: ReqItem> ReqSketch<T> {
     ///
     /// Returns [`SketchError::InvalidConfig`], leaving this sketch unchanged,
     /// if the two sketches have different [`RankAccuracy`] or if the merged
-    /// `n` would overflow `u64`.
+    /// `n` would reach 2^63, which upstream cannot handle.
     pub fn merge(&mut self, other: &ReqSketch<T>) -> Result<(), SketchError> {
         if self.rank_accuracy() != other.rank_accuracy() {
             return Err(SketchError::InvalidConfig(format!(
@@ -128,9 +157,13 @@ impl<T: ReqItem> ReqSketch<T> {
                 self.rank_accuracy()
             )));
         }
-        if self.get_n().checked_add(other.get_n()).is_none() {
+        let fits = self
+            .get_n()
+            .checked_add(other.get_n())
+            .is_some_and(|n| n < MERGED_N_LIMIT);
+        if !fits {
             return Err(SketchError::InvalidConfig(format!(
-                "REQ merge would overflow n ({} + {})",
+                "REQ merge would make n reach 2^63 ({} + {})",
                 self.get_n(),
                 other.get_n()
             )));
@@ -158,13 +191,14 @@ impl<T: ReqItem> ReqSketch<T> {
 
     /// The a-priori one-standard-deviation error of a rank estimate at
     /// normalized `rank`, for a sketch with this `k` and `accuracy` after `n`
-    /// items, in `[0, rank]` units of normalized rank.
+    /// items, in units of normalized rank (at most `0.084 / k`).
     ///
     /// It is `0.0` where upstream treats the rank as exact (for small `n`,
     /// e.g. `n <= 36` at `k = 12`). `k` must be even and in `4..=1024`.
     ///
     /// Upstream's `get_RSE` is misnamed: it returns the 1-sigma rank *lower
-    /// bound* (about 0.4946 at rank 0.5), not an error. This returns
+    /// bound* (about 0.4946 at rank 0.5 for `k = 12`, [`RankAccuracy::High`]
+    /// and `n = 1000`), not an error. This returns
     /// `rank - get_RSE(..)`, the error that bound implies.
     pub fn a_priori_rank_error(
         k: u16,
