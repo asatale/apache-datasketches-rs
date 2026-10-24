@@ -102,7 +102,7 @@ fn all_four_overloads_preserve_operand_order() {
 // A-not-B has no policy at all (`tuple_a_not_b.hpp:29-33` -- the class takes
 // only <Summary, Allocator>, and `theta_set_difference_base::compute` never
 // invokes a callback). The retained entries are COPY-constructed out of `a`
-// (`theta_set_difference_base_impl.hpp:72` forwards a const lvalue when, as
+// (`theta_set_difference_base_impl.hpp:74` forwards a const lvalue when, as
 // here, `a` arrives as a const reference), which routes through DynSummary's
 // copy ctor and so through `rust_summary_clone`.
 //
@@ -134,7 +134,7 @@ fn result_copies_operand_a_summaries_and_leaves_a_intact() {
 
 // `ordered` must reach upstream rather than being hard-wired. Both operands
 // are non-empty and disjoint, so this takes the scan path
-// (`theta_set_difference_base_impl.hpp:55-77`) and lands on line 81's
+// (`theta_set_difference_base_impl.hpp:57-79`) and lands on line 83's
 // `a.is_ordered() || ordered`; an update sketch is never ordered, so the flag
 // alone decides.
 #[test]
@@ -180,7 +180,7 @@ fn empty_a_yields_empty() {
 // Identical operands cancel exactly. `get_num_retained() == 0` is asserted
 // alongside `is_empty()` because upstream only sets the empty flag when the
 // entry list is empty AND theta is still MAX_THETA
-// (`theta_set_difference_base_impl.hpp:79`).
+// (`theta_set_difference_base_impl.hpp:81`).
 #[test]
 fn a_not_b_with_identical_operands_is_empty() {
     let a = sketch(0..100, 17);

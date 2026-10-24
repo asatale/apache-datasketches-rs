@@ -30,7 +30,8 @@ conversion; a shared `quantiles` module with KLL (see "Relationship to KLL").
 
 ## Upstream facts this design rests on
 
-Checked against the vendored `req/include/` (datasketches-cpp 5.2.0):
+Checked against the vendored `req/include/` (datasketches-cpp 5.2.0; the
+`get_RSE` item notes what 5.3.0 changed):
 
 - `req_sketch(uint16_t k, bool hra = true)`. The doc says `k` "must be even
   and in the range [4, 1024]", but the constructor silently rounds an odd `k`
@@ -39,9 +40,13 @@ Checked against the vendored `req/include/` (datasketches-cpp 5.2.0):
   300 becomes 44), so only even `k` in `4..=254` survives construction.
   Deserialization and the static error math do not truncate, so `k` up to 1024
   is valid there.
-- `get_RSE(k, rank, hra, n)` is misnamed: it returns `get_rank_lb(k, 2, rank,
-  1, n, hra)`, a 1-sigma rank lower bound (about 0.4946 at rank 0.5 for
-  k = 12, HRA and n = 1000), not an error; it returns `rank` itself where the rank is treated as exact.
+- In 5.2.0, `get_RSE(k, rank, hra, n)` was misnamed: it returned
+  `get_rank_lb(k, 2, rank, 1, n, hra)`, a 1-sigma rank lower bound (about
+  0.4946 at rank 0.5 for k = 12, HRA and n = 1000), not an error; it returned
+  `rank` itself where the rank is treated as exact. 5.3.0 fixed this: it now
+  returns the one-standard-deviation error directly, and the binding calls it
+  without conversion. The `k` truncation, empty-iterator over-read and the
+  other bugs below are still present in 5.3.0.
 - Iterating an empty `req_sketch` (`begin()`/`end()`) reads past the end of
   its single empty compactor; the shim and safe layer must not iterate an
   empty sketch.
@@ -215,8 +220,9 @@ Notes:
 - **`get_rank_lower_bound`/`get_rank_upper_bound`** validate `rank` in
   `[0, 1]` and `num_std_dev` in `1..=3`, and return `EmptySketch` on an empty
   sketch. **`a_priori_rank_error`** validates `k` (even, `4..=1024`) and `rank`, and
-  returns `rank - get_RSE(..)`: the one-standard-deviation rank error, `0.0`
-  where upstream treats the rank as exact.
+  returns the one-standard-deviation rank error (`rank - get_RSE(..)` on
+  5.2.0, `get_RSE(..)` directly on 5.3.0), `0.0` where upstream treats the
+  rank as exact.
 - **NaN** updates are silently ignored (upstream `check_update_item`).
 - **`iter()`** and **`sorted_view()`** behave exactly as KLL's: copy-out,
   internal order vs sorted, the view is a snapshot.

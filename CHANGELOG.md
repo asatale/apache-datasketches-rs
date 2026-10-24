@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 `apache-datasketches` and `apache-datasketches-sys` are versioned
 independently; each entry names the crate it applies to. Both are built
-against **Apache DataSketches C++ 5.2.0**, vendored and pinned.
+against **Apache DataSketches C++ 5.3.0**, vendored and pinned.
 
 Entries for 0.1.0 through 0.2.0 were reconstructed from git history after the
 fact — this file was introduced during 0.2.1.
@@ -34,15 +34,16 @@ fact — this file was introduced during 0.2.1.
   sketches with different `RankAccuracy` (or an overflowing `n`);
   `ReqSketch` is `Send` but not `Sync` — share a `ReqSortedView` instead;
   compaction is randomized and cannot be seeded; `k` must be even and in
-  `4..=254` for `new` — upstream 5.2.0's constructor truncates `k` to 8 bits
-  and silently rounds an odd `k`. `deserialize` validates
-  the serialized layout before upstream reads it, so corrupt bytes return
+  `4..=254` for `new` — upstream's 5.2.0 and 5.3.0 constructor truncates `k`
+  to 8 bits and silently rounds an odd `k`. `deserialize` validates the
+  serialized layout before upstream reads it, so corrupt bytes return
   `SketchError::Deserialization`; a committed fuzz test guards this.
 
   Upstream bugs found and worked around: the 8-bit `k` truncation above;
   iterating an empty sketch reads past the end (guarded in the shim); and
-  `get_RSE` returns a rank lower bound rather than an error, which is why
-  the binding exposes the error it implies as `a_priori_rank_error`.
+  in 5.2.0, `get_RSE` returned a rank lower bound rather than an error, so
+  the binding converted it into `a_priori_rank_error` (5.3.0 fixed `get_RSE`;
+  see Changed).
 - **KLL quantiles sketch family** (`kll` feature, on by default):
   `KllSketch<T>` for `T = f64` or `f32` — rank, quantile, PMF and CDF
   queries, `merge`, serialization compatible with the Java and Python
@@ -142,6 +143,33 @@ fact — this file was introduced during 0.2.1.
   because its `hot` baseline already runs above the pack — an ordinary,
   already-understood cost — rather than because the string path itself hides
   a distinct third cost.
+- Theta and Tuple sketches now accept `lg_k = 4` (the minimum was 5),
+  matching Java.
+- HLL union estimates and serialized union bytes can differ slightly from
+  builds on 5.2.0: upstream repaired a merge-order dependence and made the
+  composite estimator Java-bit-exact. HLL flag bit 0x20 is no longer written
+  or read.
+- Compact Theta sketches holding exactly one item now set the single-item
+  flag (matching Java), and empty compact Theta/Tuple sketches serialize a
+  seed hash of 0. Old and new bytes deserialize either way.
+- Theta bounds on crafted bytes with `theta = 0` now return an error
+  instead of infinity/NaN; Theta a-not-b with an empty B carrying a foreign
+  seed hash no longer aborts the process.
+- `ReqSketch::a_priori_rank_error` is unchanged in value; it now calls
+  upstream's `get_RSE` directly, which 5.3.0 fixed.
+
+### Security
+- **Upgraded the vendored Apache DataSketches C++ from 5.2.0 to 5.3.0**,
+  which fixes deserialization vulnerabilities reachable through this crate's
+  safe `deserialize`/`wrap` APIs on untrusted bytes:
+  [CVE-2026-103501](https://www.cve.org/CVERecord?id=CVE-2026-103501)
+  (HLL, heap buffer overflow),
+  [CVE-2026-103513](https://www.cve.org/CVERecord?id=CVE-2026-103513)
+  (CPC, out-of-bounds read/write) and
+  [CVE-2026-103635](https://www.cve.org/CVERecord?id=CVE-2026-103635)
+  (compact Theta, out-of-bounds read). KLL and REQ were already guarded by
+  this crate's own layout validation; 5.3.0 also removes a latent undefined
+  behavior in their deserialize paths. Regression tests pin each fix.
 
 ## [0.2.3] — 2026-08-13
 

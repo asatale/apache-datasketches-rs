@@ -1,5 +1,5 @@
 // apache-datasketches/tests/theta_sketch_test.rs
-//! Ported from theta/test/theta_sketch_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_sketch_test.cpp (tag 5.3.0).
 //!
 //! Upstream has 22 `TEST_CASE`s. 8 of them ("deserialize compact v1/v2
 //! empty/estimation from java" and "wrap compact v1/v2 empty/estimation
@@ -36,6 +36,10 @@
 //! Plus three 5.3.0 security regression tests (CVE-2026-103635) ported at the end of this file
 //! from tag 5.3.0: `deserialize_truncated_preamble`, `deserialize_v4_corrupt_header` and
 //! `deserialize_v4_entry_bits_overflow`.
+//!
+//! Not ported from the other 5.3.0 additions: "empty serialized image", "single item serialized
+//! image", "one entry in estimation mode is not a single item" and the four "compact with trim"
+//! cases. ("min lg_k" is covered by `builder_rejects_lg_k_out_of_range`.)
 use apache_datasketches::theta::{
     CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch,
 };

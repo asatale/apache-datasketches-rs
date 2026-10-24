@@ -1,6 +1,6 @@
 // apache-datasketches/tests/cpc_sketch_test.rs
-//! Ported from cpc/test/cpc_sketch_test.cpp (tag 5.2.0). 15 of 26 upstream
-//! cases ported; 11 excluded:
+//! Ported from cpc/test/cpc_sketch_test.cpp (tag 5.3.0). 15 of the 26 pre-5.3.0
+//! upstream cases ported; 11 excluded:
 //! - "overflow bug" (100,000,000 updates) — impractically slow for a
 //!   routine local test suite; the bug it regression-tests is a specific
 //!   historical fix, not a public-API behavior distinct from the

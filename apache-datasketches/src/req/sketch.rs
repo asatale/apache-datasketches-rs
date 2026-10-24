@@ -14,7 +14,7 @@ const DEFAULT_K: u16 = 12;
 /// `quantiles_sorted_view::get_quantile` (quantiles_sorted_view_impl.hpp:78)
 /// casts `rank * n` to `uint64_t`, which is undefined behaviour once the
 /// `double` rounds to 2^64 (n within about 2^10 of `u64::MAX`), and upstream's
-/// `merge` adds `n_ += other.n_` unchecked (req_sketch_impl.hpp:204). 2^63 is
+/// `merge` adds `n_ += other.n_` unchecked (req_sketch_impl.hpp:205). 2^63 is
 /// a round bound well below that, matching KLL's. The deserializer enforces
 /// the same bound on incoming bytes.
 const MERGED_N_LIMIT: u64 = 1 << 63;
@@ -91,8 +91,8 @@ impl<T: ReqItem> ReqSketch<T> {
     /// means smaller error and more memory. [`Default`] uses `k = 12` and
     /// [`RankAccuracy::High`].
     ///
-    /// Upstream documents `k` up to 1024, but its 5.2.0 constructor truncates
-    /// `k` to 8 bits, so a larger `k` would silently become a different one
+    /// Upstream documents `k` up to 1024, but its 5.2.0 and 5.3.0 constructor
+    /// truncates `k` to 8 bits, so a larger `k` would silently become a different one
     /// (256 becomes 4, 300 becomes 44); this crate rejects it instead.
     /// Non-empty sketches deserialized from bytes may carry `k` up to 1024.
     pub fn new(k: u16, accuracy: RankAccuracy) -> Result<Self, SketchError> {

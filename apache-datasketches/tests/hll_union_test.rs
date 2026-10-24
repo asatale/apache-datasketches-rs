@@ -1,6 +1,6 @@
 // apache-datasketches/tests/hll_union_test.rs
 //
-// Ported 1:1 from vendor/datasketches-cpp/hll/test/HllUnionTest.cpp (tag 5.2.0).
+// Ported 1:1 from vendor/datasketches-cpp/hll/test/HllUnionTest.cpp (tag 5.3.0).
 // Test names and order mirror the upstream Catch2 TEST_CASE list.
 
 use apache_datasketches::hll::{HllSketch, HllUnion, TargetHllType};
@@ -203,7 +203,7 @@ fn hll_union_check_composite_estimate() {
 // REQUIRE_THROWS_AS(hll_union(hll_constants::MAX_LOG_K + 1), ...).
 //
 // hll_constants::MIN_LOG_K == 4 and MAX_LOG_K == 21 (vendor/datasketches-cpp/hll/include/
-// HllUtil.hpp:82-83). Note: the doc comment on `hll_union_alloc`'s constructor (hll.hpp) claims
+// HllUtil.hpp:91-92). Note: the doc comment on `hll_union_alloc`'s constructor (hll.hpp) claims
 // lg_max_k "must be between 7 and 21, inclusive", but the actual implementation
 // (HllUnion-internal.hpp: `hll_union_alloc(...): lg_max_k_(HllUtil<A>::checkLgK(lg_max_k))`) only
 // calls `checkLgK`, which enforces MIN_LOG_K=4. This was confirmed empirically against the Rust

@@ -1,5 +1,5 @@
 // apache-datasketches/tests/theta_a_not_b_test.rs
-//! Ported from theta/test/theta_a_not_b_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_a_not_b_test.cpp (tag 5.3.0).
 //!
 //! Upstream has 11 `TEST_CASE`s: "empty", "non empty no retained keys",
 //! "exact mode half overlap", "exact mode disjoint", "exact mode full
