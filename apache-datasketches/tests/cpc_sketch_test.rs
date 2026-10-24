@@ -23,6 +23,9 @@
 //! - "serialize both ways" — exercises the `header_size_bytes` parameter
 //!   on `serialize()`, which this crate doesn't expose (PostgreSQL
 //!   extension-specific, no use case here).
+//!
+//! Plus two 5.3.0 security regression tests (CVE-2026-103513) ported at the end of this file
+//! from tag 5.3.0: `deserialize_corrupt_num_coupons` and `deserialize_corrupt_lg_k`.
 use apache_datasketches::cpc::{get_max_serialized_size_bytes, CpcSketch, CpcSketchBuilder};
 
 const RELATIVE_ERROR_FOR_LG_K_11: f64 = 0.02;
@@ -247,4 +250,67 @@ fn max_serialized_size() {
     );
     assert!(get_max_serialized_size_bytes(3).is_err());
     assert!(get_max_serialized_size_bytes(27).is_err());
+}
+
+// Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
+// TEST_CASE("cpc sketch: deserialize corrupt num_coupons") at tag 5.3.0.
+// Guards the fix for CVE-2026-103513: a sparse image whose num_coupons field (bytes 8..12) is
+// larger than the compressed table holds, or larger than the k x 64 bit matrix can hold, must be
+// rejected rather than read out of bounds. Upstream distinguishes `std::out_of_range` from
+// `std::invalid_argument`; the safe API maps every deserialize failure to
+// `SketchError::Deserialization`, so both sub-cases assert that variant.
+#[test]
+fn deserialize_corrupt_num_coupons() {
+    use apache_datasketches::SketchError;
+
+    let mut sketch = CpcSketchBuilder::new().lg_k(11).build().unwrap();
+    for i in 0..100u64 {
+        sketch.update_u64(i);
+    }
+    let bytes = sketch.serialize();
+    assert_ne!(bytes[5] & (1 << 3), 0); // sparse flavor: table present
+    assert_eq!(bytes[5] & (1 << 4), 0); // and no window
+    let num_coupons = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+
+    // more pairs than the compressed table holds: decoder must not read past it
+    let mut corrupt = bytes.clone();
+    corrupt[8..12].copy_from_slice(&(num_coupons + 50).to_le_bytes());
+    assert!(matches!(
+        CpcSketch::deserialize(&corrupt),
+        Err(SketchError::Deserialization(_))
+    ));
+
+    // more coupons than the k x 64 bit matrix can hold
+    let mut corrupt = bytes.clone();
+    let too_many_coupons: u32 = 64 * 2048 + 1;
+    corrupt[8..12].copy_from_slice(&too_many_coupons.to_le_bytes());
+    assert!(matches!(
+        CpcSketch::deserialize(&corrupt),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+
+// Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
+// TEST_CASE("cpc sketch: deserialize corrupt lg_k") at tag 5.3.0.
+// Guards the fix for CVE-2026-103513: an lg_k byte (offset 3) outside the valid range must be
+// rejected at deserialization. The stream half of each iteration is not ported (no stream API).
+#[test]
+fn deserialize_corrupt_lg_k() {
+    use apache_datasketches::SketchError;
+
+    let mut sketch = CpcSketchBuilder::new().lg_k(11).build().unwrap();
+    for i in 0..100u64 {
+        sketch.update_u64(i);
+    }
+    let mut bytes = sketch.serialize();
+    for lg_k in [0u8, 3, 27, 255] {
+        bytes[3] = lg_k;
+        assert!(
+            matches!(
+                CpcSketch::deserialize(&bytes),
+                Err(SketchError::Deserialization(_))
+            ),
+            "lg_k = {lg_k} was not rejected"
+        );
+    }
 }

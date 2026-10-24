@@ -32,6 +32,10 @@
 //!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[4, 26]`, `p`
 //!     must be in `(0.0, 1.0]`), which upstream's `theta_sketch_test.cpp` does not exercise directly but
 //!     which is reachable and worth covering through this crate's public builder API.
+//!
+//! Plus three 5.3.0 security regression tests (CVE-2026-103635) ported at the end of this file
+//! from tag 5.3.0: `deserialize_truncated_preamble`, `deserialize_v4_corrupt_header` and
+//! `deserialize_v4_entry_bits_overflow`.
 use apache_datasketches::theta::{
     CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch,
 };
@@ -208,4 +212,165 @@ fn builder_rejects_p_out_of_range() {
     assert!(ThetaSketchBuilder::new().p(0.0).build().is_err());
     assert!(ThetaSketchBuilder::new().p(1.5).build().is_err());
     assert!(ThetaSketchBuilder::new().p(1.0).build().is_ok());
+}
+
+/// `compute_seed_hash(DEFAULT_SEED)` (DEFAULT_SEED = 9001), as upstream computes it in
+/// `MurmurHash3.h`.
+const DEFAULT_SEED_HASH: u16 = 0x93cc;
+
+fn assert_deserialize_and_wrap_rejected(bytes: &[u8], what: &str) {
+    assert!(
+        matches!(
+            CompactThetaSketch::deserialize(bytes),
+            Err(apache_datasketches::SketchError::Deserialization(_))
+        ),
+        "deserialize accepted {what}"
+    );
+    assert!(
+        matches!(
+            WrappedCompactThetaSketch::wrap(bytes),
+            Err(apache_datasketches::SketchError::Deserialization(_))
+        ),
+        "wrap accepted {what}"
+    );
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize truncated preamble") at tag 5.3.0.
+// Guards the fix for CVE-2026-103635: compact images (serial versions 1, 2 and 3) cut off inside
+// the preamble they declare must be rejected by both `deserialize` and `wrap` instead of being
+// read past the end of the buffer. The images are hand-built exactly as upstream builds them.
+// Upstream expects `std::out_of_range`; the safe API maps it to `SketchError::Deserialization`.
+#[test]
+fn deserialize_truncated_preamble() {
+    let [seed_hash_lo, seed_hash_hi] = DEFAULT_SEED_HASH.to_le_bytes();
+    let max_theta: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
+
+    // serial version 1: three preamble longs, num_entries = 0 and theta = max would be empty
+    let mut v1: Vec<u8> = vec![3, 1, 3, 0, 0, 0x1a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    v1.extend_from_slice(&max_theta);
+    for size in [8, 16] {
+        assert_deserialize_and_wrap_rejected(&v1[..size], &format!("v1 truncated to {size}"));
+    }
+
+    // serial version 2: two preamble longs, num_entries = 0 would be empty
+    let v2_exact: Vec<u8> = vec![
+        2,
+        2,
+        3,
+        0,
+        0,
+        0x1a,
+        seed_hash_lo,
+        seed_hash_hi,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    assert_deserialize_and_wrap_rejected(&v2_exact[..8], "v2 exact truncated to 8");
+    assert!(CompactThetaSketch::deserialize(&v2_exact)
+        .unwrap()
+        .is_empty());
+
+    // serial version 2: three preamble longs, num_entries = 0 and theta = max would be empty
+    let mut v2_estimation: Vec<u8> = vec![
+        3,
+        2,
+        3,
+        0,
+        0,
+        0x1a,
+        seed_hash_lo,
+        seed_hash_hi,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    v2_estimation.extend_from_slice(&max_theta);
+    for size in [8, 16] {
+        assert_deserialize_and_wrap_rejected(
+            &v2_estimation[..size],
+            &format!("v2 estimation truncated to {size}"),
+        );
+    }
+    assert!(CompactThetaSketch::deserialize(&v2_estimation)
+        .unwrap()
+        .is_empty());
+
+    // serial version 3: two preamble longs, not empty
+    let v3: [u8; 8] = [2, 3, 3, 0, 0, 0x1a, seed_hash_lo, seed_hash_hi];
+    assert_deserialize_and_wrap_rejected(&v3, "v3 non-empty with only one preamble long");
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize v4 corrupt header") at tag 5.3.0.
+// Part of the CVE-2026-103635 compact-theta hardening: a v4 (compressed) image whose entry_bits
+// byte (offset 3) or num_entries_bytes byte (offset 4) is out of range must be rejected.
+// Upstream only exercises `compact_theta_sketch::deserialize` (bytes and stream), not `wrap`, so
+// only `deserialize_compressed` is asserted here; the stream half is not ported (no stream API).
+#[test]
+fn deserialize_v4_corrupt_header() {
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    for i in 0..100i64 {
+        update_sketch.update_i64(i);
+    }
+    let bytes = update_sketch.compact(true).serialize_compressed();
+    assert_eq!(bytes[1], 4);
+    for entry_bits in [0u8, 64, 255] {
+        let mut corrupt = bytes.clone();
+        corrupt[3] = entry_bits;
+        assert!(
+            matches!(
+                CompactThetaSketch::deserialize_compressed(&corrupt),
+                Err(apache_datasketches::SketchError::Deserialization(_))
+            ),
+            "entry_bits = {entry_bits} was not rejected"
+        );
+    }
+    for num_entries_bytes in [0u8, 5, 255] {
+        let mut corrupt = bytes.clone();
+        corrupt[4] = num_entries_bytes;
+        assert!(
+            matches!(
+                CompactThetaSketch::deserialize_compressed(&corrupt),
+                Err(apache_datasketches::SketchError::Deserialization(_))
+            ),
+            "num_entries_bytes = {num_entries_bytes} was not rejected"
+        );
+    }
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize v4 entry bits overflow") at tag 5.3.0.
+// Part of the CVE-2026-103635 compact-theta hardening: 8 bits * 2^29 entries = 2^32 bits wraps
+// to 0 in 32-bit arithmetic, so a 12-byte v4 image claiming 2^29 entries used to pass the size
+// check. It must be rejected. Upstream expects `std::out_of_range`; the safe API maps it to
+// `SketchError::Deserialization`.
+#[test]
+fn deserialize_v4_entry_bits_overflow() {
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    for i in 0..100i64 {
+        update_sketch.update_i64(i);
+    }
+    let mut bytes = update_sketch.compact(true).serialize_compressed();
+    assert_eq!(bytes[0], 1); // exact mode, num_entries follows the first preamble long
+    bytes.resize(12, 0);
+    bytes[3] = 8;
+    bytes[4] = 4;
+    let num_entries: u32 = 1 << 29;
+    bytes[8..12].copy_from_slice(&num_entries.to_le_bytes());
+    assert!(matches!(
+        CompactThetaSketch::deserialize_compressed(&bytes),
+        Err(apache_datasketches::SketchError::Deserialization(_))
+    ));
 }
