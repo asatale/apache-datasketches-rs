@@ -21,6 +21,7 @@
 #define _HLLARRAY_INTERNAL_HPP_
 
 #include "HllArray.hpp"
+#include "fdlibm_log.hpp"
 #include "HllUtil.hpp"
 #include "HarmonicNumbers.hpp"
 #include "CubicInterpolation.hpp"
@@ -35,8 +36,8 @@
 namespace datasketches {
 
 template<typename A>
-HllArray<A>::HllArray(uint8_t lgConfigK, target_hll_type tgtHllType, bool startFullSize, const A& allocator):
-HllSketchImpl<A>(lgConfigK, tgtHllType, hll_mode::HLL, startFullSize),
+HllArray<A>::HllArray(uint8_t lgConfigK, target_hll_type tgtHllType, const A& allocator):
+HllSketchImpl<A>(lgConfigK, tgtHllType, hll_mode::HLL),
 hipAccum_(0.0),
 kxq0_(1 << lgConfigK),
 kxq1_(0.0),
@@ -49,7 +50,7 @@ rebuild_kxq_curmin_(false)
 
 template<typename A>
 HllArray<A>::HllArray(const HllArray& other, target_hll_type tgtHllType) :
-  HllSketchImpl<A>(other.getLgConfigK(), tgtHllType, hll_mode::HLL, other.isStartFullSize()),
+  HllSketchImpl<A>(other.getLgConfigK(), tgtHllType, hll_mode::HLL),
   // remaining fields are initialized to empty sketch defaults
   // and left to subclass constructor to populate
   hipAccum_(0.0),
@@ -109,7 +110,6 @@ HllArray<A>* HllArray<A>::newHll(const void* bytes, size_t len, const A& allocat
   const target_hll_type tgtHllType = HllSketchImpl<A>::extractTgtHllType(data[hll_constants::MODE_BYTE]);
   const bool oooFlag = ((data[hll_constants::FLAGS_BYTE] & hll_constants::OUT_OF_ORDER_FLAG_MASK) ? true : false);
   const bool comapctFlag = ((data[hll_constants::FLAGS_BYTE] & hll_constants::COMPACT_FLAG_MASK) ? true : false);
-  const bool startFullSizeFlag = ((data[hll_constants::FLAGS_BYTE] & hll_constants::FULL_SIZE_FLAG_MASK) ? true : false);
 
   const uint8_t lgK = data[hll_constants::LG_K_BYTE];
   const uint8_t curMin = data[hll_constants::HLL_CUR_MIN_BYTE];
@@ -139,18 +139,19 @@ HllArray<A>* HllArray<A>::newHll(const void* bytes, size_t len, const A& allocat
     aux_ptr = aux_hash_map_ptr(auxHashMap, auxHashMap->make_deleter());
   }
 
-  HllArray<A>* sketch = HllSketchImplFactory<A>::newHll(lgK, tgtHllType, startFullSizeFlag, allocator);
+  HllArray<A>* sketch = HllSketchImplFactory<A>::newHll(lgK, tgtHllType, allocator);
   sketch->putCurMin(curMin);
   sketch->putOutOfOrderFlag(oooFlag);
-  if (!oooFlag) sketch->putHipAccum(hip);
+  if (!oooFlag) { sketch->putHipAccum(hip); }
   sketch->putKxQ0(kxq0);
   sketch->putKxQ1(kxq1);
   sketch->putNumAtCurMin(numAtCurMin);
 
   std::memcpy(sketch->hllByteArr_.data(), data + hll_constants::HLL_BYTE_ARR_START, arrayBytes);
 
-  if (auxHashMap != nullptr)
+  if (auxHashMap != nullptr) {
     ((Hll4Array<A>*)sketch)->putAuxHashMap(auxHashMap);
+  }
 
   aux_ptr.release();
   return sketch;
@@ -173,18 +174,17 @@ HllArray<A>* HllArray<A>::newHll(std::istream& is, const A& allocator) {
 
   hll_mode mode = HllSketchImpl<A>::extractCurMode(listHeader[hll_constants::MODE_BYTE]);
   if (mode != HLL) {
-    throw std::invalid_argument("Calling HLL construtor with non-HLL mode data");
+    throw std::invalid_argument("Calling HLL constructor with non-HLL mode data");
   }
 
   const target_hll_type tgtHllType = HllSketchImpl<A>::extractTgtHllType(listHeader[hll_constants::MODE_BYTE]);
   const bool oooFlag = ((listHeader[hll_constants::FLAGS_BYTE] & hll_constants::OUT_OF_ORDER_FLAG_MASK) ? true : false);
   const bool comapctFlag = ((listHeader[hll_constants::FLAGS_BYTE] & hll_constants::COMPACT_FLAG_MASK) ? true : false);
-  const bool startFullSizeFlag = ((listHeader[hll_constants::FLAGS_BYTE] & hll_constants::FULL_SIZE_FLAG_MASK) ? true : false);
 
   const uint8_t lgK = listHeader[hll_constants::LG_K_BYTE];
   const uint8_t curMin = listHeader[hll_constants::HLL_CUR_MIN_BYTE];
 
-  HllArray* sketch = HllSketchImplFactory<A>::newHll(lgK, tgtHllType, startFullSizeFlag, allocator);
+  HllArray* sketch = HllSketchImplFactory<A>::newHll(lgK, tgtHllType, allocator);
   typedef std::unique_ptr<HllArray<A>, std::function<void(HllSketchImpl<A>*)>> hll_array_ptr;
   hll_array_ptr sketch_ptr(sketch, sketch->get_deleter());
   sketch->putCurMin(curMin);
@@ -193,7 +193,7 @@ HllArray<A>* HllArray<A>::newHll(std::istream& is, const A& allocator) {
   const auto hip = read<double>(is);
   const auto kxq0 = read<double>(is);
   const auto kxq1 = read<double>(is);
-  if (!oooFlag) sketch->putHipAccum(hip);
+  if (!oooFlag) { sketch->putHipAccum(hip); }
   sketch->putKxQ0(kxq0);
   sketch->putKxQ1(kxq1);
 
@@ -209,8 +209,7 @@ HllArray<A>* HllArray<A>::newHll(std::istream& is, const A& allocator) {
     ((Hll4Array<A>*)sketch)->putAuxHashMap(auxHashMap);
   }
 
-  if (!is.good())
-    throw std::runtime_error("error reading from std::istream"); 
+  if (!is.good()) { throw std::runtime_error("error reading from std::istream"); } 
 
   return sketch_ptr.release();
 }
@@ -465,6 +464,10 @@ bool HllArray<A>::isCompact() const {
 
 template<typename A>
 bool HllArray<A>::isEmpty() const {
+  // mergeHll() is only called with non-empty sketches and sets this flag after updating the
+  // register array. The cached curMin_/numAtCurMin_ may still have their empty-sketch values,
+  // but a pending rebuild therefore proves that this array is not empty.
+  if (rebuild_kxq_curmin_) return false;
   const uint32_t configK = 1 << this->lgConfigK_;
   return (curMin_ == 0) && (numAtCurMin_ == configK);
 }
@@ -545,7 +548,7 @@ template<typename A>
 void HllArray<A>::hipAndKxQIncrementalUpdate(uint8_t oldValue, uint8_t newValue) {
   const uint32_t configK = 1 << this->getLgConfigK();
   // update hip BEFORE updating kxq
-  if (!oooFlag_) hipAccum_ += configK / (kxq0_ + kxq1_);
+  if (!oooFlag_) { hipAccum_ += configK / (kxq0_ + kxq1_); }
   // update kxq0 and kxq1; subtract first, then add
   if (oldValue < 32) { kxq0_ -= INVERSE_POWERS_OF_2[oldValue]; }
   else               { kxq1_ -= INVERSE_POWERS_OF_2[oldValue]; }
@@ -566,7 +569,7 @@ double HllArray<A>::getHllBitMapEstimate() const {
 
   //This will eventually go away.
   if (numUnhitBuckets == 0) {
-    return configK * log(configK / 0.5);
+    return configK * fdlibm::log(configK / 0.5);
   }
 
   const uint32_t numHitBuckets = configK - numUnhitBuckets;
@@ -599,34 +602,37 @@ bool HllArray<A>::isRebuildKxqCurminFlag() const {
 template<typename A>
 void HllArray<A>::check_rebuild_kxq_cur_min() {
   if (!rebuild_kxq_curmin_) { return; }
+  // the deferred rebuild is only ever set on an HLL_8 union gadget. Guarding here also keeps
+  // this from ever rewriting curMin_ on an HLL_4 array, whose nibbles are stored relative to it.
+  if (this->getCurMode() != hll_mode::HLL || this->getTgtHllType() != target_hll_type::HLL_8) {
+    rebuild_kxq_curmin_ = false;
+    return;
+  }
 
-  uint8_t cur_min = 64;
-  uint32_t num_at_cur_min = 0;
+  uint32_t num_zeros = 0;
   double kxq0 = 1 << this->lgConfigK_;
   double kxq1 = 0;
 
-  auto it = this->begin(true); // want all points to adjust cur_min
+  auto it = this->begin(true); // want all slots, including the empty ones
   const auto end = this->end();
   while (it != end) {
     uint8_t v = HllUtil<A>::getValue(*it);
     if (v > 0) {
       if (v < 32) { kxq0 += INVERSE_POWERS_OF_2[v] - 1.0; }
       else        { kxq1 += INVERSE_POWERS_OF_2[v] - 1.0; }
-    }
-    if (v > cur_min) { ++it; continue; }
-    if (v < cur_min) {
-      cur_min = v;
-      num_at_cur_min = 1;
     } else {
-      ++num_at_cur_min;
-    }    
+      ++num_zeros;
+    }
     ++it;
   }
 
   kxq0_ = kxq0;
   kxq1_ = kxq1;
-  curMin_ = cur_min;
-  numAtCurMin_ = num_at_cur_min;
+  // HLL_8 convention: curMin is always 0 and numAtCurMin is the number of zero registers.
+  // That is the representation the incremental update path maintains, so the rebuilt state is
+  // indistinguishable from it and the timing of this rebuild is not observable in the image.
+  curMin_ = 0;
+  numAtCurMin_ = num_zeros;
   rebuild_kxq_curmin_ = false;
   // HipAccum is not affected
 
@@ -648,7 +654,7 @@ array_(array), array_size_(array_size), index_(index), hll_type_(hll_type), exce
 {
   while (index_ < array_size_) {
     value_ = get_value(array_, index_, hll_type_, exceptions_, offset_);
-    if (all_ || value_ != hll_constants::EMPTY) break;
+    if (all_ || value_ != hll_constants::EMPTY) { break; }
     ++index_;
   }
 }
@@ -657,7 +663,7 @@ template<typename A>
 typename HllArray<A>::const_iterator& HllArray<A>::const_iterator::operator++() {
   while (++index_ < array_size_) {
     value_ = get_value(array_, index_, hll_type_, exceptions_, offset_);
-    if (all_ || value_ != hll_constants::EMPTY) break;
+    if (all_ || value_ != hll_constants::EMPTY) { break; }
   }
   return *this;
 }

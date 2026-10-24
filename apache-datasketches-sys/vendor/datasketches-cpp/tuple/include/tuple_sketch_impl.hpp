@@ -315,7 +315,7 @@ entries_(other.get_allocator())
 {
   entries_.reserve(other.get_num_retained());
   for (uint64_t hash: other) {
-    entries_.push_back(Entry(hash, summary));
+    entries_.emplace_back(hash, summary);
   }
   if (ordered && !other.is_ordered()) std::sort(entries_.begin(), entries_.end(), comparator());
 }
@@ -347,7 +347,7 @@ uint32_t compact_tuple_sketch<S, A>::get_num_retained() const {
 
 template<typename S, typename A>
 uint16_t compact_tuple_sketch<S, A>::get_seed_hash() const {
-  return seed_hash_;
+  return is_empty_ ? 0 : seed_hash_;
 }
 
 template<typename S, typename A>
@@ -518,7 +518,7 @@ compact_tuple_sketch<S, A> compact_tuple_sketch<S, A>::deserialize(std::istream&
     for (size_t i = 0; i < num_entries; ++i) {
       const auto key = read<uint64_t>(is);
       sd.deserialize(is, summary.get(), 1);
-      entries.push_back(Entry(key, std::move(*summary)));
+      entries.emplace_back(key, std::move(*summary));
       (*summary).~S();
     }
   }
@@ -583,9 +583,10 @@ compact_tuple_sketch<S, A> compact_tuple_sketch<S, A>::deserialize(const void* b
     std::unique_ptr<S, deleter_of_summaries> summary(alloc.allocate(1), deleter_of_summaries(1, false, allocator));
     for (size_t i = 0; i < num_entries; ++i) {
       uint64_t key;
+      ensure_minimum_memory(base + size - ptr, sizeof(uint64_t));
       ptr += copy_from_mem(ptr, key);
       ptr += sd.deserialize(ptr, base + size - ptr, summary.get(), 1);
-      entries.push_back(Entry(key, std::move(*summary)));
+      entries.emplace_back(key, std::move(*summary));
       (*summary).~S();
     }
   }

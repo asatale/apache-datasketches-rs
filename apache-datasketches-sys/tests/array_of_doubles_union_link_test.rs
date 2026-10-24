@@ -65,7 +65,10 @@ fn union_sums_values_on_collision() {
 #[test]
 fn invalid_lg_k_returns_err() {
     assert!(
-        union_ffi::new_array_of_doubles_union(4, sketch_ffi::TupleResizeFactor::X8, 1.0, 1)
+        union_ffi::new_array_of_doubles_union(4, sketch_ffi::TupleResizeFactor::X8, 1.0, 1).is_ok()
+    );
+    assert!(
+        union_ffi::new_array_of_doubles_union(3, sketch_ffi::TupleResizeFactor::X8, 1.0, 1)
             .is_err()
     );
 }

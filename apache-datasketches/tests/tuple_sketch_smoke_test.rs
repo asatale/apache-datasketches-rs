@@ -13,7 +13,11 @@ fn construct_update_estimate() {
 
 #[test]
 fn invalid_lg_k_is_err() {
-    assert!(ArrayOfDoublesSketchBuilder::new().lg_k(4).build().is_err());
+    assert!(ArrayOfDoublesSketchBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ArrayOfDoublesSketchBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
 }
 
 #[test]

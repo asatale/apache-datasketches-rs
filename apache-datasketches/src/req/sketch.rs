@@ -198,10 +198,8 @@ impl<T: ReqItem> ReqSketch<T> {
     /// It is `0.0` where upstream treats the rank as exact (for small `n`,
     /// e.g. `n <= 36` at `k = 12`). `k` must be even and in `4..=1024`.
     ///
-    /// Upstream's `get_RSE` is misnamed: it returns the 1-sigma rank *lower
-    /// bound* (about 0.4946 at rank 0.5 for `k = 12`, [`RankAccuracy::High`]
-    /// and `n = 1000`), not an error. This returns
-    /// `rank - get_RSE(..)`, the error that bound implies.
+    /// This is upstream's `get_RSE`. (In datasketches-cpp 5.2.0, `get_RSE`
+    /// returned a rank lower bound instead; that was fixed in 5.3.0.)
     pub fn a_priori_rank_error(
         k: u16,
         rank: f64,

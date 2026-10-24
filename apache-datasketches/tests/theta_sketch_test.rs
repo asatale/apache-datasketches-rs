@@ -29,7 +29,7 @@
 //!     never exposes a seed parameter (every sketch always uses upstream's `DEFAULT_SEED`).
 //!   - `builder_rejects_lg_k_out_of_range` and `builder_rejects_p_out_of_range` are API-surface-driven
 //!     additions covering `theta_base_builder::set_lg_k`/`set_p`'s validation
-//!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[5, 26]`, `p`
+//!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[4, 26]`, `p`
 //!     must be in `(0.0, 1.0]`), which upstream's `theta_sketch_test.cpp` does not exercise directly but
 //!     which is reachable and worth covering through this crate's public builder API.
 use apache_datasketches::theta::{
@@ -74,10 +74,8 @@ fn duplicate_updates_do_not_double_count() {
 
 #[test]
 fn trim_reduces_retained_below_target() {
-    // Note: the brief's illustrative code used `lg_k(4)`, but
-    // `theta_constants::MIN_LG_K == 5` (see `builder_rejects_lg_k_out_of_range`
-    // below), so `lg_k(4)` is rejected by the builder; using the minimum
-    // valid value `5` here instead.
+    // Uses `lg_k(5)` (not the minimum): `theta_constants::MIN_LG_K == 4`
+    // as of datasketches-cpp 5.3.0 (see `builder_rejects_lg_k_out_of_range`).
     let mut sketch = ThetaSketchBuilder::new().lg_k(5).build().unwrap();
     for i in 0..10_000u64 {
         sketch.update_u64(i);
@@ -193,8 +191,12 @@ fn wrapped_compact_query_parity_with_source() {
 
 #[test]
 fn builder_rejects_lg_k_out_of_range() {
-    // theta_constants::MIN_LG_K == 5, MAX_LG_K == 26.
-    assert!(ThetaSketchBuilder::new().lg_k(4).build().is_err());
+    // theta_constants::MIN_LG_K == 4 (5.3.0), MAX_LG_K == 26.
+    assert!(ThetaSketchBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ThetaSketchBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(ThetaSketchBuilder::new().lg_k(27).build().is_err());
     assert!(ThetaSketchBuilder::new().lg_k(5).build().is_ok());
     assert!(ThetaSketchBuilder::new().lg_k(26).build().is_ok());

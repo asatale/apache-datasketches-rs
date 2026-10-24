@@ -107,6 +107,7 @@ fn union_accepts_compact_input_and_resets() {
 
 #[test]
 fn invalid_config_returns_err() {
-    assert!(union_ffi::new_tuple_generic_union(4, 8, 1.0).is_err());
+    assert!(union_ffi::new_tuple_generic_union(4, 8, 1.0).is_ok());
+    assert!(union_ffi::new_tuple_generic_union(3, 8, 1.0).is_err());
     assert!(union_ffi::new_tuple_generic_union(12, 3, 1.0).is_err());
 }
