@@ -270,12 +270,14 @@ fn a_not_b_issue_152_large_size_mismatch() {
 // across languages because datasketches-java serializes every empty compact sketch with a seed
 // hash of 0.
 //
-// This crate exposes no seed API, so B is built by serializing an empty default-seed compact
-// sketch and hand-editing its seed-hash bytes (offset 6..8, little-endian) to
-// `compute_seed_hash(123)` = 0x05b6, which is what upstream's `set_seed(123)` empty sketch
-// carries. On 5.2.0 the seed-hash mismatch threw from inside `theta_a_not_b::compute`, which this
-// crate's bridge does not declare as `Result`-returning, so it aborted the whole process instead
-// of returning an error.
+// In 5.3.0 (and in Java) an empty compact sketch serializes seed hash 0, whatever its seed. In
+// 5.2.0 it serialized its real seed hash, and a-not-b compared B's seed hash against the default
+// seed hash. On a mismatch it threw from inside `theta_a_not_b::compute`, which this crate's
+// bridge does not declare as `Result`-returning, so the whole process aborted instead of
+// returning an error. This crate exposes no seed API, so the test serializes an empty
+// default-seed compact sketch and hand-edits its seed-hash bytes (offset 6..8, little-endian) to
+// an explicit foreign value, `compute_seed_hash(123)` = 0x05b6, to exercise that same path.
+// Verified: this aborts the process on 5.2.0 and passes on 5.3.0.
 #[test]
 fn a_not_b_empty_b_with_different_seed_is_ignored() {
     use apache_datasketches::theta::{CompactThetaSketch, WrappedCompactThetaSketch};

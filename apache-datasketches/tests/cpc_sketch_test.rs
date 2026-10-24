@@ -24,8 +24,10 @@
 //!   on `serialize()`, which this crate doesn't expose (PostgreSQL
 //!   extension-specific, no use case here).
 //!
-//! Plus two 5.3.0 security regression tests (CVE-2026-103513) ported at the end of this file
-//! from tag 5.3.0: `deserialize_corrupt_num_coupons` and `deserialize_corrupt_lg_k`.
+//! Plus two 5.3.0 corrupt-input regression tests ported at the end of this file from tag 5.3.0:
+//! `deserialize_corrupt_num_coupons` and `deserialize_corrupt_lg_k`. They come from upstream's
+//! CVE-2026-103513 fix but do not discriminate 5.2.0 from 5.3.0 through the safe API (see the
+//! comments on each test).
 use apache_datasketches::cpc::{get_max_serialized_size_bytes, CpcSketch, CpcSketchBuilder};
 
 const RELATIVE_ERROR_FOR_LG_K_11: f64 = 0.02;
@@ -254,11 +256,13 @@ fn max_serialized_size() {
 
 // Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
 // TEST_CASE("cpc sketch: deserialize corrupt num_coupons") at tag 5.3.0.
-// Guards the fix for CVE-2026-103513: a sparse image whose num_coupons field (bytes 8..12) is
-// larger than the compressed table holds, or larger than the k x 64 bit matrix can hold, must be
-// rejected rather than read out of bounds. Upstream distinguishes `std::out_of_range` from
-// `std::invalid_argument`; the safe API maps every deserialize failure to
-// `SketchError::Deserialization`, so both sub-cases assert that variant.
+// Regression/parity test from upstream's CVE-2026-103513 fix: a sparse image whose num_coupons
+// field (bytes 8..12) is larger than the compressed table holds, or larger than the k x 64 bit
+// matrix can hold, must be rejected. Through the safe API this test does NOT discriminate the
+// fix: 5.2.0 also rejected both inputs, as `std::logic_error`, which the safe layer maps to
+// `SketchError::Deserialization` just like 5.3.0's `std::out_of_range`/`std::invalid_argument`.
+// In the "more pairs" case 5.2.0 read past the compressed buffer before throwing; that over-read
+// is detectable only under a sanitizer (e.g. ASan), not by this assertion.
 #[test]
 fn deserialize_corrupt_num_coupons() {
     use apache_datasketches::SketchError;
@@ -292,8 +296,12 @@ fn deserialize_corrupt_num_coupons() {
 
 // Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
 // TEST_CASE("cpc sketch: deserialize corrupt lg_k") at tag 5.3.0.
-// Guards the fix for CVE-2026-103513: an lg_k byte (offset 3) outside the valid range must be
-// rejected at deserialization. The stream half of each iteration is not ported (no stream API).
+// Regression/parity test from upstream's CVE-2026-103513 fix: an lg_k byte (offset 3) outside
+// the valid range must be rejected at deserialization. Through the safe API this test does NOT
+// discriminate the fix: 5.2.0 also rejected every one of these inputs (as `std::logic_error`,
+// which the safe layer maps to `SketchError::Deserialization` too), so a regression would show
+// only as a crash or under a sanitizer. The stream half of each iteration is not ported (no
+// stream API).
 #[test]
 fn deserialize_corrupt_lg_k() {
     use apache_datasketches::SketchError;
