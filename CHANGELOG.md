@@ -144,8 +144,10 @@ fact — this file was introduced during 0.2.1.
   already-understood cost — rather than because the string path itself hides
   a distinct third cost.
 
-The remaining Changed entries come from the 5.3.0 upgrade: the C++ change
-ships in `apache-datasketches-sys`, and `apache-datasketches` exposes it.
+#### From the datasketches-cpp 5.3.0 upgrade
+
+The C++ change ships in `apache-datasketches-sys`, and
+`apache-datasketches` exposes it.
 
 - Theta and Tuple sketches now accept `lg_k = 4` (the minimum was 5),
   matching Java.

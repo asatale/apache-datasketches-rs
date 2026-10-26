@@ -32,13 +32,13 @@ namespace apache_datasketches_rs {
 // throws only on a seed-hash mismatch (theta_set_difference_base_impl.hpp:41
 // for A, :44 for a non-empty B), and no generic-Tuple API exposes a seed --
 // every sketch and set op in this family is built with
-// datasketches::DEFAULT_SEED. The only other source of a sketch is
-// deserialization, and upstream compact_tuple_sketch::deserialize rejects a
-// foreign seed hash on every non-empty image (tuple_sketch_impl.hpp:559), so
-// the mismatch is unreachable. ArrayOfDoubles relies on the same argument,
-// but its upstream deserialize checks the seed hash only for images with
-// entries, so array_of_doubles_compact_shim.cc validates it before upstream
-// does (validate_aod_seed_hash).
+// datasketches::DEFAULT_SEED, and no generic-Tuple deserialize is exposed, so
+// the mismatch is unreachable. (Were one added, upstream
+// compact_tuple_sketch::deserialize rejects a foreign seed hash on every
+// non-empty image, tuple_sketch_impl.hpp:559.) ArrayOfDoubles does expose
+// deserialize, and its upstream deserialize checks the seed hash only for
+// images with entries, so array_of_doubles_compact_shim.cc validates it before
+// upstream does (validate_aod_seed_hash).
 class TupleGenericAnotBShim {
 public:
   TupleGenericAnotBShim();
