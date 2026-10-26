@@ -1,7 +1,8 @@
 // apache-datasketches/tests/theta_sketch_test.rs
 //! Ported from theta/test/theta_sketch_test.cpp (tag 5.3.0).
 //!
-//! Upstream has 22 `TEST_CASE`s. 8 of them ("deserialize compact v1/v2
+//! Upstream has 33 `TEST_CASE`s at tag 5.3.0: 22 pre-5.3.0 ones and 11 added
+//! in 5.3.0. Of the 22 pre-5.3.0 cases, 8 ("deserialize compact v1/v2
 //! empty/estimation from java" and "wrap compact v1/v2 empty/estimation
 //! from java") round-trip fixture files (`theta_compact_*_from_java_v{1,2}.sk`)
 //! that do not exist in this repository and are not introduced by this
@@ -33,13 +34,16 @@
 //!     must be in `(0.0, 1.0]`), which upstream's `theta_sketch_test.cpp` does not exercise directly but
 //!     which is reachable and worth covering through this crate's public builder API.
 //!
-//! Plus three 5.3.0 security regression tests (CVE-2026-103635) ported at the end of this file
-//! from tag 5.3.0: `deserialize_truncated_preamble`, `deserialize_v4_corrupt_header` and
-//! `deserialize_v4_entry_bits_overflow`.
+//! Of the 11 cases added in 5.3.0, these are ported at the end of this file:
+//!   - three security regression tests (CVE-2026-103635): `deserialize_truncated_preamble`,
+//!     `deserialize_v4_corrupt_header` and `deserialize_v4_entry_bits_overflow`;
+//!   - "empty serialized image", "single item serialized image" and "one entry in estimation mode
+//!     is not a single item" as `empty_serialized_image`, `single_item_serialized_image` and
+//!     `one_entry_in_estimation_mode_is_not_a_single_item` (with the default seed, since this
+//!     crate exposes none).
 //!
-//! Not ported from the other 5.3.0 additions: "empty serialized image", "single item serialized
-//! image", "one entry in estimation mode is not a single item" and the four "compact with trim"
-//! cases. ("min lg_k" is covered by `builder_rejects_lg_k_out_of_range`.)
+//! "min lg_k" is covered by `builder_rejects_lg_k_out_of_range`. Not ported: the four "compact
+//! with trim" cases.
 use apache_datasketches::theta::{
     CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch,
 };
@@ -377,4 +381,65 @@ fn deserialize_v4_entry_bits_overflow() {
         CompactThetaSketch::deserialize_compressed(&bytes),
         Err(apache_datasketches::SketchError::Deserialization(_))
     ));
+}
+
+// Ported from TEST_CASE("theta sketch: empty serialized image") at tag 5.3.0. Upstream builds the
+// sketch with a non-default seed to prove the seed hash is not written; this crate has no seed
+// API, but the default seed's hash (0x93cc) is non-zero too, so the zero bytes at 6..8 prove the
+// same thing. There is no compressed form of an empty sketch.
+#[test]
+fn empty_serialized_image() {
+    let sketch = ThetaSketchBuilder::new().build().unwrap().compact(true);
+    let expected: Vec<u8> = vec![1, 3, 3, 0, 0, 0x1E, 0, 0];
+    assert_eq!(sketch.serialize_compact(), expected);
+    assert_eq!(sketch.serialize_compressed(), expected);
+}
+
+// Ported from TEST_CASE("theta sketch: single item serialized image") at tag 5.3.0, with the
+// default seed (hash 0x93cc) in place of upstream's 12345. This crate does not expose retained
+// hashes, so the one hash is taken from the image and checked by re-serializing.
+#[test]
+fn single_item_serialized_image() {
+    const DEFAULT_SEED_HASH: u16 = 0x93cc; // compute_seed_hash(DEFAULT_SEED = 9001)
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    update_sketch.update_u64(1);
+    let sketch = update_sketch.compact(true);
+    let bytes = sketch.serialize_compact();
+
+    // flags: single item | ordered | compact | read-only, then seed hash and the one hash,
+    // little-endian
+    let mut expected: Vec<u8> = vec![1, 3, 3, 0, 0, 0x3A];
+    expected.extend_from_slice(&DEFAULT_SEED_HASH.to_le_bytes());
+    assert_eq!(bytes.len(), 16);
+    assert_eq!(&bytes[..8], &expected[..]);
+    expected.extend_from_slice(&bytes[8..16]);
+    assert_eq!(sketch.serialize_compressed(), expected); // no compressed form of a single item
+
+    // the single item flag is informational: the reader does not depend on it
+    let deserialized = CompactThetaSketch::deserialize(&expected).unwrap();
+    assert_eq!(deserialized.get_num_retained(), 1);
+    assert_eq!(deserialized.serialize_compact(), expected);
+    expected[5] = 0x1A; // as written before this flag existed
+    let deserialized = CompactThetaSketch::deserialize(&expected).unwrap();
+    assert_eq!(deserialized.get_num_retained(), 1);
+    expected[5] = 0x3A; // re-serialized with the flag
+    assert_eq!(deserialized.serialize_compact(), expected);
+}
+
+// Ported from TEST_CASE("theta sketch: one entry in estimation mode is not a single item") at
+// tag 5.3.0.
+#[test]
+fn one_entry_in_estimation_mode_is_not_a_single_item() {
+    let mut update_sketch = ThetaSketchBuilder::new().p(0.5).build().unwrap();
+    let mut i = 0u64;
+    while update_sketch.get_num_retained() < 1 {
+        update_sketch.update_u64(i);
+        i += 1;
+    }
+    let sketch = update_sketch.compact(true);
+    assert_eq!(sketch.get_num_retained(), 1);
+    assert!(sketch.is_estimation_mode());
+    let bytes = sketch.serialize_compact();
+    assert_eq!(bytes[0], 3); // theta is present, so this is the 3-long preamble
+    assert_eq!(bytes[5], 0x1A); // ordered | compact | read-only, no single item flag
 }

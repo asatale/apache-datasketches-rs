@@ -1,7 +1,7 @@
 // apache-datasketches/tests/theta_setop_test.rs
-//! Ported from theta/test/theta_setop_test.cpp (tag 5.2.0; unchanged in 5.3.0): the 4x4 = 16
-//! pairwise combinations of {Empty, Exact, Estimation, Degenerate} sketch
-//! states run through union/intersection/a-not-b.
+//! Ported from theta/test/theta_setop_test.cpp (tag 5.2.0; unchanged in
+//! 5.3.0): the 4x4 = 16 pairwise combinations of {Empty, Exact, Estimation,
+//! Degenerate} sketch states run through union/intersection/a-not-b.
 use apache_datasketches::theta::{
     ResizeFactor, ThetaAnotB, ThetaIntersection, ThetaSketch, ThetaSketchBuilder, ThetaUnionBuilder,
 };

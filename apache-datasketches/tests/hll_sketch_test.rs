@@ -1,7 +1,8 @@
 // apache-datasketches/tests/hll_sketch_test.rs
 //
-// Ports the 5.2.0 tests of vendor/datasketches-cpp/hll/test/HllSketchTest.cpp (tag 5.2.0; only comment typos differ in 5.3.0) 1:1,
-// plus one 5.3.0 case. Test names and order mirror the upstream Catch2 TEST_CASE list
+// Ports the 5.2.0 tests of vendor/datasketches-cpp/hll/test/HllSketchTest.cpp
+// (tag 5.2.0; only comment typos differ in 5.3.0) 1:1, plus one 5.3.0 case.
+// Test names and order mirror the upstream Catch2 TEST_CASE list
 // ([hll_sketch] tag). The 5.3.0 case is a security regression test (CVE-2026-103501) ported
 // at the end of this file from CouponListTest.cpp at tag 5.3.0:
 // `hll_sketch_deserialize_rejects_malformed_coupon_count`.

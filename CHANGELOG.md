@@ -143,23 +143,45 @@ fact — this file was introduced during 0.2.1.
   because its `hot` baseline already runs above the pack — an ordinary,
   already-understood cost — rather than because the string path itself hides
   a distinct third cost.
+
+The remaining Changed entries come from the 5.3.0 upgrade: the C++ change
+ships in `apache-datasketches-sys`, and `apache-datasketches` exposes it.
+
 - Theta and Tuple sketches now accept `lg_k = 4` (the minimum was 5),
   matching Java.
-- HLL union estimates and serialized union bytes can differ slightly from
-  builds on 5.2.0: upstream repaired a merge-order dependence and made the
-  composite estimator Java-bit-exact. HLL flag bit 0x20 is no longer written
-  or read.
+- HLL estimates and bounds can differ slightly from builds on 5.2.0.
+  Upstream now uses full-precision RSE constants, so the bounds of any HLL
+  sketch can shift in the last digits. The composite estimator now uses an
+  fdlibm `log` (Java-bit-exact), which changes the composite estimate of any
+  out-of-order sketch, not only of unions. Upstream also repaired a
+  merge-order dependence in union, so union estimates and serialized union
+  bytes can differ too. HLL flag bit 0x20 is no longer written or read.
 - Compact Theta sketches holding exactly one item now set the single-item
   flag (matching Java), and empty compact Theta/Tuple sketches serialize a
   seed hash of 0. Old and new bytes deserialize either way.
 - Theta bounds on crafted bytes with `theta = 0` now return an error
-  instead of infinity/NaN; Theta a-not-b with an empty B carrying a foreign
-  seed hash no longer aborts the process.
-- `ReqSketch::a_priori_rank_error` is unchanged in value; it now calls
-  upstream's `get_RSE` directly, which 5.3.0 fixed.
+  instead of infinity/NaN. A-not-b with an empty B carrying a foreign seed
+  hash, Theta and ArrayOfDoubles alike, no longer aborts the process: upstream
+  now ignores an empty B's seed hash.
+- `ReqSketch::a_priori_rank_error` (`apache-datasketches`) is unchanged in
+  value; it now calls upstream's `get_RSE` directly, which 5.3.0 fixed.
 
 ### Security
-- **Upgraded the vendored Apache DataSketches C++ from 5.2.0 to 5.3.0**,
+- **`apache-datasketches-sys`: ArrayOfDoubles deserialize now rejects a
+  non-empty image with a foreign seed hash.** Upstream checks the seed hash
+  only for images that retain entries, so crafted bytes flagged non-empty
+  but with zero entries (theta < 1) and another seed's hash deserialized
+  successfully through `CompactArrayOfDoublesSketch::deserialize`. Passing
+  the result to `ArrayOfDoublesAnotB::compute` (as A),
+  `ArrayOfDoublesUnion::update`, `ArrayOfDoublesIntersection::update` or
+  `array_of_doubles_jaccard_similarity` then threw from inside upstream and
+  aborted the process. This crate never uses a seed other than the default,
+  so the shim now validates the seed hash of every non-empty image before
+  upstream sees it, and `deserialize` returns
+  `SketchError::Deserialization`. Empty images are still accepted whatever
+  their seed hash. Regression tests pin both.
+- **Upgraded the vendored Apache DataSketches C++ from 5.2.0 to 5.3.0**
+  (`apache-datasketches-sys`),
   which fixes deserialization vulnerabilities reachable through this crate's
   safe `deserialize`/`wrap` APIs on untrusted bytes:
   [CVE-2026-103501](https://www.cve.org/CVERecord?id=CVE-2026-103501)

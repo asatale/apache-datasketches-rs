@@ -92,8 +92,9 @@ impl<T: ReqItem> ReqSketch<T> {
     /// [`RankAccuracy::High`].
     ///
     /// Upstream documents `k` up to 1024, but its 5.2.0 and 5.3.0 constructor
-    /// truncates `k` to 8 bits, so a larger `k` would silently become a different one
-    /// (256 becomes 4, 300 becomes 44); this crate rejects it instead.
+    /// truncates `k` to 8 bits, so a larger `k` would silently become a
+    /// different one (256 becomes 4, 300 becomes 44); this crate rejects it
+    /// instead.
     /// Non-empty sketches deserialized from bytes may carry `k` up to 1024.
     pub fn new(k: u16, accuracy: RankAccuracy) -> Result<Self, SketchError> {
         check_k(k)?;

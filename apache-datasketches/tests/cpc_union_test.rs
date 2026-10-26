@@ -1,6 +1,6 @@
 // apache-datasketches/tests/cpc_union_test.rs
-//! Ported from cpc/test/cpc_union_test.cpp (tag 5.2.0; unchanged in 5.3.0). 6 of 9 upstream
-//! cases ported; 3 excluded:
+//! Ported from cpc/test/cpc_union_test.cpp (tag 5.2.0; unchanged in 5.3.0).
+//! 6 of 9 upstream cases ported; 3 excluded:
 //! - "copy" — tests C++ copy-constructor/assignment semantics; this
 //!   crate's `CpcUnion` doesn't implement `Clone`.
 //! - "custom seed" — no seed parameter is exposed in this crate's public
