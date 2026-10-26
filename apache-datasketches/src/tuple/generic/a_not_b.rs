@@ -51,7 +51,8 @@ impl<S: TupleSummary> TupleAnotB<S> {
     ///
     /// Infallible: upstream throws only on a seed-hash mismatch, and this
     /// family never exposes a seed — every sketch here is built with the
-    /// default one.
+    /// default one, and deserialization rejects a non-empty sketch carrying
+    /// any other seed hash.
     pub fn compute(
         &self,
         a: &impl TupleInput<S>,
