@@ -16,7 +16,7 @@ namespace apache_datasketches_rs {
 // Unlike those two, a-not-b has NO policy: datasketches::tuple_a_not_b is
 // templated on <Summary, Allocator> only (tuple_a_not_b.hpp:29-33), and
 // theta_set_difference_base::compute never invokes a callback
-// (theta_set_difference_base_impl.hpp:39-82) -- retained entries are
+// (theta_set_difference_base_impl.hpp:39-84) -- retained entries are
 // copy-constructed straight out of A. That is why the constructor below is a
 // bare `a_not_b_()` rather than intersection's
 // `(DEFAULT_SEED, DynIntersectionPolicy())`; it matches
@@ -29,10 +29,16 @@ namespace apache_datasketches_rs {
 // asymmetric fixture.
 //
 // The compute_* methods are declared non-Result on the bridge side. compute()
-// throws only on a seed-hash mismatch (theta_set_difference_base_impl.hpp:
-// 41-42), and no generic-Tuple API exposes a seed -- every sketch and set op
-// in this family is built with datasketches::DEFAULT_SEED -- so the mismatch
-// is unreachable. Same reasoning as array_of_doubles_a_not_b_shim.h.
+// throws only on a seed-hash mismatch (theta_set_difference_base_impl.hpp:41
+// for A, :44 for a non-empty B), and no generic-Tuple API exposes a seed --
+// every sketch and set op in this family is built with
+// datasketches::DEFAULT_SEED, and no generic-Tuple deserialize is exposed, so
+// the mismatch is unreachable. (Were one added, upstream
+// compact_tuple_sketch::deserialize rejects a foreign seed hash on every
+// non-empty image, tuple_sketch_impl.hpp:559.) ArrayOfDoubles does expose
+// deserialize, and its upstream deserialize checks the seed hash only for
+// images with entries, so array_of_doubles_compact_shim.cc validates it before
+// upstream does (validate_aod_seed_hash).
 class TupleGenericAnotBShim {
 public:
   TupleGenericAnotBShim();

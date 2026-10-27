@@ -123,7 +123,7 @@ cargo run -p apache-datasketches --example req --features req
 
 ## Vendored C++ version
 
-`vendor/datasketches-cpp` is pinned to tag `5.2.0`.
+`vendor/datasketches-cpp` is pinned to tag `5.3.0`.
 
 ## License
 

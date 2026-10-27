@@ -1,5 +1,5 @@
 // apache-datasketches/tests/theta_a_not_b_test.rs
-//! Ported from theta/test/theta_a_not_b_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_a_not_b_test.cpp (tag 5.3.0).
 //!
 //! Upstream has 11 `TEST_CASE`s: "empty", "non empty no retained keys",
 //! "exact mode half overlap", "exact mode disjoint", "exact mode full
@@ -36,6 +36,10 @@
 //! `ThetaSketch`/`CompactThetaSketch`/`WrappedCompactThetaSketch` beyond the
 //! wrapped-compact case above is already exhaustively covered by that same
 //! dispatch test.
+//!
+//! Plus `a_not_b_empty_b_with_different_seed_is_ignored`, ported from tag 5.3.0 at the end of
+//! this file; it reaches the seed-hash path without a seed API by hand-editing the seed-hash
+//! bytes of an empty compact image.
 use apache_datasketches::theta::{ThetaAnotB, ThetaSketchBuilder};
 
 #[test]
@@ -256,4 +260,61 @@ fn a_not_b_issue_152_large_size_mismatch() {
     assert!(!result.is_empty());
     assert!(result.is_estimation_mode());
     assert!((result.get_estimate() - 5_000.0).abs() < 5_000.0 * 0.03);
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_a_not_b_test.cpp,
+// TEST_CASE("theta a-not-b: empty B with different seed must be ignored") at tag 5.3.0.
+//
+// An empty sketch carries no hashes, so its seed hash is meaningless; a-not-b must skip the seed
+// hash check for an empty B, as deserialization, union and intersection already do. This matters
+// across languages because datasketches-java serializes every empty compact sketch with a seed
+// hash of 0.
+//
+// In 5.3.0 (and in Java) an empty compact sketch serializes seed hash 0, whatever its seed. In
+// 5.2.0 it serialized its real seed hash, and a-not-b compared B's seed hash against the default
+// seed hash. On a mismatch it threw from inside `theta_a_not_b::compute`, which this crate's
+// bridge does not declare as `Result`-returning, so the whole process aborted instead of
+// returning an error. This crate exposes no seed API, so the test serializes an empty
+// default-seed compact sketch and hand-edits its seed-hash bytes (offset 6..8, little-endian) to
+// an explicit foreign value, `compute_seed_hash(123)` = 0x05b6, to exercise that same path.
+// Verified: this aborts the process on 5.2.0 and passes on 5.3.0.
+#[test]
+fn a_not_b_empty_b_with_different_seed_is_ignored() {
+    use apache_datasketches::theta::{CompactThetaSketch, WrappedCompactThetaSketch};
+
+    // A: non-empty, but with zero retained entries (all hashes exceeded theta)
+    let mut a = ThetaSketchBuilder::new().p(1e-6).build().unwrap();
+    a.update_u64(1);
+    assert!(!a.is_empty());
+    assert_eq!(a.get_num_retained(), 0);
+    let a = a.compact(true);
+
+    // B: empty, carrying the seed hash of a different seed (123)
+    let mut b_bytes = ThetaSketchBuilder::new()
+        .build()
+        .unwrap()
+        .compact(true)
+        .serialize_compact();
+    assert_eq!(
+        b_bytes.len(),
+        8,
+        "empty compact image is a single preamble long"
+    );
+    b_bytes[6..8].copy_from_slice(&0x05b6u16.to_le_bytes());
+    let b = CompactThetaSketch::deserialize(&b_bytes).unwrap();
+    assert!(b.is_empty());
+
+    let a_not_b = ThetaAnotB::new(); // default seed
+    let result = a_not_b.compute(&a, &b, true);
+    assert!(!result.is_empty());
+    assert_eq!(result.get_num_retained(), 0);
+    assert_eq!(result.get_estimate(), a.get_estimate());
+
+    // Same check with B wrapped rather than deserialized.
+    let b_wrapped = WrappedCompactThetaSketch::wrap(&b_bytes).unwrap();
+    assert!(b_wrapped.is_empty());
+    let result = a_not_b.compute(&a, &b_wrapped, true);
+    assert!(!result.is_empty());
+    assert_eq!(result.get_num_retained(), 0);
+    assert_eq!(result.get_estimate(), a.get_estimate());
 }

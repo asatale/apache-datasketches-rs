@@ -1,5 +1,5 @@
 // apache-datasketches/tests/theta_intersection_test.rs
-//! Ported from theta/test/theta_intersection_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_intersection_test.cpp (tag 5.2.0; unchanged in 5.3.0).
 //!
 //! Upstream has 13 `TEST_CASE`s: "invalid", "empty", "non empty no retained
 //! keys", "exact mode half overlap unordered", "exact mode half overlap

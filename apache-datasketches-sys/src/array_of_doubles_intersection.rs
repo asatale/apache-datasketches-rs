@@ -1,3 +1,11 @@
+//! The `update_*` methods are not declared `Result`: upstream throws from them only on
+//! a seed-hash mismatch, and no ArrayOfDoubles API exposes a seed, so every
+//! sketch built here carries `DEFAULT_SEED`'s hash. Upstream's deserialize
+//! checks the seed hash only for images that have entries, so
+//! `compact_array_of_doubles_sketch_deserialize` rejects any other non-empty
+//! image with a foreign seed hash before upstream sees it
+//! (`validate_aod_seed_hash` in `cpp/tuple/array_of_doubles_compact_shim.cc`).
+
 #[cxx::bridge(namespace = "apache_datasketches_rs")]
 pub mod ffi {
     unsafe extern "C++" {

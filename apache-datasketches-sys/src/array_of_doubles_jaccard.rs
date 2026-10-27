@@ -1,3 +1,9 @@
+//! The `tuple_jaccard_*` functions are not declared `Result`: Jaccard runs a
+//! union and an intersection internally, which throw only on a seed-hash
+//! mismatch, and no ArrayOfDoubles API exposes a seed. A deserialized image
+//! with a foreign seed hash is rejected before upstream sees it; see
+//! [`crate::array_of_doubles_union`].
+
 #[cxx::bridge(namespace = "apache_datasketches_rs")]
 pub mod ffi {
     /// Named `TupleJaccardBoundsFfi` rather than `JaccardBoundsFfi` because

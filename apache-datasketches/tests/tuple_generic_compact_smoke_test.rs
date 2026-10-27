@@ -88,7 +88,7 @@ fn empty_sketch_compacts_to_empty() {
 ///
 /// ESTIMATION mode is required for the ordering to have any signal at all —
 /// `base_theta_sketch::get_lower_bound`/`get_upper_bound`
-/// (`theta/include/theta_sketch_impl.hpp:52,58`) short-circuit with
+/// (`theta/include/theta_sketch_impl.hpp:53,59`) short-circuit with
 /// `if (!is_estimation_mode()) return get_num_retained();`, so in exact mode
 /// `lower == estimate == upper` and a transposed pair still compares equal.
 /// Hence the strict inequalities and the monotonicity checks.

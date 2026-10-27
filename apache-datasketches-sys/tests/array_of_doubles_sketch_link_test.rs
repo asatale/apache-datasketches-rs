@@ -20,6 +20,8 @@ fn construct_update_estimate() {
 #[test]
 fn invalid_lg_k_returns_err() {
     let result = ffi::new_array_of_doubles_sketch(4, ffi::TupleResizeFactor::X8, 1.0, 1);
+    assert!(result.is_ok());
+    let result = ffi::new_array_of_doubles_sketch(3, ffi::TupleResizeFactor::X8, 1.0, 1);
     assert!(result.is_err());
 }
 

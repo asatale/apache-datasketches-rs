@@ -268,7 +268,7 @@ void validate_kll_layout(const uint8_t* data, size_t size) {
   if (n == 0) throw std::invalid_argument("KLL sketch is flagged non-empty but has n = 0");
   // kll_helper::ub_on_num_levels(n) never returns for n >= 2^63 (the
   // doubling in floor_of_log2_of_fraction wraps to 0), and upstream merge
-  // calls it on the merged n (kll_sketch_impl.hpp:779). No real stream gets
+  // calls it on the merged n (kll_sketch_impl.hpp:788). No real stream gets
   // there, so refuse such sketches outright; the safe merge guards the sum.
   if (n >= (uint64_t(1) << 63)) {
     throw std::invalid_argument("KLL sketch n = " + std::to_string(n) + " is not below 2^63");

@@ -1,7 +1,8 @@
 // apache-datasketches/tests/theta_sketch_test.rs
-//! Ported from theta/test/theta_sketch_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_sketch_test.cpp (tag 5.3.0).
 //!
-//! Upstream has 22 `TEST_CASE`s. 8 of them ("deserialize compact v1/v2
+//! Upstream has 33 `TEST_CASE`s at tag 5.3.0: 22 pre-5.3.0 ones and 11 added
+//! in 5.3.0. Of the 22 pre-5.3.0 cases, 8 ("deserialize compact v1/v2
 //! empty/estimation from java" and "wrap compact v1/v2 empty/estimation
 //! from java") round-trip fixture files (`theta_compact_*_from_java_v{1,2}.sk`)
 //! that do not exist in this repository and are not introduced by this
@@ -29,9 +30,20 @@
 //!     never exposes a seed parameter (every sketch always uses upstream's `DEFAULT_SEED`).
 //!   - `builder_rejects_lg_k_out_of_range` and `builder_rejects_p_out_of_range` are API-surface-driven
 //!     additions covering `theta_base_builder::set_lg_k`/`set_p`'s validation
-//!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[5, 26]`, `p`
+//!     (`theta_update_sketch_base_impl.hpp`: `lg_k` must be in `[MIN_LG_K, MAX_LG_K]` = `[4, 26]`, `p`
 //!     must be in `(0.0, 1.0]`), which upstream's `theta_sketch_test.cpp` does not exercise directly but
 //!     which is reachable and worth covering through this crate's public builder API.
+//!
+//! Of the 11 cases added in 5.3.0, these are ported at the end of this file:
+//!   - three security regression tests (CVE-2026-103635): `deserialize_truncated_preamble`,
+//!     `deserialize_v4_corrupt_header` and `deserialize_v4_entry_bits_overflow`;
+//!   - "empty serialized image", "single item serialized image" and "one entry in estimation mode
+//!     is not a single item" as `empty_serialized_image`, `single_item_serialized_image` and
+//!     `one_entry_in_estimation_mode_is_not_a_single_item` (with the default seed, since this
+//!     crate exposes none).
+//!
+//! "min lg_k" is covered by `builder_rejects_lg_k_out_of_range`. Not ported: the four "compact
+//! with trim" cases.
 use apache_datasketches::theta::{
     CompactThetaSketch, ThetaSketchBuilder, WrappedCompactThetaSketch,
 };
@@ -74,10 +86,8 @@ fn duplicate_updates_do_not_double_count() {
 
 #[test]
 fn trim_reduces_retained_below_target() {
-    // Note: the brief's illustrative code used `lg_k(4)`, but
-    // `theta_constants::MIN_LG_K == 5` (see `builder_rejects_lg_k_out_of_range`
-    // below), so `lg_k(4)` is rejected by the builder; using the minimum
-    // valid value `5` here instead.
+    // Uses `lg_k(5)` (not the minimum): `theta_constants::MIN_LG_K == 4`
+    // as of datasketches-cpp 5.3.0 (see `builder_rejects_lg_k_out_of_range`).
     let mut sketch = ThetaSketchBuilder::new().lg_k(5).build().unwrap();
     for i in 0..10_000u64 {
         sketch.update_u64(i);
@@ -193,8 +203,12 @@ fn wrapped_compact_query_parity_with_source() {
 
 #[test]
 fn builder_rejects_lg_k_out_of_range() {
-    // theta_constants::MIN_LG_K == 5, MAX_LG_K == 26.
-    assert!(ThetaSketchBuilder::new().lg_k(4).build().is_err());
+    // theta_constants::MIN_LG_K == 4 (5.3.0), MAX_LG_K == 26.
+    assert!(ThetaSketchBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ThetaSketchBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(ThetaSketchBuilder::new().lg_k(27).build().is_err());
     assert!(ThetaSketchBuilder::new().lg_k(5).build().is_ok());
     assert!(ThetaSketchBuilder::new().lg_k(26).build().is_ok());
@@ -206,4 +220,226 @@ fn builder_rejects_p_out_of_range() {
     assert!(ThetaSketchBuilder::new().p(0.0).build().is_err());
     assert!(ThetaSketchBuilder::new().p(1.5).build().is_err());
     assert!(ThetaSketchBuilder::new().p(1.0).build().is_ok());
+}
+
+/// `compute_seed_hash(DEFAULT_SEED)` (DEFAULT_SEED = 9001), as upstream computes it in
+/// `MurmurHash3.h`.
+const DEFAULT_SEED_HASH: u16 = 0x93cc;
+
+fn assert_deserialize_and_wrap_rejected(bytes: &[u8], what: &str) {
+    assert!(
+        matches!(
+            CompactThetaSketch::deserialize(bytes),
+            Err(apache_datasketches::SketchError::Deserialization(_))
+        ),
+        "deserialize accepted {what}"
+    );
+    assert!(
+        matches!(
+            WrappedCompactThetaSketch::wrap(bytes),
+            Err(apache_datasketches::SketchError::Deserialization(_))
+        ),
+        "wrap accepted {what}"
+    );
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize truncated preamble") at tag 5.3.0.
+// Guards the fix for CVE-2026-103635: compact images (serial versions 1, 2 and 3) cut off inside
+// the preamble they declare must be rejected by both `deserialize` and `wrap` instead of being
+// read past the end of the buffer. The images are hand-built exactly as upstream builds them.
+// Upstream expects `std::out_of_range`; the safe API maps it to `SketchError::Deserialization`.
+#[test]
+fn deserialize_truncated_preamble() {
+    let [seed_hash_lo, seed_hash_hi] = DEFAULT_SEED_HASH.to_le_bytes();
+    let max_theta: [u8; 8] = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
+
+    // serial version 1: three preamble longs, num_entries = 0 and theta = max would be empty
+    let mut v1: Vec<u8> = vec![3, 1, 3, 0, 0, 0x1a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    v1.extend_from_slice(&max_theta);
+    for size in [8, 16] {
+        assert_deserialize_and_wrap_rejected(&v1[..size], &format!("v1 truncated to {size}"));
+    }
+
+    // serial version 2: two preamble longs, num_entries = 0 would be empty
+    let v2_exact: Vec<u8> = vec![
+        2,
+        2,
+        3,
+        0,
+        0,
+        0x1a,
+        seed_hash_lo,
+        seed_hash_hi,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    assert_deserialize_and_wrap_rejected(&v2_exact[..8], "v2 exact truncated to 8");
+    assert!(CompactThetaSketch::deserialize(&v2_exact)
+        .unwrap()
+        .is_empty());
+
+    // serial version 2: three preamble longs, num_entries = 0 and theta = max would be empty
+    let mut v2_estimation: Vec<u8> = vec![
+        3,
+        2,
+        3,
+        0,
+        0,
+        0x1a,
+        seed_hash_lo,
+        seed_hash_hi,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    v2_estimation.extend_from_slice(&max_theta);
+    for size in [8, 16] {
+        assert_deserialize_and_wrap_rejected(
+            &v2_estimation[..size],
+            &format!("v2 estimation truncated to {size}"),
+        );
+    }
+    assert!(CompactThetaSketch::deserialize(&v2_estimation)
+        .unwrap()
+        .is_empty());
+
+    // serial version 3: two preamble longs, not empty
+    let v3: [u8; 8] = [2, 3, 3, 0, 0, 0x1a, seed_hash_lo, seed_hash_hi];
+    assert_deserialize_and_wrap_rejected(&v3, "v3 non-empty with only one preamble long");
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize v4 corrupt header") at tag 5.3.0.
+// Part of the CVE-2026-103635 compact-theta hardening: a v4 (compressed) image whose entry_bits
+// byte (offset 3) or num_entries_bytes byte (offset 4) is out of range must be rejected.
+// Upstream only exercises `compact_theta_sketch::deserialize` (bytes and stream), not `wrap`, so
+// only `deserialize_compressed` is asserted here; the stream half is not ported (no stream API).
+#[test]
+fn deserialize_v4_corrupt_header() {
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    for i in 0..100i64 {
+        update_sketch.update_i64(i);
+    }
+    let bytes = update_sketch.compact(true).serialize_compressed();
+    assert_eq!(bytes[1], 4);
+    for entry_bits in [0u8, 64, 255] {
+        let mut corrupt = bytes.clone();
+        corrupt[3] = entry_bits;
+        assert!(
+            matches!(
+                CompactThetaSketch::deserialize_compressed(&corrupt),
+                Err(apache_datasketches::SketchError::Deserialization(_))
+            ),
+            "entry_bits = {entry_bits} was not rejected"
+        );
+    }
+    for num_entries_bytes in [0u8, 5, 255] {
+        let mut corrupt = bytes.clone();
+        corrupt[4] = num_entries_bytes;
+        assert!(
+            matches!(
+                CompactThetaSketch::deserialize_compressed(&corrupt),
+                Err(apache_datasketches::SketchError::Deserialization(_))
+            ),
+            "num_entries_bytes = {num_entries_bytes} was not rejected"
+        );
+    }
+}
+
+// Ported from vendor/datasketches-cpp/theta/test/theta_sketch_test.cpp,
+// TEST_CASE("theta sketch: deserialize v4 entry bits overflow") at tag 5.3.0.
+// Part of the CVE-2026-103635 compact-theta hardening: 8 bits * 2^29 entries = 2^32 bits wraps
+// to 0 in 32-bit arithmetic, so a 12-byte v4 image claiming 2^29 entries used to pass the size
+// check. It must be rejected. Upstream expects `std::out_of_range`; the safe API maps it to
+// `SketchError::Deserialization`.
+#[test]
+fn deserialize_v4_entry_bits_overflow() {
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    for i in 0..100i64 {
+        update_sketch.update_i64(i);
+    }
+    let mut bytes = update_sketch.compact(true).serialize_compressed();
+    assert_eq!(bytes[0], 1); // exact mode, num_entries follows the first preamble long
+    bytes.resize(12, 0);
+    bytes[3] = 8;
+    bytes[4] = 4;
+    let num_entries: u32 = 1 << 29;
+    bytes[8..12].copy_from_slice(&num_entries.to_le_bytes());
+    assert!(matches!(
+        CompactThetaSketch::deserialize_compressed(&bytes),
+        Err(apache_datasketches::SketchError::Deserialization(_))
+    ));
+}
+
+// Ported from TEST_CASE("theta sketch: empty serialized image") at tag 5.3.0. Upstream builds the
+// sketch with a non-default seed to prove the seed hash is not written; this crate has no seed
+// API, but the default seed's hash (0x93cc) is non-zero too, so the zero bytes at 6..8 prove the
+// same thing. There is no compressed form of an empty sketch.
+#[test]
+fn empty_serialized_image() {
+    let sketch = ThetaSketchBuilder::new().build().unwrap().compact(true);
+    let expected: Vec<u8> = vec![1, 3, 3, 0, 0, 0x1E, 0, 0];
+    assert_eq!(sketch.serialize_compact(), expected);
+    assert_eq!(sketch.serialize_compressed(), expected);
+}
+
+// Ported from TEST_CASE("theta sketch: single item serialized image") at tag 5.3.0, with the
+// default seed (hash 0x93cc) in place of upstream's 12345. This crate does not expose retained
+// hashes, so the one hash is taken from the image and checked by re-serializing.
+#[test]
+fn single_item_serialized_image() {
+    const DEFAULT_SEED_HASH: u16 = 0x93cc; // compute_seed_hash(DEFAULT_SEED = 9001)
+    let mut update_sketch = ThetaSketchBuilder::new().build().unwrap();
+    update_sketch.update_u64(1);
+    let sketch = update_sketch.compact(true);
+    let bytes = sketch.serialize_compact();
+
+    // flags: single item | ordered | compact | read-only, then seed hash and the one hash,
+    // little-endian
+    let mut expected: Vec<u8> = vec![1, 3, 3, 0, 0, 0x3A];
+    expected.extend_from_slice(&DEFAULT_SEED_HASH.to_le_bytes());
+    assert_eq!(bytes.len(), 16);
+    assert_eq!(&bytes[..8], &expected[..]);
+    expected.extend_from_slice(&bytes[8..16]);
+    assert_eq!(sketch.serialize_compressed(), expected); // no compressed form of a single item
+
+    // the single item flag is informational: the reader does not depend on it
+    let deserialized = CompactThetaSketch::deserialize(&expected).unwrap();
+    assert_eq!(deserialized.get_num_retained(), 1);
+    assert_eq!(deserialized.serialize_compact(), expected);
+    expected[5] = 0x1A; // as written before this flag existed
+    let deserialized = CompactThetaSketch::deserialize(&expected).unwrap();
+    assert_eq!(deserialized.get_num_retained(), 1);
+    expected[5] = 0x3A; // re-serialized with the flag
+    assert_eq!(deserialized.serialize_compact(), expected);
+}
+
+// Ported from TEST_CASE("theta sketch: one entry in estimation mode is not a single item") at
+// tag 5.3.0.
+#[test]
+fn one_entry_in_estimation_mode_is_not_a_single_item() {
+    let mut update_sketch = ThetaSketchBuilder::new().p(0.5).build().unwrap();
+    let mut i = 0u64;
+    while update_sketch.get_num_retained() < 1 {
+        update_sketch.update_u64(i);
+        i += 1;
+    }
+    let sketch = update_sketch.compact(true);
+    assert_eq!(sketch.get_num_retained(), 1);
+    assert!(sketch.is_estimation_mode());
+    let bytes = sketch.serialize_compact();
+    assert_eq!(bytes[0], 3); // theta is present, so this is the 3-long preamble
+    assert_eq!(bytes[5], 0x1A); // ordered | compact | read-only, no single item flag
 }

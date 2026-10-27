@@ -88,7 +88,11 @@ fn mismatched_num_values_is_err() {
 
 #[test]
 fn invalid_config_is_err() {
-    assert!(ArrayOfDoublesUnionBuilder::new().lg_k(4).build().is_err());
+    assert!(ArrayOfDoublesUnionBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ArrayOfDoublesUnionBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(ArrayOfDoublesUnionBuilder::new()
         .num_values(0)
         .build()

@@ -10,8 +10,11 @@
 //! carry operand `a`'s summaries, copy-constructed.
 //!
 //! The `compute_*` methods are not declared `Result`: `compute` throws only on
-//! a seed-hash mismatch, and no generic-Tuple API exposes a seed. Same shape
-//! as [`crate::array_of_doubles_a_not_b`].
+//! a seed-hash mismatch, no generic-Tuple API exposes a seed, and upstream's
+//! deserialize rejects a foreign seed hash on every non-empty image. Same
+//! shape as [`crate::array_of_doubles_a_not_b`], whose deserialize shim adds
+//! that check itself because upstream's ArrayOfDoubles deserialize only
+//! checks images that have entries.
 
 #[cxx::bridge(namespace = "apache_datasketches_rs")]
 pub mod ffi {

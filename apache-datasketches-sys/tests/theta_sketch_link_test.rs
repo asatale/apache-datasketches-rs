@@ -15,6 +15,8 @@ fn construct_update_estimate_roundtrip() {
 #[test]
 fn invalid_lg_k_returns_err() {
     let result = ffi::new_theta_sketch(4, ffi::ResizeFactor::X8, 1.0);
+    assert!(result.is_ok());
+    let result = ffi::new_theta_sketch(3, ffi::ResizeFactor::X8, 1.0);
     assert!(result.is_err());
 }
 

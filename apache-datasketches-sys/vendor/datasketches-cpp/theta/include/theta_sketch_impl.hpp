@@ -23,6 +23,7 @@
 #include <sstream>
 #include <vector>
 #include <stdexcept>
+#include <algorithm>
 
 #include "binomial_bounds.hpp"
 #include "theta_helpers.hpp"
@@ -239,8 +240,21 @@ auto update_theta_sketch_alloc<A>::end() const -> const_iterator {
 }
 
 template<typename A>
-compact_theta_sketch_alloc<A> update_theta_sketch_alloc<A>::compact(bool ordered) const {
-  return compact_theta_sketch_alloc<A>(*this, ordered);
+compact_theta_sketch_alloc<A> update_theta_sketch_alloc<A>::compact(bool ordered, bool trim) const {
+  if (!trim) return compact_theta_sketch_alloc<A>(*this, ordered);
+
+  std::vector<uint64_t, A> entries(table_.allocator_);
+  if (this->is_empty()) {
+    return compact_theta_sketch_alloc<A>(true, true, this->get_seed_hash(), this->get_theta64(), std::move(entries));
+  }
+  // copy first: this method is const, and quick select would permute the source table
+  entries.reserve(this->get_num_retained());
+  std::copy(this->begin(), this->end(), std::back_inserter(entries));
+  uint64_t theta = this->get_theta64();
+  const uint32_t nominal_size = 1 << table_.lg_nom_size_;
+  theta = trim_to_nominal<trivial_extract_key>(entries, nominal_size, theta);
+  if (ordered) std::sort(entries.begin(), entries.end());
+  return compact_theta_sketch_alloc<A>(false, ordered, this->get_seed_hash(), theta, std::move(entries));
 }
 
 template<typename A>
@@ -315,7 +329,7 @@ uint32_t compact_theta_sketch_alloc<A>::get_num_retained() const {
 
 template<typename A>
 uint16_t compact_theta_sketch_alloc<A>::get_seed_hash() const {
-  return seed_hash_;
+  return is_empty_ ? 0 : seed_hash_;
 }
 
 template<typename A>
@@ -376,7 +390,7 @@ size_t compact_theta_sketch_alloc<A>::get_compressed_serialized_size_bytes(uint8
 
 template<typename A>
 void compact_theta_sketch_alloc<A>::serialize(std::ostream& os) const {
-  const uint8_t preamble_longs = this->is_estimation_mode() ? 3 : this->is_empty() || entries_.size() == 1 ? 1 : 2;
+  const uint8_t preamble_longs = get_preamble_longs(false);
   write(os, preamble_longs);
   write(os, UNCOMPRESSED_SERIAL_VERSION);
   write(os, SKETCH_TYPE);
@@ -385,7 +399,8 @@ void compact_theta_sketch_alloc<A>::serialize(std::ostream& os) const {
     (1 << flags::IS_COMPACT) |
     (1 << flags::IS_READ_ONLY) |
     (this->is_empty() ? 1 << flags::IS_EMPTY : 0) |
-    (this->is_ordered() ? 1 << flags::IS_ORDERED : 0)
+    (this->is_ordered() ? 1 << flags::IS_ORDERED : 0) |
+    (is_single_item() ? 1 << flags::IS_SINGLE_ITEM : 0)
   );
   write(os, flags_byte);
   write(os, get_seed_hash());
@@ -411,7 +426,8 @@ auto compact_theta_sketch_alloc<A>::serialize(unsigned header_size_bytes) const 
     (1 << flags::IS_COMPACT) |
     (1 << flags::IS_READ_ONLY) |
     (this->is_empty() ? 1 << flags::IS_EMPTY : 0) |
-    (this->is_ordered() ? 1 << flags::IS_ORDERED : 0)
+    (this->is_ordered() ? 1 << flags::IS_ORDERED : 0) |
+    (is_single_item() ? 1 << flags::IS_SINGLE_ITEM : 0)
   );
   *ptr++ = flags_byte;
   ptr += copy_to_mem(get_seed_hash(), ptr);
@@ -422,6 +438,12 @@ auto compact_theta_sketch_alloc<A>::serialize(unsigned header_size_bytes) const 
   if (this->is_estimation_mode()) ptr += copy_to_mem(theta_, ptr);
   if (entries_.size() > 0) ptr += copy_to_mem(entries_.data(), ptr, entries_.size() * sizeof(uint64_t));
   return bytes;
+}
+
+template<typename A>
+bool compact_theta_sketch_alloc<A>::is_single_item() const {
+  // one entry in exact mode: the same condition Java uses to set its SingleItem flag
+  return entries_.size() == 1 && !this->is_estimation_mode();
 }
 
 template<typename A>
@@ -459,7 +481,7 @@ uint8_t compact_theta_sketch_alloc<A>::compute_entry_bits() const {
 
 template<typename A>
 void compact_theta_sketch_alloc<A>::serialize_version_4(std::ostream& os) const {
-  const uint8_t preamble_longs = this->is_estimation_mode() ? 2 : 1;
+  const uint8_t preamble_longs = get_preamble_longs(true);
   const uint8_t entry_bits = compute_entry_bits();
   const uint8_t num_entries_bytes = get_num_entries_bytes();
 
@@ -674,7 +696,9 @@ compact_theta_sketch_alloc<A> compact_theta_sketch_alloc<A>::deserialize_v4(
     uint8_t preamble_longs, std::istream& is, uint64_t seed, const A& allocator)
 {
   const auto entry_bits = read<uint8_t>(is);
+  compact_theta_sketch_parser<true>::check_v4_entry_bits(entry_bits);
   const auto num_entries_bytes = read<uint8_t>(is);
+  compact_theta_sketch_parser<true>::check_v4_num_entries_bytes(num_entries_bytes);
   const auto flags_byte = read<uint8_t>(is);
   const auto seed_hash = read<uint16_t>(is);
   const bool is_empty = flags_byte & (1 << flags::IS_EMPTY);
@@ -782,7 +806,7 @@ uint32_t wrapped_compact_theta_sketch_alloc<A>::get_num_retained() const {
 
 template<typename A>
 uint16_t wrapped_compact_theta_sketch_alloc<A>::get_seed_hash() const {
-  return data_.seed_hash;
+  return is_empty() ? 0 : data_.seed_hash;
 }
 
 template<typename A>
@@ -817,23 +841,15 @@ num_entries_(num_entries),
 index_(index),
 previous_(0),
 is_block_mode_(num_entries_ >= 8),
-buf_i_(0),
 offset_(0)
 {
   if (entry_bits == 64) { // no compression
     ptr_ = reinterpret_cast<const uint64_t*>(ptr) + index;
   } else if (index < num_entries) {
     if (is_block_mode_) {
-      unpack_bits_block8(buffer_, reinterpret_cast<const uint8_t*>(ptr_), entry_bits_);
-      ptr_ = reinterpret_cast<const uint8_t*>(ptr_) + entry_bits_;
-      for (int i = 0; i < 8; ++i) {
-        buffer_[i] += previous_;
-        previous_ = buffer_[i];
-      }
+      unpack8();
     } else {
-      offset_ = unpack_bits(buffer_[0], entry_bits_, reinterpret_cast<const uint8_t*&>(ptr_), offset_);
-      buffer_[0] += previous_;
-      previous_ = buffer_[0];
+      unpack1();
     }
   }
 }
@@ -844,33 +860,39 @@ auto wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::operator++()
     ptr_ = reinterpret_cast<const uint64_t*>(ptr_) + 1;
     return *this;
   }
-  ++index_;
-  if (index_ < num_entries_) {
+  if (++index_ < num_entries_) {
     if (is_block_mode_) {
-      ++buf_i_;
-      if (buf_i_ == 8) {
-        buf_i_ = 0;
-        if (index_ + 8 < num_entries_) {
-          unpack_bits_block8(buffer_, reinterpret_cast<const uint8_t*>(ptr_), entry_bits_);
-          ptr_ = reinterpret_cast<const uint8_t*>(ptr_) + entry_bits_;
-          for (int i = 0; i < 8; ++i) {
-            buffer_[i] += previous_;
-            previous_ = buffer_[i];
-          }
+      if ((index_ & 7) == 0) {
+        if (num_entries_ - index_ >= 8) {
+          unpack8();
         } else {
           is_block_mode_ = false;
-          offset_ = unpack_bits(buffer_[0], entry_bits_, reinterpret_cast<const uint8_t*&>(ptr_), offset_);
-          buffer_[0] += previous_;
-          previous_ = buffer_[0];
+          unpack1();
         }
       }
     } else {
-      offset_ = unpack_bits(buffer_[0], entry_bits_, reinterpret_cast<const uint8_t*&>(ptr_), offset_);
-      buffer_[0] += previous_;
-      previous_ = buffer_[0];
+      unpack1();
     }
   }
   return *this;
+}
+
+template<typename Allocator>
+void wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::unpack1() {
+  const uint32_t i = index_ & 7;
+  offset_ = unpack_bits(buffer_[i], entry_bits_, reinterpret_cast<const uint8_t*&>(ptr_), offset_);
+  buffer_[i] += previous_;
+  previous_ = buffer_[i];
+}
+
+template<typename Allocator>
+void wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::unpack8() {
+  unpack_bits_block8(buffer_, reinterpret_cast<const uint8_t*>(ptr_), entry_bits_);
+  ptr_ = reinterpret_cast<const uint8_t*>(ptr_) + entry_bits_;
+  for (int i = 0; i < 8; ++i) {
+    buffer_[i] += previous_;
+    previous_ = buffer_[i];
+  }
 }
 
 template<typename Allocator>
@@ -895,13 +917,13 @@ bool wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::operator==(c
 template<typename Allocator>
 auto wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::operator*() const -> reference {
   if (entry_bits_ == 64) return *reinterpret_cast<const uint64_t*>(ptr_);
-  return buffer_[buf_i_];
+  return buffer_[index_ & 7];
 }
 
 template<typename Allocator>
 auto wrapped_compact_theta_sketch_alloc<Allocator>::const_iterator::operator->() const -> pointer {
   if (entry_bits_ == 64) return reinterpret_cast<const uint64_t*>(ptr_);
-  return buffer_ + buf_i_;
+  return buffer_ + (index_ & 7);
 }
 
 } /* namespace datasketches */

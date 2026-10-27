@@ -330,11 +330,25 @@ public:
   void reset();
 
   /**
-   * Converts this sketch to a compact sketch (ordered or unordered).
+   * Converts this sketch to a compact sketch (ordered or unordered, trimmed or not trimmed).
+   * This does not modify the source update sketch.
    * @param ordered optional flag to specify if an ordered sketch should be produced
+   * @param trim optional flag to reduce the size of the returned sketch to at most
+   * the nominal size k, if required. An update sketch retains more than k entries
+   * between rebuilds; those extra entries below theta improve the estimate, so the
+   * default is to keep them.
+   * Trimming is lossy and is never required for correctness. It discards retained
+   * entries, and since the relative error scales with 1 / sqrt(retained), it always
+   * degrades accuracy and widens the confidence bounds, whatever mode the source is
+   * in. Worst case, a sketch grown to just under the rebuild threshold of 15/16 * 2k
+   * loses nearly half its entries, widening the bounds by about sqrt(15/8), or
+   * roughly 37%. A sketch in exact mode that retains more than k entries loses
+   * exactness as well: it is returned in estimation mode, so get_estimate() carries
+   * error where it would otherwise have returned an exact count.
+   * Only pass true if a bounded result size matters more than that accuracy.
    * @return compact sketch
    */
-  compact_theta_sketch_alloc<Allocator> compact(bool ordered = true) const;
+  compact_theta_sketch_alloc<Allocator> compact(bool ordered = true, bool trim = false) const;
 
   virtual iterator begin();
   virtual iterator end();
@@ -492,7 +506,7 @@ public:
       uint64_t seed = DEFAULT_SEED, const Allocator& allocator = Allocator());
 
 private:
-  enum flags { IS_BIG_ENDIAN, IS_READ_ONLY, IS_EMPTY, IS_COMPACT, IS_ORDERED };
+  enum flags { IS_BIG_ENDIAN, IS_READ_ONLY, IS_EMPTY, IS_COMPACT, IS_ORDERED, IS_SINGLE_ITEM };
 
   bool is_empty_;
   bool is_ordered_;
@@ -501,6 +515,7 @@ private:
   std::vector<uint64_t, Allocator> entries_;
 
   uint8_t get_preamble_longs(bool compressed) const;
+  bool is_single_item() const;
   bool is_suitable_for_compression() const;
   uint8_t compute_entry_bits() const;
   uint8_t get_num_entries_bytes() const;
@@ -518,6 +533,7 @@ private:
   template<typename E, typename EK, typename P, typename S, typename CS, typename A> friend class theta_union_base;
   template<typename E, typename EK, typename P, typename S, typename CS, typename A> friend class theta_intersection_base;
   template<typename E, typename EK, typename CS, typename A> friend class theta_set_difference_base;
+  template<typename A> friend class update_theta_sketch_alloc;
   compact_theta_sketch_alloc(bool is_empty, bool is_ordered, uint16_t seed_hash, uint64_t theta, std::vector<uint64_t, Allocator>&& entries);
 };
 
@@ -609,9 +625,11 @@ private:
   uint32_t index_;
   uint64_t previous_;
   bool is_block_mode_;
-  uint8_t buf_i_;
   uint8_t offset_;
   uint64_t buffer_[8];
+
+  inline void unpack1();
+  inline void unpack8();
 };
 
 } /* namespace datasketches */

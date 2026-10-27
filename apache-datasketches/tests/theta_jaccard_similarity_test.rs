@@ -1,5 +1,5 @@
 //! Partially ported from theta/test/theta_jaccard_similarity_test.cpp
-//! (tag 5.2.0). `empty_sketches`, `exact_mode_identical`,
+//! (tag 5.2.0; unchanged in 5.3.0). `empty_sketches`, `exact_mode_identical`,
 //! `estimation_mode_half_overlap`, `full_overlap_exact_mode`, and
 //! `disjoint_exact_mode` are direct ports of the corresponding upstream
 //! default-seed cases ("theta jaccard: empty", "theta jaccard: same sketch

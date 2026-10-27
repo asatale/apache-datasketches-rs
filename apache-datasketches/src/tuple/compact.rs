@@ -18,7 +18,9 @@ impl CompactArrayOfDoublesSketch {
 
     /// Deserializes bytes produced by [`Self::serialize`]. Returns
     /// [`SketchError::Deserialization`] if the bytes are truncated, corrupt,
-    /// or not an ArrayOfDoubles sketch.
+    /// or not an ArrayOfDoubles sketch, or if a non-empty sketch carries a
+    /// seed hash other than the default seed's (this crate never uses another
+    /// seed; upstream itself checks only sketches that retain entries).
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = sys::compact_array_of_doubles_sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;

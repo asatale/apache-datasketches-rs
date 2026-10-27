@@ -1,6 +1,6 @@
 // apache-datasketches/tests/hll_union_test.rs
 //
-// Ported 1:1 from vendor/datasketches-cpp/hll/test/HllUnionTest.cpp (tag 5.2.0).
+// Ported 1:1 from vendor/datasketches-cpp/hll/test/HllUnionTest.cpp (tag 5.3.0).
 // Test names and order mirror the upstream Catch2 TEST_CASE list.
 
 use apache_datasketches::hll::{HllSketch, HllUnion, TargetHllType};
@@ -203,7 +203,7 @@ fn hll_union_check_composite_estimate() {
 // REQUIRE_THROWS_AS(hll_union(hll_constants::MAX_LOG_K + 1), ...).
 //
 // hll_constants::MIN_LOG_K == 4 and MAX_LOG_K == 21 (vendor/datasketches-cpp/hll/include/
-// HllUtil.hpp:82-83). Note: the doc comment on `hll_union_alloc`'s constructor (hll.hpp) claims
+// HllUtil.hpp:91-92). Note: the doc comment on `hll_union_alloc`'s constructor (hll.hpp) claims
 // lg_max_k "must be between 7 and 21, inclusive", but the actual implementation
 // (HllUnion-internal.hpp: `hll_union_alloc(...): lg_max_k_(HllUtil<A>::checkLgK(lg_max_k))`) only
 // calls `checkLgK`, which enforces MIN_LOG_K=4. This was confirmed empirically against the Rust
@@ -402,4 +402,111 @@ fn hll_union_check_serialize_compact_and_updatable() {
         check_union_round_trip(11, 100_000, tgt_type, true); // HLL mode
         check_union_round_trip(11, 100_000, tgt_type, false);
     }
+}
+
+// --- datasketches-cpp 5.3.0 additions -------------------------------------------------------
+//
+// Ported from the four TEST_CASEs added in vendor/datasketches-cpp/hll/test/HllUnionTest.cpp
+// (tag 5.3.0) alongside the repair of HLL's deferred KxQ rebuild. Nothing is dropped: the safe
+// API exposes everything the upstream cases use (`HllUnion::update_sketch`, `get_result`,
+// `serialize_updatable`).
+
+/// Port of upstream's static `make_hll_sketch` helper (Hll4 target, the C++ default).
+fn make_hll_sketch(lg_config_k: u8, start: u64, end: u64) -> HllSketch {
+    let mut sketch = HllSketch::new(lg_config_k, TargetHllType::Hll4).unwrap();
+    for i in start..end {
+        sketch.update_u64(i);
+    }
+    sketch
+}
+
+/// Port of upstream's `serialize_flat_union`: merge three sketches into one lgMaxK=8 union.
+fn serialize_flat_union(first: &HllSketch, second: &HllSketch, third: &HllSketch) -> Vec<u8> {
+    let mut u = HllUnion::new(8).unwrap();
+    u.update_sketch(first);
+    u.update_sketch(second);
+    u.update_sketch(third);
+    u.get_result(TargetHllType::Hll8).serialize_updatable()
+}
+
+/// Port of upstream's `serialize_nested_union`: union the first two, then union that result
+/// with the third.
+fn serialize_nested_union(first: &HllSketch, second: &HllSketch, third: &HllSketch) -> Vec<u8> {
+    let mut prefix = HllUnion::new(8).unwrap();
+    prefix.update_sketch(first);
+    prefix.update_sketch(second);
+
+    let mut u = HllUnion::new(8).unwrap();
+    u.update_sketch(&prefix.get_result(TargetHllType::Hll8));
+    u.update_sketch(third);
+    u.get_result(TargetHllType::Hll8).serialize_updatable()
+}
+
+// Upstream "hll union: downsampling merge is not empty": merging an lgK=15 sketch into an
+// lgMaxK=8 union (a downsampling merge) must leave the union non-empty.
+#[test]
+fn hll_union_downsampling_merge_is_not_empty() {
+    let sketch = make_hll_sketch(15, 0, 100_000);
+    let mut u = HllUnion::new(8).unwrap();
+    u.update_sketch(&sketch);
+    assert!(!u.is_empty());
+}
+
+// Upstream "hll union: mixed lgConfigK estimate is merge-order independent": a (lgK=15) and b
+// (lgK=8) cover disjoint ranges; the union's estimate is within 10% of truth in either merge
+// order.
+#[test]
+fn hll_union_mixed_lg_config_k_estimate_is_merge_order_independent() {
+    let n: u64 = 100_000;
+    let a = make_hll_sketch(15, 0, n);
+    let b = make_hll_sketch(8, n, 2 * n);
+    let truth = 2.0 * n as f64;
+
+    let mut larger_first = HllUnion::new(8).unwrap();
+    larger_first.update_sketch(&a);
+    larger_first.update_sketch(&b);
+    assert!((larger_first.get_estimate() - truth).abs() <= truth * 0.1);
+
+    let mut smaller_first = HllUnion::new(8).unwrap();
+    smaller_first.update_sketch(&b);
+    smaller_first.update_sketch(&a);
+    assert!((smaller_first.get_estimate() - truth).abs() <= truth * 0.1);
+}
+
+// Upstream "hll union: scalar update after downsampling merge": after a downsampling merge of an
+// lgK=15 sketch, further scalar updates keep the estimate within 10% of the true cardinality.
+#[test]
+fn hll_union_scalar_update_after_downsampling_merge() {
+    let n: u64 = 100_000;
+    let sketch = make_hll_sketch(15, 0, n);
+    let mut u = HllUnion::new(8).unwrap();
+    u.update_sketch(&sketch);
+    for i in n..2 * n {
+        u.update_u64(i);
+    }
+    let truth = 2.0 * n as f64;
+    assert!((u.get_estimate() - truth).abs() <= truth * 0.1);
+}
+
+// Upstream "hll union: serialization is grouping independent": for three sketches of mixed
+// lgConfigK (15, 8, 11), the updatable serialization of a nested union ((x,y) then z) is
+// byte-identical to that of a flat union (x,y,z), for three different orderings.
+#[test]
+fn hll_union_serialization_is_grouping_independent() {
+    let n: u64 = 100_000;
+    let a = make_hll_sketch(15, 0, n);
+    let b = make_hll_sketch(8, n, 2 * n);
+    let c = make_hll_sketch(11, n / 2, n + n / 2);
+    assert_eq!(
+        serialize_nested_union(&b, &c, &a),
+        serialize_flat_union(&b, &c, &a)
+    );
+    assert_eq!(
+        serialize_nested_union(&a, &c, &b),
+        serialize_flat_union(&a, &c, &b)
+    );
+    assert_eq!(
+        serialize_nested_union(&a, &b, &c),
+        serialize_flat_union(&a, &b, &c)
+    );
 }

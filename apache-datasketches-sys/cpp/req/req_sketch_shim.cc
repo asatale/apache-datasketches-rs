@@ -258,7 +258,7 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
   const auto num_levels = read_at<uint8_t>(data, size, 6, "num_levels");
   const auto num_raw_items = read_at<uint8_t>(data, size, 7, "num_raw_items");
 
-  // Upstream checks these three too (req_sketch_impl.hpp:532-534); checking
+  // Upstream checks these three too (req_sketch_impl.hpp:537-539); checking
   // them first keeps the message right for bytes of another family.
   if (family != 17) reject("family is " + std::to_string(family) + ", not 17 (REQ)");
   if (serial_version != 1) reject("serial version " + std::to_string(serial_version));
@@ -268,7 +268,7 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
   }
 
   // req_sketch's private `enum flags { RESERVED1, RESERVED2, IS_EMPTY,
-  // IS_HIGH_RANK, RAW_ITEMS, IS_LEVEL_ZERO_SORTED }` (req_sketch.hpp:437).
+  // IS_HIGH_RANK, RAW_ITEMS, IS_LEVEL_ZERO_SORTED }` (req_sketch.hpp:446).
   constexpr uint8_t IS_EMPTY = 1 << 2;
   constexpr uint8_t IS_HIGH_RANK = 1 << 3;
   constexpr uint8_t RAW_ITEMS = 1 << 4;
@@ -278,7 +278,7 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
 
   // Upstream documents k as even and in [4, 1024] but checks neither, on any
   // path. Empty bytes are rebuilt through the constructor, which truncates k
-  // to 8 bits (req_sketch_impl.hpp:32, 538), so there k must survive that.
+  // to 8 bits (req_sketch_impl.hpp:33, 543), so there k must survive that.
   constexpr uint16_t MIN_K = datasketches::req_constants::MIN_K;
   constexpr uint16_t MAX_K = 1024;
   constexpr uint16_t MAX_CONSTRUCTOR_K = 254;
@@ -311,7 +311,7 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
   }
 
   if (flags & RAW_ITEMS) {
-    // Upstream writes raw items only when n <= MIN_K (req_sketch_impl.hpp:416),
+    // Upstream writes raw items only when n <= MIN_K (req_sketch_impl.hpp:417),
     // which also means a single level; with more levels it would take n,
     // min and max from the header but items from the raw block only.
     if (num_levels != 1) reject("raw items with " + std::to_string(num_levels) + " levels");
@@ -323,8 +323,8 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
       reject("buffer does not hold " + std::to_string(num_raw_items) + " raw items");
     }
     // For 2 to 4 raw items, upstream's byte serialize sizes the buffer as if
-    // it held a compactor (get_serialized_size_bytes, req_sketch_impl.hpp:340
-    // -344) but writes only the raw items (line 436), leaving the 20-byte
+    // it held a compactor (get_serialized_size_bytes, req_sketch_impl.hpp:341
+    // -345) but writes only the raw items (line 437), leaving the 20-byte
     // compactor header's worth of zeros at the end. Accept exactly that.
     const size_t trailing = size - offset - items_size;
     constexpr size_t PHANTOM_COMPACTOR_HEADER = 20;
@@ -371,14 +371,14 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
     offset += size_t(num_items) * sizeof(T);
 
     // grow() gives each new level lg_weight = its index
-    // (req_sketch_impl.hpp:592), and merge requires the weights to match.
+    // (req_sketch_impl.hpp:601), and merge requires the weights to match.
     if (lg_weight != level) reject(where + "lg_weight is " + std::to_string(lg_weight));
     // Every compaction leaves at least nom_capacity / 2 items behind
     // (req_compactor_impl.hpp:316) and promotes at least one, so no level of
     // a non-empty sketch is ever empty. Upstream's iterator
-    // (req_sketch_impl.hpp:754-768) dereferences an empty level and then
+    // (req_sketch_impl.hpp:763-777) dereferences an empty level and then
     // never reaches end(); a single empty level also makes deserialize
-    // dereference begin() of an empty range (line 583).
+    // dereference begin() of an empty range (line 592).
     if (num_items == 0) reject(where + "no items");
     if (num_sections != 3 && num_sections != 6 && num_sections != 12
         && num_sections != 24 && num_sections != 48) {
@@ -408,8 +408,8 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
   if (offset != size) reject("trailing bytes after the last compactor");
 
   // Upstream compresses on update only when the retained count *equals* the
-  // total nominal capacity (req_sketch_impl.hpp:182), and every compress
-  // leaves each level below its own capacity (lines 615-627), so a genuine
+  // total nominal capacity (req_sketch_impl.hpp:183), and every compress
+  // leaves each level below its own capacity (lines 624-636), so a genuine
   // sketch always retains fewer. One at or past it would never compact again
   // and grow without bound.
   if (total_items >= total_nom_capacity) {
@@ -424,7 +424,7 @@ void validate_req_layout(rust::Slice<const uint8_t> bytes) {
           + std::to_string(n));
     }
     // serialize writes n raw items from level 0 whenever n <= MIN_K
-    // (req_sketch_impl.hpp:416, 436), reading past level 0 if other levels
+    // (req_sketch_impl.hpp:417, 437), reading past level 0 if other levels
     // hold some of them. A genuine sketch reaches a second level only by
     // compacting a full level 0 (at least 2 * 3 * MIN_K = 24 items), so it
     // never has more than one level at n <= MIN_K.
@@ -471,10 +471,11 @@ std::unique_ptr<ReqDoublesSketchShim> req_doubles_deserialize(rust::Slice<const 
 }
 
 double req_doubles_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n) {
-  // Upstream 5.2.0's get_RSE returns a rank lower bound; 5.3.0 changed it to
-  // return the error directly, so when upgrading, return get_RSE(...)
-  // unchanged here.
-  return rank - datasketches::req_sketch<double>::get_RSE(k, rank, hra, n);
+  // From datasketches-cpp 5.3.0, get_RSE returns the one-standard-deviation
+  // rank error directly (get_rank_ub(k, 2, rank, 1, n, hra) - rank). 5.2.0
+  // returned the lower bound get_rank_lb(...) instead, which this function
+  // used to convert; the value it returns is unchanged.
+  return datasketches::req_sketch<double>::get_RSE(k, rank, hra, n);
 }
 
 std::unique_ptr<ReqFloatsSketchShim> req_floats_new(uint16_t k, bool hra) {
@@ -486,10 +487,11 @@ std::unique_ptr<ReqFloatsSketchShim> req_floats_deserialize(rust::Slice<const ui
 }
 
 double req_floats_a_priori_rank_error(uint16_t k, double rank, bool hra, uint64_t n) {
-  // Upstream 5.2.0's get_RSE returns a rank lower bound; 5.3.0 changed it to
-  // return the error directly, so when upgrading, return get_RSE(...)
-  // unchanged here.
-  return rank - datasketches::req_sketch<float>::get_RSE(k, rank, hra, n);
+  // From datasketches-cpp 5.3.0, get_RSE returns the one-standard-deviation
+  // rank error directly (get_rank_ub(k, 2, rank, 1, n, hra) - rank). 5.2.0
+  // returned the lower bound get_rank_lb(...) instead, which this function
+  // used to convert; the value it returns is unchanged.
+  return datasketches::req_sketch<float>::get_RSE(k, rank, hra, n);
 }
 
 } // namespace apache_datasketches_rs

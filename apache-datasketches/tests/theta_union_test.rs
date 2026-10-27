@@ -1,5 +1,5 @@
 // apache-datasketches/tests/theta_union_test.rs
-//! Ported from theta/test/theta_union_test.cpp (tag 5.2.0).
+//! Ported from theta/test/theta_union_test.cpp (tag 5.2.0; unchanged in 5.3.0).
 //!
 //! Upstream has 7 `TEST_CASE`s: "empty", "non empty no retained keys",
 //! "exact mode half overlap", "exact mode half overlap wrapped compact",
@@ -142,7 +142,11 @@ fn union_uses_builders_own_lg_k() {
 
 #[test]
 fn union_builder_rejects_lg_k_out_of_range() {
-    assert!(ThetaUnionBuilder::new().lg_k(4).build().is_err());
+    assert!(ThetaUnionBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ThetaUnionBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(ThetaUnionBuilder::new().lg_k(27).build().is_err());
     assert!(ThetaUnionBuilder::new().lg_k(5).build().is_ok());
     assert!(ThetaUnionBuilder::new().lg_k(26).build().is_ok());

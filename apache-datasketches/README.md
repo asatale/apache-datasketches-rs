@@ -389,9 +389,9 @@ Five things differ from the other families:
   `get_rank_upper_bound` give confidence bounds at 1, 2 or 3 standard
   deviations, and `a_priori_rank_error` gives the expected one-standard-
   deviation rank error (`k` even, `4..=1024`) for a `k`, rank, accuracy and `n` before building
-  anything. Upstream's `get_RSE` actually returns a rank lower bound rather
-  than an error, so the binding computes the error it implies and names it
-  `a_priori_rank_error`.
+  anything. `a_priori_rank_error` is upstream's `get_RSE`. (In 5.2.0 `get_RSE`
+  returned a rank lower bound rather than an error, and the binding converted
+  it; 5.3.0 fixed it, so the binding now calls it directly.)
 - **`merge` returns `Result`.** It rejects a sketch with a different
   `RankAccuracy`, and a merged `n` that would reach `2^63` (beyond which
   upstream cannot cope), with `SketchError::InvalidConfig`, leaving the
@@ -410,8 +410,8 @@ Five things differ from the other families:
   and `iter()` yields nothing (upstream reads past the end when iterating an
   empty sketch, so the shim guards it). NaN updates are silently ignored, as
   upstream does, and NaN is rejected as a rank, a `get_rank` item or a split
-  point. `new` accepts only even `k` in `4..=254`, because upstream 5.2.0's
-  constructor truncates `k` to 8 bits and rounds an odd `k` silently;
+  point. `new` accepts only even `k` in `4..=254`, because upstream's 5.2.0 and
+  5.3.0 constructor truncates `k` to 8 bits and rounds an odd `k` silently;
   non-empty deserialized bytes may carry `k` up to 1024.
 
 See `examples/req.rs` (`cargo run -p apache-datasketches --example req

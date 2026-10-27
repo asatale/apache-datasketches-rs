@@ -150,8 +150,8 @@ not shared with `kll` so the two features stay independent. Its shim
 validates serialized bytes too (`validate_req_layout` in
 `req_sketch_shim.cc`), and the committed `req_deserialize_fuzz_test` guards
 that. `ReqSketch::merge` returns `Result` because mixing `RankAccuracy` is a
-caller error, and `ReqSketch::new` caps `k` at 254 because upstream 5.2.0's
-constructor truncates it to 8 bits. Its bench pair cross-checks the
+caller error, and `ReqSketch::new` caps `k` at 254 because upstream's 5.2.0 and
+5.3.0 constructor truncates it to 8 bits. Its bench pair cross-checks the
 deterministic `n`/`min`/`max`/`retained` fields like KLL's.
 
 ### `cxx::bridge` names must be globally unique across the sys crate

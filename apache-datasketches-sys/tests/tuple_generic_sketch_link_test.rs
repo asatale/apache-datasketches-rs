@@ -52,7 +52,8 @@ fn repeated_key_combines_rather_than_inserting() {
 
 #[test]
 fn invalid_lg_k_returns_err() {
-    assert!(ffi::new_tuple_generic_sketch(4, 8, 1.0).is_err());
+    assert!(ffi::new_tuple_generic_sketch(4, 8, 1.0).is_ok());
+    assert!(ffi::new_tuple_generic_sketch(3, 8, 1.0).is_err());
 }
 
 #[test]

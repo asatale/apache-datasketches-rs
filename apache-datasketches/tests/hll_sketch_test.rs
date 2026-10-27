@@ -1,7 +1,11 @@
 // apache-datasketches/tests/hll_sketch_test.rs
 //
-// Ported 1:1 from vendor/datasketches-cpp/hll/test/HllSketchTest.cpp (tag 5.2.0).
-// Test names and order mirror the upstream Catch2 TEST_CASE list ([hll_sketch] tag).
+// Ports the 5.2.0 tests of vendor/datasketches-cpp/hll/test/HllSketchTest.cpp
+// (tag 5.2.0; only comment typos differ in 5.3.0) 1:1, plus one 5.3.0 case.
+// Test names and order mirror the upstream Catch2 TEST_CASE list
+// ([hll_sketch] tag). The 5.3.0 case is a security regression test (CVE-2026-103501) ported
+// at the end of this file from CouponListTest.cpp at tag 5.3.0:
+// `hll_sketch_deserialize_rejects_malformed_coupon_count`.
 
 use apache_datasketches::hll::{HllSketch, TargetHllType};
 
@@ -412,4 +416,40 @@ fn hll_sketch_compact_bytes_round_trip_set_mode() {
     let bytes2 = s1.serialize_compact();
     let bytes3 = s2.serialize_compact();
     assert_eq!(bytes2, bytes3);
+}
+
+// Ported from vendor/datasketches-cpp/hll/test/CouponListTest.cpp,
+// TEST_CASE("coupon list: rejects malformed coupon count in bytes") at tag 5.3.0.
+// Guards the fix for CVE-2026-103501: a LIST-mode image whose declared coupon count reaches the
+// fixed LIST capacity (1 << LG_INIT_LIST_SIZE = 8) must be rejected instead of overrunning the
+// coupon array. Upstream's second assertion (`CouponList::newList` directly) targets an internal
+// class that is not part of the safe API, so only the `hll_sketch::deserialize` assertion is
+// ported. The sibling "in stream" TEST_CASE is not ported: this crate has no stream API.
+#[test]
+fn hll_sketch_deserialize_rejects_malformed_coupon_count() {
+    use apache_datasketches::SketchError;
+
+    // hll_constants (HllUtil.hpp, tag 5.3.0).
+    const LG_INIT_LIST_SIZE: u32 = 3;
+    const LIST_INT_ARR_START: usize = 8;
+    const LIST_COUNT_BYTE: usize = 6;
+
+    let mut sk1 = HllSketch::new(8, TargetHllType::Hll4).unwrap();
+    sk1.update_u64(1);
+    sk1.update_u64(2);
+    let valid_bytes = sk1.serialize_compact();
+
+    let malformed_count = (1u32 << LG_INIT_LIST_SIZE) as u8;
+    let mut sketch_bytes = valid_bytes;
+    // Keep the input long enough to validate the declared LIST count.
+    let required_len = LIST_INT_ARR_START + malformed_count as usize * std::mem::size_of::<u32>();
+    if sketch_bytes.len() < required_len {
+        sketch_bytes.resize(required_len, 0);
+    }
+    sketch_bytes[LIST_COUNT_BYTE] = malformed_count;
+
+    assert!(matches!(
+        HllSketch::deserialize(&sketch_bytes),
+        Err(SketchError::Deserialization(_))
+    ));
 }

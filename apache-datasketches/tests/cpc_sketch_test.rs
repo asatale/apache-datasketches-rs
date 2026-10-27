@@ -1,6 +1,6 @@
 // apache-datasketches/tests/cpc_sketch_test.rs
-//! Ported from cpc/test/cpc_sketch_test.cpp (tag 5.2.0). 15 of 26 upstream
-//! cases ported; 11 excluded:
+//! Ported from cpc/test/cpc_sketch_test.cpp (tag 5.3.0). 15 of the 26 pre-5.3.0
+//! upstream cases ported; 11 excluded:
 //! - "overflow bug" (100,000,000 updates) — impractically slow for a
 //!   routine local test suite; the bug it regression-tests is a specific
 //!   historical fix, not a public-API behavior distinct from the
@@ -23,6 +23,11 @@
 //! - "serialize both ways" — exercises the `header_size_bytes` parameter
 //!   on `serialize()`, which this crate doesn't expose (PostgreSQL
 //!   extension-specific, no use case here).
+//!
+//! Plus two 5.3.0 corrupt-input regression tests ported at the end of this file from tag 5.3.0:
+//! `deserialize_corrupt_num_coupons` and `deserialize_corrupt_lg_k`. They come from upstream's
+//! CVE-2026-103513 fix but do not discriminate 5.2.0 from 5.3.0 through the safe API (see the
+//! comments on each test).
 use apache_datasketches::cpc::{get_max_serialized_size_bytes, CpcSketch, CpcSketchBuilder};
 
 const RELATIVE_ERROR_FOR_LG_K_11: f64 = 0.02;
@@ -247,4 +252,73 @@ fn max_serialized_size() {
     );
     assert!(get_max_serialized_size_bytes(3).is_err());
     assert!(get_max_serialized_size_bytes(27).is_err());
+}
+
+// Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
+// TEST_CASE("cpc sketch: deserialize corrupt num_coupons") at tag 5.3.0.
+// Regression/parity test from upstream's CVE-2026-103513 fix: a sparse image whose num_coupons
+// field (bytes 8..12) is larger than the compressed table holds, or larger than the k x 64 bit
+// matrix can hold, must be rejected. Through the safe API this test does NOT discriminate the
+// fix: 5.2.0 also rejected both inputs, as `std::logic_error`, which the safe layer maps to
+// `SketchError::Deserialization` just like 5.3.0's `std::out_of_range`/`std::invalid_argument`.
+// In the "more pairs" case 5.2.0 read past the compressed buffer before throwing; that over-read
+// is detectable only under a sanitizer (e.g. ASan), not by this assertion.
+#[test]
+fn deserialize_corrupt_num_coupons() {
+    use apache_datasketches::SketchError;
+
+    let mut sketch = CpcSketchBuilder::new().lg_k(11).build().unwrap();
+    for i in 0..100u64 {
+        sketch.update_u64(i);
+    }
+    let bytes = sketch.serialize();
+    assert_ne!(bytes[5] & (1 << 3), 0); // sparse flavor: table present
+    assert_eq!(bytes[5] & (1 << 4), 0); // and no window
+    let num_coupons = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+
+    // more pairs than the compressed table holds: decoder must not read past it
+    let mut corrupt = bytes.clone();
+    corrupt[8..12].copy_from_slice(&(num_coupons + 50).to_le_bytes());
+    assert!(matches!(
+        CpcSketch::deserialize(&corrupt),
+        Err(SketchError::Deserialization(_))
+    ));
+
+    // more coupons than the k x 64 bit matrix can hold
+    let mut corrupt = bytes.clone();
+    let too_many_coupons: u32 = 64 * 2048 + 1;
+    corrupt[8..12].copy_from_slice(&too_many_coupons.to_le_bytes());
+    assert!(matches!(
+        CpcSketch::deserialize(&corrupt),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+
+// Ported from vendor/datasketches-cpp/cpc/test/cpc_sketch_test.cpp,
+// TEST_CASE("cpc sketch: deserialize corrupt lg_k") at tag 5.3.0.
+// Regression/parity test from upstream's CVE-2026-103513 fix: an lg_k byte (offset 3) outside
+// the valid range must be rejected at deserialization. Through the safe API this test does NOT
+// discriminate the fix: 5.2.0 also rejected every one of these inputs (as `std::logic_error`,
+// which the safe layer maps to `SketchError::Deserialization` too), so a regression would show
+// only as a crash or under a sanitizer. The stream half of each iteration is not ported (no
+// stream API).
+#[test]
+fn deserialize_corrupt_lg_k() {
+    use apache_datasketches::SketchError;
+
+    let mut sketch = CpcSketchBuilder::new().lg_k(11).build().unwrap();
+    for i in 0..100u64 {
+        sketch.update_u64(i);
+    }
+    let mut bytes = sketch.serialize();
+    for lg_k in [0u8, 3, 27, 255] {
+        bytes[3] = lg_k;
+        assert!(
+            matches!(
+                CpcSketch::deserialize(&bytes),
+                Err(SketchError::Deserialization(_))
+            ),
+            "lg_k = {lg_k} was not rejected"
+        );
+    }
 }

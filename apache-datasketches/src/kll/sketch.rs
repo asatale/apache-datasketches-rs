@@ -12,7 +12,7 @@ const DEFAULT_K: u16 = 200;
 /// strictly below 2^63.
 ///
 /// Upstream `merge` sums the two `n`s in a plain `uint64_t` and passes the
-/// result to `kll_helper::ub_on_num_levels` (kll_sketch_impl.hpp:779, in
+/// result to `kll_helper::ub_on_num_levels` (kll_sketch_impl.hpp:788, in
 /// `merge_higher_levels`). That calls `floor_of_log2_of_fraction(n, 1)`
 /// (kll_helper_impl.hpp:38-51), which doubles a `uint64_t` until it exceeds
 /// `n`; for `n >= 2^63` the doubling wraps to 0 and it loops forever, and a

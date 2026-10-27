@@ -140,7 +140,11 @@ fn union_uses_builders_own_lg_k() {
 
 #[test]
 fn union_builder_rejects_lg_k_out_of_range() {
-    assert!(ArrayOfDoublesUnionBuilder::new().lg_k(4).build().is_err());
+    assert!(ArrayOfDoublesUnionBuilder::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        ArrayOfDoublesUnionBuilder::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(ArrayOfDoublesUnionBuilder::new().lg_k(27).build().is_err());
     assert!(ArrayOfDoublesUnionBuilder::new().lg_k(5).build().is_ok());
     assert!(ArrayOfDoublesUnionBuilder::new().lg_k(26).build().is_ok());

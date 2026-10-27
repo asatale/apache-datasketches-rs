@@ -90,7 +90,11 @@ fn union_reset_empties_result() {
 
 #[test]
 fn invalid_config_is_err() {
-    assert!(TupleUnionBuilder::<Sum>::new().lg_k(4).build().is_err());
+    assert!(TupleUnionBuilder::<Sum>::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        TupleUnionBuilder::<Sum>::new().lg_k(3).build(),
+        Err(apache_datasketches::SketchError::InvalidConfig(_))
+    ));
     assert!(TupleUnionBuilder::<Sum>::new().p(1.5).build().is_err());
 }
 

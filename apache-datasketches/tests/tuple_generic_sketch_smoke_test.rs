@@ -132,7 +132,11 @@ fn builder_is_copy_clone_debug_for_a_non_copy_summary() {
 
 #[test]
 fn invalid_config_is_err() {
-    assert!(TupleSketchBuilder::<Sum>::new().lg_k(4).build().is_err());
+    assert!(TupleSketchBuilder::<Sum>::new().lg_k(4).build().is_ok());
+    assert!(matches!(
+        TupleSketchBuilder::<Sum>::new().lg_k(3).build(),
+        Err(SketchError::InvalidConfig(_))
+    ));
     assert!(TupleSketchBuilder::<Sum>::new().p(0.0).build().is_err());
     assert!(TupleSketchBuilder::<Sum>::new().p(1.5).build().is_err());
 }
@@ -263,7 +267,7 @@ fn bounds_bracket_the_estimate_in_estimation_mode() {
 ///
 /// ESTIMATION mode is required, and that is not incidental:
 /// `base_theta_sketch::get_lower_bound`/`get_upper_bound`
-/// (`theta/include/theta_sketch_impl.hpp:52,58`) short-circuit with
+/// (`theta/include/theta_sketch_impl.hpp:53,59`) short-circuit with
 /// `if (!is_estimation_mode()) return get_num_retained();` BEFORE reaching
 /// `binomial_bounds::check_num_std_devs`, so an exact-mode sketch answers
 /// `Ok` for every `num_std_dev`, including 0. The exact-mode `Ok(0)`
