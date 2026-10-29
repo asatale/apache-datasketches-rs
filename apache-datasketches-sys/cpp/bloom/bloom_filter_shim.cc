@@ -11,34 +11,45 @@ std::unique_ptr<BloomFilterShim> BloomFilterShim::clone_shim() const {
   return std::make_unique<BloomFilterShim>(filter_);
 }
 
-void BloomFilterShim::update_u64(uint64_t value) { filter_.update(value); }
+// Every update_* calls upstream's query_and_update and discards the answer.
+// Upstream's update (internal_update, bloom_filter_impl.hpp:644-654) marks the
+// cached bits-set count dirty; query_and_update (internal_query_and_update,
+// :742-755) instead adds to that cached count and clears the dirty flag via
+// update_num_bits_set (:552-558) -- without recounting first. So an update
+// followed by a query_and_update left a stale count: get_bits_used reported
+// too few bits, serialize wrote a count that upstream's own deserialize then
+// rejected ("invalid number of bits set"), and when the stale count was 0
+// is_empty() turned true, so internal_query (:843) answered false for items
+// that had been added -- a false negative. query_and_update sets the same
+// bits as update, and keeps the count exact without ever going dirty.
+void BloomFilterShim::update_u64(uint64_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_u64(uint64_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_u64(uint64_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_i64(int64_t value) { filter_.update(value); }
+void BloomFilterShim::update_i64(int64_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_i64(int64_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_i64(int64_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_u32(uint32_t value) { filter_.update(value); }
+void BloomFilterShim::update_u32(uint32_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_u32(uint32_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_u32(uint32_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_i32(int32_t value) { filter_.update(value); }
+void BloomFilterShim::update_i32(int32_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_i32(int32_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_i32(int32_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_u16(uint16_t value) { filter_.update(value); }
+void BloomFilterShim::update_u16(uint16_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_u16(uint16_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_u16(uint16_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_i16(int16_t value) { filter_.update(value); }
+void BloomFilterShim::update_i16(int16_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_i16(int16_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_i16(int16_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_u8(uint8_t value) { filter_.update(value); }
+void BloomFilterShim::update_u8(uint8_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_u8(uint8_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_u8(uint8_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_i8(int8_t value) { filter_.update(value); }
+void BloomFilterShim::update_i8(int8_t value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_i8(int8_t value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_i8(int8_t value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_f64(double value) { filter_.update(value); }
+void BloomFilterShim::update_f64(double value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_f64(double value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_f64(double value) { return filter_.query_and_update(value); }
-void BloomFilterShim::update_f32(float value) { filter_.update(value); }
+void BloomFilterShim::update_f32(float value) { (void)filter_.query_and_update(value); }
 bool BloomFilterShim::query_f32(float value) const { return filter_.query(value); }
 bool BloomFilterShim::query_and_update_f32(float value) { return filter_.query_and_update(value); }
 
@@ -49,7 +60,7 @@ bool BloomFilterShim::query_and_update_f32(float value) { return filter_.query_a
 // would hash it instead.
 void BloomFilterShim::update_str(rust::Str value) {
   if (value.empty()) return;
-  filter_.update(value.data(), value.size());
+  (void)filter_.query_and_update(value.data(), value.size());
 }
 bool BloomFilterShim::query_str(rust::Str value) const {
   if (value.empty()) return false;
@@ -60,7 +71,7 @@ bool BloomFilterShim::query_and_update_str(rust::Str value) {
   return filter_.query_and_update(value.data(), value.size());
 }
 void BloomFilterShim::update_bytes(rust::Slice<const uint8_t> value) {
-  filter_.update(value.data(), value.size());
+  (void)filter_.query_and_update(value.data(), value.size());
 }
 bool BloomFilterShim::query_bytes(rust::Slice<const uint8_t> value) const {
   return filter_.query(value.data(), value.size());

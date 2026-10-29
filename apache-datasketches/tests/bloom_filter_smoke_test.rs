@@ -193,3 +193,36 @@ fn false_positive_rate_is_near_target() {
     let rate = fp as f64 / 100_000.0;
     assert!(rate < 0.02, "fpp {rate} far above the 0.01 target");
 }
+
+#[test]
+fn mixing_update_and_query_and_update_keeps_count_exact() {
+    // Upstream's query_and_update added to a stale cached count after a plain
+    // update, so bits_used under-reported and serialize wrote a count that
+    // deserialize rejected. Deserialize recounts the bits and compares, so a
+    // successful round trip pins the count.
+    // The stale count could also be 0 with bits set, so the filter claimed to
+    // be empty and every query answered false: a false negative.
+    let mut f = BloomFilterBuilder::by_size(1024, 3).build().unwrap();
+    f.update_u64(1);
+    assert!(f.query_and_update_u64(1));
+    assert!(!f.is_empty());
+    assert!(f.query_u64(1), "no false negatives");
+    assert_eq!(f.bits_used(), 3);
+
+    let mut f = BloomFilterBuilder::by_size(1024, 3).build().unwrap();
+    for i in 0..200u64 {
+        if i % 3 == 0 {
+            f.update_u64(i);
+        } else {
+            let _ = f.query_and_update_u64(i);
+        }
+        if i % 50 == 0 {
+            let mut restored = BloomFilter::deserialize(&f.serialize()).unwrap();
+            assert_eq!(restored.bits_used(), f.bits_used(), "after {i}");
+        }
+    }
+    f.update_str("a");
+    let _ = f.query_and_update_bytes(b"b");
+    let mut restored = BloomFilter::deserialize(&f.serialize()).unwrap();
+    assert_eq!(restored.bits_used(), f.bits_used());
+}
