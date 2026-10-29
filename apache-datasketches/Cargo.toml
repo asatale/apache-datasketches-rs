@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 description = "Safe, idiomatic Rust bindings for Apache DataSketches"
 readme = "README.md"
-keywords = ["datasketches", "hyperloglog", "sketch", "cardinality"]
+keywords = ["datasketches", "hyperloglog", "sketch", "cardinality", "quantiles"]
 categories = ["data-structures", "algorithms"]
 
 [features]
