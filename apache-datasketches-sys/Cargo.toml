@@ -22,6 +22,7 @@ cpc = []
 tuple = []
 kll = []
 req = []
+bloom = []
 
 [dependencies]
 cxx = "1"
