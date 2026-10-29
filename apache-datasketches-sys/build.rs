@@ -141,8 +141,13 @@ fn main() {
         // Upstream datasketches-cpp declares virtual destructors on some
         // `final` classes (e.g. AuxHashMap) — harmless, but noisy under
         // clang. Silenced here rather than patched in the vendored headers so
-        // we don't diverge from upstream.
-        .flag_if_supported("-Wno-unnecessary-virtual-specifier");
+        // we don't diverge from upstream. Likewise the vendored filters header
+        // bloom_filter_impl.hpp declares a `static` (non-inline) function in a
+        // header (validate_bloom_filter_num_bits_set), which clang warns about
+        // as an unneeded internal declaration; silenced here rather than
+        // patching the vendored copy.
+        .flag_if_supported("-Wno-unnecessary-virtual-specifier")
+        .flag_if_supported("-Wno-unneeded-internal-declaration");
 
     if cfg!(feature = "hll") {
         build
