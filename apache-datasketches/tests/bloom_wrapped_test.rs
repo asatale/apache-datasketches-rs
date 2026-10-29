@@ -1,6 +1,9 @@
 use apache_datasketches::bloom::{BloomFilter, BloomFilterBuilder, WrappedBloomFilter};
 use apache_datasketches::SketchError;
 
+mod bloom_common;
+use bloom_common::{assert_wrap_rejected, Image};
+
 fn sample() -> BloomFilter {
     let mut f = BloomFilterBuilder::by_accuracy(1_000, 0.01)
         .build()
@@ -69,4 +72,44 @@ fn garbage_bytes_fail() {
         WrappedBloomFilter::wrap(&[1, 2, 3]),
         Err(SketchError::Deserialization(_))
     ));
+}
+
+#[test]
+fn preamble_3_non_empty_cannot_read_past_the_slice() {
+    // Upstream requires only `prelongs * 8` = 24 bytes, then reads the
+    // bits-set count at 24..32 and points the wrapped bit array at byte 32:
+    // past the end of the borrowed slice. Here the bytes past the slice are
+    // a consistent bit array, so unvalidated upstream would return a view
+    // whose queries read memory the lifetime does not cover.
+    let mut image = Image::non_empty(2, 3, 7, &[0, 1, 2, 3]);
+    image.preamble_longs = 3;
+    let bytes = image.bytes();
+    assert_wrap_rejected(&bytes[..24], "preamble 3, sliced to 24 bytes");
+    bloom_common::assert_deserialize_rejected(&bytes[..24], "preamble 3, sliced to 24 bytes");
+}
+
+#[test]
+fn wrapped_crafted_capacity_zero_is_rejected() {
+    // Capacity 0 from num_longs = 0 or a wrapped 32-bit shift. Queries on such
+    // a view returned false early (`is_empty`) because the 0-byte bit array
+    // counts 0 set bits, but `to_owned` would hand back an updatable filter.
+    for num_longs in [0u32, 1 << 29, 0x8000_0000] {
+        let mut image = Image::non_empty(1, 3, 7, &[]);
+        image.num_longs = num_longs;
+        image.bits.clear();
+        assert_wrap_rejected(&image.bytes(), &format!("{num_longs:#x} longs"));
+    }
+}
+
+#[test]
+fn wrapped_valid_crafted_image_queries_and_converts() {
+    let bytes = Image::non_empty(2, 2, 7, &[5, 77]).bytes();
+    let w = WrappedBloomFilter::wrap(&bytes).unwrap();
+    assert_eq!((w.capacity(), w.bits_used()), (128, 2));
+    for i in 0..1_000u64 {
+        let _ = w.query_u64(i);
+    }
+    let mut owned = w.to_owned();
+    owned.update_u64(1);
+    assert!(owned.query_and_update_u64(1));
 }

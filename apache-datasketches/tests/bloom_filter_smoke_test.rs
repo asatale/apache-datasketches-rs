@@ -1,6 +1,9 @@
 use apache_datasketches::bloom::{BloomFilter, BloomFilterBuilder, DEFAULT_SEED};
 use apache_datasketches::SketchError;
 
+mod bloom_common;
+use bloom_common::{assert_rejected, Image, DIRTY, EMPTY_FLAG};
+
 fn filled(n: u64) -> BloomFilter {
     let mut f = BloomFilterBuilder::by_accuracy(10_000, 0.01)
         .build()
@@ -192,6 +195,192 @@ fn false_positive_rate_is_near_target() {
         .count();
     let rate = fp as f64 / 100_000.0;
     assert!(rate < 0.02, "fpp {rate} far above the 0.01 target");
+}
+
+// ---- Hardening: crafted serialized images -------------------------------
+//
+// Upstream's `internal_deserialize_or_wrap` (bloom_filter_impl.hpp:346-421,
+// 5.3.0) trusts parts of the header; the shim's `validate_bloom_layout`
+// rejects these before upstream sees them. Each case is checked through both
+// `BloomFilter::deserialize` and `WrappedBloomFilter::wrap`.
+
+#[test]
+fn rejects_zero_hashes() {
+    // Upstream checks num_hashes only on the empty path (in the constructor);
+    // a non-empty image with 0 hashes made every query return true.
+    assert_rejected(
+        &Image::non_empty(2, 0, 7, &[3]).bytes(),
+        "non-empty, 0 hashes",
+    );
+    assert_rejected(&Image::empty(2, 0, 7).bytes(), "empty, 0 hashes");
+}
+
+#[test]
+fn rejects_max_hashes() {
+    // Upstream's hashing loops use a uint16_t counter `i <= num_hashes_`
+    // (bloom_filter_impl.hpp:650, :748, :845), which never ends for 65535:
+    // any update hangs.
+    assert_rejected(
+        &Image::non_empty(2, u16::MAX, 7, &[3]).bytes(),
+        "non-empty, 65535 hashes",
+    );
+    assert_rejected(&Image::empty(2, u16::MAX, 7).bytes(), "empty, 65535 hashes");
+    // One fewer works.
+    let mut f = BloomFilterBuilder::by_size(64, u16::MAX - 1)
+        .build()
+        .unwrap();
+    f.update_u64(1);
+    assert!(f.query_u64(1));
+    assert!(f.query_and_update_u64(1));
+}
+
+#[test]
+fn rejects_zero_capacity() {
+    // Non-empty with num_longs = 0: upstream builds a filter of capacity 0,
+    // and update / query_and_update compute `hash % 0`.
+    assert_rejected(
+        &Image::non_empty(0, 3, 7, &[]).bytes(),
+        "non-empty, 0 longs",
+    );
+    assert_rejected(&Image::empty(0, 3, 7).bytes(), "empty, 0 longs");
+}
+
+#[test]
+fn rejects_num_longs_that_wrap_the_32_bit_shift() {
+    // Upstream reads num_longs as uint32_t and evaluates `num_longs << 6` and
+    // `num_longs << 3` in 32 bits (bloom_filter_impl.hpp:392, :398, :420).
+    // These need no large buffer: num_bytes wraps to 0 or 8 too.
+    for num_longs in [1u32 << 29, 0x8000_0000, 3 << 29] {
+        // Capacity wraps to 0: the same `% 0` as num_longs = 0. 0x8000_0000
+        // is also a negative int32_t, which is what upstream serializes.
+        let mut image = Image::non_empty(1, 3, 7, &[]);
+        image.num_longs = num_longs;
+        image.bits.clear();
+        assert_rejected(&image.bytes(), &format!("non-empty, {num_longs:#x} longs"));
+    }
+    // 2^29 + 1 reads as one word: capacity 64, misread rather than rejected.
+    let mut image = Image::non_empty(1, 3, 7, &[5]);
+    image.num_longs = (1 << 29) + 1;
+    assert_rejected(&image.bytes(), "non-empty, 2^29 + 1 longs");
+    // Empty images: 2^26 wraps to 0 bits, 2^26 + 1 to a 64-bit filter, and
+    // anything at or above MAX_FILTER_SIZE_BITS / 64 is out of range anyway.
+    for num_longs in [1u32 << 26, (1 << 26) + 1, 1 << 28, 0x8000_0000, u32::MAX] {
+        assert_rejected(
+            &Image::empty(num_longs, 3, 7).bytes(),
+            &format!("empty, {num_longs:#x} longs"),
+        );
+    }
+}
+
+#[test]
+fn rejects_num_longs_above_the_maximum_filter_size() {
+    // MAX_FILTER_SIZE_BITS / 64 = 268_435_451; the buffer cannot hold it.
+    let mut image = Image::non_empty(1, 3, 7, &[]);
+    image.num_longs = 268_435_452;
+    assert_rejected(&image.bytes(), "non-empty, above maximum");
+}
+
+#[test]
+fn rejects_truncated_bit_array() {
+    let bytes = Image::non_empty(4, 3, 7, &[1, 100, 200]).bytes();
+    for len in [24, 31, 32, 33, 40, bytes.len() - 1] {
+        assert_rejected(&bytes[..len], &format!("truncated to {len}"));
+    }
+}
+
+#[test]
+fn rejects_wrong_bits_set_count() {
+    let mut image = Image::non_empty(2, 3, 7, &[1, 2, 3]);
+    for count in [0, 2, 4, 128, DIRTY - 1] {
+        image.count = Some(count);
+        assert_rejected(&image.bytes(), &format!("count {count}"));
+    }
+}
+
+#[test]
+fn rejects_unknown_flag_bits() {
+    for flag in [1u8, 2, 8, 0x10, 0x80] {
+        let mut image = Image::non_empty(2, 3, 7, &[1]);
+        image.flags = flag;
+        assert_rejected(&image.bytes(), &format!("non-empty, flags {flag:#x}"));
+        let mut image = Image::empty(2, 3, 7);
+        image.flags = EMPTY_FLAG | flag;
+        assert_rejected(&image.bytes(), &format!("empty, flags {flag:#x}"));
+    }
+}
+
+#[test]
+fn rejects_preamble_flag_mismatch() {
+    // Preamble 3 without the empty flag: upstream checks only 24 bytes are
+    // present, then reads the bits-set count and bit array past them.
+    let mut image = Image::non_empty(2, 3, 7, &[1]);
+    image.preamble_longs = 3;
+    assert_rejected(&image.bytes(), "preamble 3, non-empty");
+    // Preamble 4 with the empty flag (upstream never writes it).
+    let mut image = Image::empty(2, 3, 7);
+    image.preamble_longs = 4;
+    image.count = Some(0);
+    assert_rejected(&image.bytes(), "preamble 4, empty");
+    // Out-of-range preambles, version and family.
+    for preamble_longs in [0u8, 1, 2, 5, 255] {
+        let mut image = Image::non_empty(2, 3, 7, &[1]);
+        image.preamble_longs = preamble_longs;
+        assert_rejected(&image.bytes(), &format!("preamble {preamble_longs}"));
+    }
+    let mut image = Image::non_empty(2, 3, 7, &[1]);
+    image.serial_version = 2;
+    assert_rejected(&image.bytes(), "serial version 2");
+    let mut image = Image::non_empty(2, 3, 7, &[1]);
+    image.family = 20;
+    assert_rejected(&image.bytes(), "family 20");
+}
+
+#[test]
+fn accepts_genuine_crafted_images() {
+    // An empty image with a large but valid capacity still deserializes and
+    // allocates the whole bit array (2^20 bits here; see
+    // `BloomFilter::deserialize` for the bound).
+    let bytes = Image::empty(1 << 14, 3, 7).bytes();
+    let mut f = BloomFilter::deserialize(&bytes).unwrap();
+    assert!(f.is_empty());
+    assert_eq!(f.capacity(), 1 << 20);
+    f.update_u64(9);
+    assert!(f.query_u64(9));
+    let w = apache_datasketches::bloom::WrappedBloomFilter::wrap(&bytes).unwrap();
+    assert_eq!(w.capacity(), 1 << 20);
+
+    // Non-empty with the dirty sentinel, any seed, trailing bytes.
+    for seed in [0, 7, u64::MAX] {
+        let mut image = Image::non_empty(3, 65_534, seed, &[0, 64, 191]);
+        image.count = Some(DIRTY);
+        let mut bytes = image.bytes();
+        bytes.extend_from_slice(&[0xAB; 5]);
+        let mut f = BloomFilter::deserialize(&bytes).unwrap();
+        assert_eq!(
+            (f.capacity(), f.num_hashes(), f.seed(), f.bits_used()),
+            (192, 65_534, seed, 3)
+        );
+        let w = apache_datasketches::bloom::WrappedBloomFilter::wrap(&bytes).unwrap();
+        assert_eq!((w.capacity(), w.bits_used()), (192, 3));
+    }
+
+    // The largest accepted capacity, 2^26 - 1 words, as a non-empty image is
+    // 512 MiB; check only the boundary arithmetic on a one-word image.
+    let f = BloomFilter::deserialize(&Image::non_empty(1, 1, 0, &[63]).bytes()).unwrap();
+    assert_eq!(f.capacity(), 64);
+}
+
+#[test]
+fn deserialized_filters_update_and_query_after_validation() {
+    // The operations that divide by the capacity, on accepted crafted bytes.
+    let mut f = BloomFilter::deserialize(&Image::non_empty(1, 4, 7, &[0]).bytes()).unwrap();
+    for i in 0..100u64 {
+        f.update_u64(i);
+        assert!(f.query_and_update_u64(i));
+        assert!(f.query_u64(i));
+    }
+    let again = BloomFilter::deserialize(&f.serialize()).unwrap();
+    assert_eq!(again.capacity(), 64);
 }
 
 #[test]
