@@ -58,7 +58,7 @@ Checked against the vendored 5.3.0 headers:
   the full bit array (`ensure_minimum_memory`), and that the stored
   bits-set count matches the actual count (or is the "dirty" sentinel).
   The constructor rejects `num_hashes == 0`, zero bits and oversize filters.
-- An **empty** image is 32 bytes but carries `num_longs` (capacity); upstream
+- An **empty** image is 24 bytes but carries `num_longs` (capacity); upstream
   allocates the full bit array for it, up to `MAX_FILTER_SIZE_BITS` bits
   (~2 GiB). A genuine large empty filter serializes exactly this way.
 - Serialization is deterministic given the seed; there is no randomness in
@@ -241,7 +241,7 @@ Planned as its own task, as for REQ:
    non-empty image, the bit array fully present; trailing-byte policy
    matching what upstream itself writes. Plus anything the audit finds.
 3. **Empty-image capacity (decided):** accept it as upstream does — a
-   genuine large empty filter serializes to 32 bytes — and state clearly in
+   genuine large empty filter serializes to 24 bytes — and state clearly in
    the `deserialize` and `wrap` rustdoc that an empty image can make upstream
    allocate up to ~2 GiB, so callers handling untrusted input should bound
    it (e.g. check the claimed capacity or cap process memory).
