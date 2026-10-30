@@ -69,7 +69,10 @@ public:
   uint64_t get_seed() const;
   uint64_t get_bits_used();  // not const upstream: recounts and caches after updates
 
-  std::unique_ptr<std::vector<uint8_t>> serialize() const;
+  uint64_t serialized_size_bytes() const;
+  // Writes the image into `out`, which must be exactly serialized_size_bytes()
+  // long; throws (surfaced as Err) otherwise.
+  void serialize_into(rust::Slice<uint8_t> out) const;
   rust::String to_string_summary() const;
 
   const datasketches::bloom_filter& inner() const { return filter_; }

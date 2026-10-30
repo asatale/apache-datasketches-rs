@@ -21,10 +21,13 @@ fn construct_update_query_roundtrip() {
     let used = f.pin_mut().get_bits_used();
     assert!(used > 0 && used <= f.get_capacity());
 
-    let bytes = f.serialize();
-    let g = ffi::bloom_deserialize(bytes.as_slice()).unwrap();
+    let mut bytes = vec![0u8; f.serialized_size_bytes() as usize];
+    f.serialize_into(&mut bytes).unwrap();
+    let mut too_short = vec![0u8; bytes.len() - 1];
+    assert!(f.serialize_into(&mut too_short).is_err());
+    let g = ffi::bloom_deserialize(&bytes).unwrap();
     assert!(g.query_u64(42));
-    let w = ffi::bloom_wrap(bytes.as_slice()).unwrap();
+    let w = ffi::bloom_wrap(&bytes).unwrap();
     assert!(w.query_u64(42));
     assert!(w.query_str("hello"));
     assert_eq!(w.get_bits_used(), used);

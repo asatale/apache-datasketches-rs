@@ -1,6 +1,8 @@
 #include "bloom_filter_shim.h"
 
 #include <cstring>
+#include <ostream>
+#include <streambuf>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -228,10 +230,27 @@ uint16_t BloomFilterShim::get_num_hashes() const { return filter_.get_num_hashes
 uint64_t BloomFilterShim::get_seed() const { return filter_.get_seed(); }
 uint64_t BloomFilterShim::get_bits_used() { return filter_.get_bits_used(); }
 
-// Whole buffer handed over at once; see cpc_sketch_shim.cc for why not a
-// rust::Vec built element by element.
-std::unique_ptr<std::vector<uint8_t>> BloomFilterShim::serialize() const {
-  return std::make_unique<std::vector<uint8_t>>(filter_.serialize());
+uint64_t BloomFilterShim::serialized_size_bytes() const { return filter_.get_serialized_size_bytes(); }
+
+namespace {
+// A fixed-capacity output buffer over caller-owned memory: upstream's
+// serialize(std::ostream&) writes straight into the Rust Vec, so the image is
+// built once instead of in a std::vector and then copied again. Writes past
+// the end fail the stream rather than overflowing.
+class FixedBuf : public std::streambuf {
+public:
+  FixedBuf(char* data, size_t size) { setp(data, data + size); }
+  size_t written() const { return static_cast<size_t>(pptr() - pbase()); }
+};
+}  // namespace
+
+void BloomFilterShim::serialize_into(rust::Slice<uint8_t> out) const {
+  FixedBuf buf(reinterpret_cast<char*>(out.data()), out.size());
+  std::ostream os(&buf);
+  filter_.serialize(os);
+  if (!os.good() || buf.written() != out.size()) {
+    throw std::runtime_error("bloom serialize_into: output length does not match the serialized size");
+  }
 }
 
 rust::String BloomFilterShim::to_string_summary() const {

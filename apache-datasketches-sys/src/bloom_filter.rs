@@ -93,7 +93,8 @@ pub mod ffi {
         fn get_num_hashes(self: &BloomFilterShim) -> u16;
         fn get_seed(self: &BloomFilterShim) -> u64;
         fn get_bits_used(self: Pin<&mut BloomFilterShim>) -> u64;
-        fn serialize(self: &BloomFilterShim) -> UniquePtr<CxxVector<u8>>;
+        fn serialized_size_bytes(self: &BloomFilterShim) -> u64;
+        fn serialize_into(self: &BloomFilterShim, out: &mut [u8]) -> Result<()>;
         fn to_string_summary(self: &BloomFilterShim) -> String;
 
         fn query_u64(self: &WrappedBloomFilterShim, value: u64) -> bool;

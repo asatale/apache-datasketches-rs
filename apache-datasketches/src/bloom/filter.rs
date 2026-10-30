@@ -183,8 +183,21 @@ impl BloomFilter {
     /// Every filter this crate builds round-trips: the builder caps sizes at
     /// 2^32 - 64 bits because upstream computes the capacity it reads back
     /// in 32 bits.
+    ///
+    /// # Panics
+    ///
+    /// Only if the shim's own size accounting disagrees with upstream's
+    /// serializer, which cannot happen for a valid filter.
     pub fn serialize(&self) -> Vec<u8> {
-        self.inner.serialize().as_slice().to_vec()
+        // The image is written straight into the Vec: no intermediate
+        // C++ buffer and no second full-size copy.
+        let len = usize::try_from(self.inner.serialized_size_bytes())
+            .expect("serialized Bloom filter size exceeds usize");
+        let mut bytes = vec![0u8; len];
+        self.inner
+            .serialize_into(&mut bytes)
+            .expect("serializing a Bloom filter failed (size mismatch)");
+        bytes
     }
 
     /// Returns a human-readable summary of the filter.
