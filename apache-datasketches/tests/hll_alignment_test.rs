@@ -3,6 +3,7 @@
 //! map, which a real sketch rarely produces, so it is forged here.
 
 use apache_datasketches::hll::{HllSketch, TargetHllType};
+use apache_datasketches::SketchError;
 
 /// A buffer whose base is 8-byte aligned (it is a `Vec<u64>`), holding
 /// `bytes` at `offset`.
@@ -107,4 +108,29 @@ fn ordinary_images_deserialize_at_every_offset() {
             assert_round_trips_at_every_offset(&s.serialize_updatable());
         }
     }
+}
+
+#[test]
+fn empty_input_is_rejected_not_crashed() {
+    assert!(matches!(
+        HllSketch::deserialize(&[]),
+        Err(SketchError::Deserialization(_))
+    ));
+    // An aligned, non-dangling empty subslice of a real buffer.
+    let p = Placed::new(&forged_hll4_with_aux(), 0);
+    assert!(matches!(
+        HllSketch::deserialize(&p.slice()[8..8]),
+        Err(SketchError::Deserialization(_))
+    ));
+}
+
+#[test]
+fn updatable_image_of_forged_aux_map_round_trips_at_every_offset() {
+    // The updatable image is built by re-serializing the forged sketch, then
+    // deserialized again at every offset; this reads the aux map the way
+    // AuxHashMap-internal.hpp:82 does for an updatable HLL4 image.
+    let updatable = HllSketch::deserialize(&forged_hll4_with_aux())
+        .unwrap()
+        .serialize_updatable();
+    assert_round_trips_at_every_offset(&updatable);
 }

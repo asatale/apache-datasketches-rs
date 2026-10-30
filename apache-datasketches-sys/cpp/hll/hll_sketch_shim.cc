@@ -91,6 +91,11 @@ std::unique_ptr<HllSketchShim> hll_sketch_copy_as(const HllSketchShim& sketch, T
 // undefined behavior unless the image is 4-byte aligned. The result is an
 // owned sketch, so an 8-byte-aligned copy of a misaligned image is harmless.
 std::unique_ptr<HllSketchShim> hll_sketch_deserialize(rust::Slice<const uint8_t> bytes) {
+  // Upstream reads bytes[0] before any length check, so an empty input must
+  // be rejected here (a zero-length slice may also have a dangling address).
+  if (bytes.size() == 0) {
+    throw std::invalid_argument("HLL sketch bytes are empty");
+  }
   if (reinterpret_cast<uintptr_t>(bytes.data()) % alignof(uint64_t) != 0) {
     std::vector<uint64_t> aligned((bytes.size() + sizeof(uint64_t) - 1) / sizeof(uint64_t));
     std::memcpy(aligned.data(), bytes.data(), bytes.size());
