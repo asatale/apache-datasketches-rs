@@ -27,14 +27,17 @@ V read_at(const uint8_t* data, size_t size, size_t offset, const char* what) {
   return value;
 }
 
-// Upstream hashes an item with XXHash64, which reads it through uint64_t*
-// (and uint32_t* for the tail; xxhash64.h process() and hash()), so an item
-// of 8 or more bytes at a misaligned address is undefined behavior. Calls
-// fn(ptr) with ptr 8-byte aligned and pointing at the same bytes: the
-// caller's own pointer when it is already aligned (or the item is shorter
-// than a word, where only narrower reads happen), else an aligned copy on
-// the stack for small items and on the heap above that. The hash depends only
-// on the bytes, so filter state is unchanged.
+// Upstream hashes an item with XXHash64. Its process() reads caller memory
+// through uint64_t* only for items of 32 or more bytes; shorter items are
+// copied byte-wise into the hasher's own aligned buffer, and the typed tail
+// reads in hash() are from that buffer (xxhash64.h). So a misaligned item is
+// undefined behavior only from 32 bytes up. The 8-byte threshold below is
+// deliberately more conservative than that, so this stays correct if
+// upstream's buffering changes. Calls fn(ptr) with ptr 8-byte aligned and
+// pointing at the same bytes: the caller's own pointer when it is already
+// aligned or shorter than a word, else an aligned copy on the stack for small
+// items and on the heap above that. The hash depends only on the bytes, so
+// filter state is unchanged.
 constexpr size_t STACK_ITEM_BYTES = 256;
 
 template<typename Fn>
