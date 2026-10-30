@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
+#include <cstdint>
 
 namespace apache_datasketches_rs {
 
@@ -287,14 +289,41 @@ std::unique_ptr<BloomFilterShim> bloom_new_by_size(uint64_t num_bits, uint16_t n
       datasketches::bloom_filter::builder::create_by_size(num_bits, num_hashes, seed));
 }
 
+// Upstream reads a non-empty image's bit array through a
+// reinterpret_cast<const uint64_t*> (bit_array_ops.hpp count_num_bits_set, and
+// every query on a wrapped view), which is undefined behavior unless the base
+// is 8-byte aligned. Both headers (24 and 32 bytes) are multiples of 8, so
+// aligning the base aligns the bit array.
+bool is_aligned_for_words(const uint8_t* data) {
+  return reinterpret_cast<uintptr_t>(data) % alignof(uint64_t) == 0;
+}
+
 std::unique_ptr<BloomFilterShim> bloom_deserialize(rust::Slice<const uint8_t> bytes) {
+  // The validator reads byte-wise (memcpy), so it is safe on misaligned input.
   validate_bloom_layout(bytes);
-  return std::make_unique<BloomFilterShim>(datasketches::bloom_filter::deserialize(bytes.data(), bytes.size()));
+  if (is_aligned_for_words(bytes.data())) {
+    return std::make_unique<BloomFilterShim>(
+        datasketches::bloom_filter::deserialize(bytes.data(), bytes.size()));
+  }
+  // Deserialize copies into an owned filter, so an aligned copy is harmless.
+  std::vector<uint64_t> aligned((bytes.size() + sizeof(uint64_t) - 1) / sizeof(uint64_t));
+  std::memcpy(aligned.data(), bytes.data(), bytes.size());
+  return std::make_unique<BloomFilterShim>(
+      datasketches::bloom_filter::deserialize(aligned.data(), bytes.size()));
 }
 
 std::unique_ptr<WrappedBloomFilterShim> bloom_wrap(rust::Slice<const uint8_t> bytes) {
   validate_bloom_layout(bytes);
-  return std::make_unique<WrappedBloomFilterShim>(datasketches::bloom_filter::wrap(bytes.data(), bytes.size()));
+  // An empty image is rebuilt as an owned filter (only the header is read,
+  // byte-wise), so its alignment does not matter. A non-empty one is viewed in
+  // place and every query reads the caller's bytes as uint64_t.
+  const bool is_empty = (bytes.data()[3] & EMPTY_FLAG_MASK) != 0;
+  if (!is_empty && !is_aligned_for_words(bytes.data())) {
+    throw std::invalid_argument(
+        "Invalid Bloom filter bytes: wrapping requires the bytes to be 8-byte aligned");
+  }
+  return std::make_unique<WrappedBloomFilterShim>(
+      datasketches::bloom_filter::wrap(bytes.data(), bytes.size()));
 }
 
 uint16_t bloom_suggest_num_hashes(uint64_t max_distinct_items, uint64_t num_filter_bits) {

@@ -48,6 +48,10 @@ impl BloomFilter {
     /// are rejected: upstream misreads the former (its capacity arithmetic is
     /// 32-bit) and cannot use the latter.
     ///
+    /// Any alignment of `bytes` is accepted: upstream reads the bit array as
+    /// 64-bit words, so misaligned input is copied into an aligned buffer
+    /// first.
+    ///
     /// An empty filter serializes to 24 bytes but records its capacity;
     /// deserializing allocates the full bit array, which can be up to
     /// 2^32 - 64 bits (512 MiB). When deserializing untrusted bytes, bound the

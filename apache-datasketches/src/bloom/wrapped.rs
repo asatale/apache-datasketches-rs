@@ -50,6 +50,20 @@ impl<'a> WrappedBloomFilter<'a> {
     /// same limits; malformed or truncated input returns
     /// [`SketchError::Deserialization`].
     ///
+    /// # Errors
+    ///
+    /// Besides malformed input, returns [`SketchError::Deserialization`] if
+    /// `bytes` holds a non-empty filter and `bytes.as_ptr()` is not 8-byte
+    /// aligned: the view reads the bytes in place as 64-bit words, so it
+    /// cannot copy them. (An empty image is rebuilt as an owned filter from
+    /// its header alone, so its alignment is not checked.) A `Vec<u8>` from
+    /// [`BloomFilter::serialize`](super::BloomFilter::serialize) is in
+    /// practice aligned by the allocator, but Rust does not guarantee that;
+    /// when alignment cannot be ensured, use
+    /// [`BloomFilter::deserialize`](super::BloomFilter::deserialize) or copy
+    /// the bytes into an aligned buffer (for example a `Vec<u64>` viewed as
+    /// bytes) first.
+    ///
     /// Wrapping a non-empty image does not allocate a bit array, but wrapping
     /// an *empty* one does: an empty filter serializes to 24 bytes but records
     /// its capacity, and upstream builds an owned empty filter of that
