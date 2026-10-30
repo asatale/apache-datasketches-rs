@@ -14,6 +14,8 @@
 
 ## Global Constraints
 
+> **Amended during Task 4 (supersedes the values below):** `MAX_FILTER_SIZE_BITS` is `(1 << 32) - 64` (2^32 − 64 bits), the largest capacity upstream can deserialize; the builder and `suggest_*` reject larger sizes with `InvalidConfig`. An empty image can claim at most 512 MiB (not ~2 GiB). `num_hashes` must be in `1..=65534` (65535 hangs upstream). `update_*` route through upstream `query_and_update` to keep the bits-set count exact. See the spec's upstream-facts section.
+
 - Work on branch `feat/bloom` (already created; the spec is committed there).
 - Commit messages: conventional prefix (`feat(bloom):`, `test(bloom):`, `fix(bloom):`, `docs(bloom):`, `bench(bloom):`, `chore(bloom):`). **No `Co-Authored-By` trailer and no AI attribution of any kind.** Do not push.
 - Every public item in `apache-datasketches` needs a `///`/`//!` doc comment; `missing_docs` clean.
