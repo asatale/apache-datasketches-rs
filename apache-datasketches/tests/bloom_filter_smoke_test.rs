@@ -225,6 +225,10 @@ fn rejects_max_hashes() {
         "non-empty, 65535 hashes",
     );
     assert_rejected(&Image::empty(2, u16::MAX, 7).bytes(), "empty, 65535 hashes");
+    assert!(matches!(
+        BloomFilterBuilder::by_size(64, u16::MAX).build(),
+        Err(SketchError::InvalidConfig(_))
+    ));
     // One fewer works.
     let mut f = BloomFilterBuilder::by_size(64, u16::MAX - 1)
         .build()
@@ -414,4 +418,121 @@ fn mixing_update_and_query_and_update_keeps_count_exact() {
     let _ = f.query_and_update_bytes(b"b");
     let mut restored = BloomFilter::deserialize(&f.serialize()).unwrap();
     assert_eq!(restored.bits_used(), f.bits_used());
+}
+
+// ---- suggest_* range guards ------------------------------------------------
+//
+// Upstream static_casts the suggestion (a double) to uint16_t / uint64_t
+// unchecked (bloom_filter_builder_impl.hpp:48, :54, :61): out of range is
+// undefined behavior, so the safe layer rejects it first.
+
+const MAX_FILTER_SIZE_BITS: u64 = (i32::MAX as u64 - 32) * 8;
+
+#[test]
+fn suggest_num_hashes_rejects_results_above_the_maximum() {
+    // With one item, ceil(bits * ln 2): 94_545 bits -> 65_534, the most a
+    // filter can use; 94_546 -> 65_535 (a hang upstream, see
+    // `rejects_max_hashes`), 94_548 -> 65_536 (UB in upstream's cast).
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_hashes(1, 94_545).unwrap(),
+        65_534
+    );
+    for (n, bits) in [
+        (1u64, 94_546u64),
+        (1, 94_548),
+        (1, MAX_FILTER_SIZE_BITS),
+        (1_000, 1 << 34),
+    ] {
+        assert!(
+            matches!(
+                BloomFilterBuilder::suggest_num_hashes(n, bits),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "{n} {bits}"
+        );
+    }
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_hashes(u64::MAX, 1).unwrap(),
+        1
+    );
+    assert!(matches!(
+        BloomFilterBuilder::suggest_num_hashes(1, 0),
+        Err(SketchError::InvalidConfig(_))
+    ));
+}
+
+#[test]
+fn suggest_num_filter_bits_rejects_results_above_the_maximum_size() {
+    // At fpp 0.5, ceil(n / ln 2): 11_908_177_704 items fit in the maximum
+    // filter size, 11_908_177_705 do not.
+    let bits = BloomFilterBuilder::suggest_num_filter_bits(11_908_177_704, 0.5).unwrap();
+    assert!(bits <= MAX_FILTER_SIZE_BITS && bits > MAX_FILTER_SIZE_BITS - 2);
+    for (n, p) in [
+        (11_908_177_705u64, 0.5),
+        (u64::MAX, 0.01),
+        (u64::MAX, 0.999),
+        (1 << 40, f64::MIN_POSITIVE),
+    ] {
+        assert!(
+            matches!(
+                BloomFilterBuilder::suggest_num_filter_bits(n, p),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "{n} {p}"
+        );
+        // build() calls the same upstream suggestion internally.
+        assert!(
+            matches!(
+                BloomFilterBuilder::by_accuracy(n, p).build(),
+                Err(SketchError::InvalidConfig(_))
+            ),
+            "build {n} {p}"
+        );
+    }
+}
+
+#[test]
+fn suggest_num_hashes_for_fpp_always_fits() {
+    // ceil(-ln p / ln 2) peaks at about 1074 for the smallest positive f64.
+    let most = BloomFilterBuilder::suggest_num_hashes_for_fpp(f64::from_bits(1)).unwrap();
+    assert!((1074..=1075).contains(&most), "{most}");
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_hashes_for_fpp(0.999_999).unwrap(),
+        1
+    );
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_hashes_for_fpp(0.5).unwrap(),
+        1
+    );
+}
+
+#[test]
+fn incompatibility_errors_name_the_parameter() {
+    let mut a = BloomFilterBuilder::by_size(4096, 4).build().unwrap();
+    for (other, word) in [
+        (
+            BloomFilterBuilder::by_size(8192, 4).build().unwrap(),
+            "capacity",
+        ),
+        (
+            BloomFilterBuilder::by_size(4096, 5).build().unwrap(),
+            "number of hashes",
+        ),
+        (
+            BloomFilterBuilder::by_size(4096, 4)
+                .seed(1)
+                .build()
+                .unwrap(),
+            "seed",
+        ),
+    ] {
+        for result in [a.union_with(&other), a.intersect(&other)] {
+            match result {
+                Err(SketchError::InvalidConfig(msg)) => {
+                    assert!(msg.contains(word), "{msg:?} should name the {word}")
+                }
+                other => panic!("expected InvalidConfig, got {other:?}"),
+            }
+        }
+    }
 }

@@ -42,10 +42,16 @@ macro_rules! bloom_methods {
 impl BloomFilter {
     /// Reconstructs a filter from bytes produced by [`Self::serialize`].
     ///
+    /// The bytes are validated before upstream reads them; malformed or
+    /// truncated input returns [`SketchError::Deserialization`]. Images with
+    /// a capacity of 2^32 bits or more, or with `u16::MAX` hash functions,
+    /// are rejected: upstream misreads the former (its capacity arithmetic is
+    /// 32-bit) and cannot use the latter.
+    ///
     /// An empty filter serializes to 24 bytes but records its capacity;
-    /// deserializing allocates the full bit array, which upstream allows up
-    /// to about 2 GiB. When deserializing untrusted bytes, bound the claimed
-    /// capacity (or the process's memory) yourself.
+    /// deserializing allocates the full bit array, which can be up to
+    /// 2^32 - 64 bits (512 MiB). When deserializing untrusted bytes, bound the
+    /// claimed capacity (or the process's memory) yourself.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = ffi::bloom_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
@@ -169,6 +175,10 @@ impl BloomFilter {
 
     /// Serializes the filter to bytes readable by [`Self::deserialize`] and
     /// [`WrappedBloomFilter::wrap`](super::WrappedBloomFilter::wrap).
+    ///
+    /// A filter with a capacity of 2^32 bits (512 MiB) or more serializes,
+    /// but cannot be read back: upstream computes the capacity it reads in
+    /// 32 bits, so [`Self::deserialize`] rejects such bytes.
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize().as_slice().to_vec()
     }

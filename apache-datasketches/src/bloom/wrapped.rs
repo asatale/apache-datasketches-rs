@@ -45,10 +45,16 @@ macro_rules! wrapped_queries {
 impl<'a> WrappedBloomFilter<'a> {
     /// Wraps a serialized filter's bytes without copying them.
     ///
-    /// An empty filter serializes to 24 bytes but records its capacity;
-    /// deserializing allocates the full bit array, which upstream allows up
-    /// to about 2 GiB. When wrapping untrusted bytes, bound the claimed
-    /// capacity (or the process's memory) yourself.
+    /// The bytes are validated as for
+    /// [`BloomFilter::deserialize`](super::BloomFilter::deserialize), with the
+    /// same limits; malformed or truncated input returns
+    /// [`SketchError::Deserialization`].
+    ///
+    /// Wrapping a non-empty image does not allocate a bit array, but wrapping
+    /// an *empty* one does: an empty filter serializes to 24 bytes but records
+    /// its capacity, and upstream builds an owned empty filter of that
+    /// capacity, up to 2^32 - 64 bits (512 MiB). When wrapping untrusted
+    /// bytes, bound the claimed capacity (or the process's memory) yourself.
     pub fn wrap(bytes: &'a [u8]) -> Result<Self, SketchError> {
         let inner = ffi::bloom_wrap(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
@@ -108,6 +114,11 @@ impl<'a> WrappedBloomFilter<'a> {
     }
 
     /// Copies the view into an independent, mutable [`BloomFilter`].
+    ///
+    /// # Panics
+    ///
+    /// Only if allocating the copy fails. The copy allocates the full bit
+    /// array, which for a view of an empty image can be up to 512 MiB.
     // Named to mirror the upstream API; not the `ToOwned` trait.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_owned(&self) -> BloomFilter {
@@ -115,7 +126,7 @@ impl<'a> WrappedBloomFilter<'a> {
             inner: self
                 .inner
                 .to_owned()
-                .expect("copying a validated wrapped Bloom filter cannot fail"),
+                .expect("copying a wrapped Bloom filter failed (out of memory?)"),
         }
     }
 

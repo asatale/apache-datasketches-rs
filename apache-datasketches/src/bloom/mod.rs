@@ -43,5 +43,10 @@ pub use wrapped::WrappedBloomFilter;
 /// called. Filters must share a seed to be combined.
 pub const DEFAULT_SEED: u64 = 9001;
 
+/// Largest number of hash functions that works upstream: its hashing loops
+/// (`for (uint16_t i = 1; i <= num_hashes_; i++)`, bloom_filter_impl.hpp
+/// :650, :748, :845) never terminate for `u16::MAX`.
+pub(crate) const MAX_NUM_HASHES: u16 = u16::MAX - 1;
+
 /// Largest filter size, in bits, that upstream accepts.
 pub(crate) const MAX_FILTER_SIZE_BITS: u64 = (i32::MAX as u64 - 32) * 8;

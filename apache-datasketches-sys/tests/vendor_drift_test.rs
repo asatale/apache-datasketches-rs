@@ -25,7 +25,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The header trees `build.rs` puts on the include path.
-const MODULES: [&str; 8] = ["common", "hll", "cpc", "theta", "tuple", "kll", "req", "filters"];
+const MODULES: [&str; 8] = [
+    "common", "hll", "cpc", "theta", "tuple", "kll", "req", "filters",
+];
 
 /// Present upstream, deliberately absent from the vendored copy: a CMake input
 /// template, not a header the Rust build has any use for.

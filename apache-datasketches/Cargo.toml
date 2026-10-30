@@ -370,6 +370,10 @@ name = "req_serialization_compat_test"
 required-features = ["req"]
 
 [[test]]
+name = "tuple_seed_hash_test"
+required-features = ["tuple"]
+
+[[test]]
 name = "bloom_filter_smoke_test"
 required-features = ["bloom"]
 
