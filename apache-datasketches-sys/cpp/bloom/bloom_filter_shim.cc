@@ -27,6 +27,34 @@ V read_at(const uint8_t* data, size_t size, size_t offset, const char* what) {
   return value;
 }
 
+// Upstream hashes an item with XXHash64. Its process() reads caller memory
+// through uint64_t* only for items of 32 or more bytes; shorter items are
+// copied byte-wise into the hasher's own aligned buffer, and the typed tail
+// reads in hash() are from that buffer (xxhash64.h). So a misaligned item is
+// undefined behavior only from 32 bytes up. The 8-byte threshold below is
+// deliberately more conservative than that, so this stays correct if
+// upstream's buffering changes. Calls fn(ptr) with ptr 8-byte aligned and
+// pointing at the same bytes: the caller's own pointer when it is already
+// aligned or shorter than a word, else an aligned copy on the stack for small
+// items and on the heap above that. The hash depends only on the bytes, so
+// filter state is unchanged.
+constexpr size_t STACK_ITEM_BYTES = 256;
+
+template<typename Fn>
+auto with_aligned_item(const void* data, size_t len, Fn&& fn) {
+  if (len < sizeof(uint64_t) || reinterpret_cast<uintptr_t>(data) % alignof(uint64_t) == 0) {
+    return fn(data);
+  }
+  if (len <= STACK_ITEM_BYTES) {
+    alignas(uint64_t) unsigned char buf[STACK_ITEM_BYTES];
+    std::memcpy(buf, data, len);
+    return fn(static_cast<const void*>(buf));
+  }
+  std::vector<uint64_t> copy((len + sizeof(uint64_t) - 1) / sizeof(uint64_t));
+  std::memcpy(copy.data(), data, len);
+  return fn(static_cast<const void*>(copy.data()));
+}
+
 [[noreturn]] void reject(const std::string& why) {
   throw std::invalid_argument("Invalid Bloom filter bytes: " + why);
 }
@@ -195,24 +223,24 @@ bool BloomFilterShim::query_and_update_f32(float value) { return filter_.query_a
 // would hash it instead.
 void BloomFilterShim::update_str(rust::Str value) {
   if (value.empty()) return;
-  (void)filter_.query_and_update(value.data(), value.size());
+  (void)with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query_and_update(p, value.size()); });
 }
 bool BloomFilterShim::query_str(rust::Str value) const {
   if (value.empty()) return false;
-  return filter_.query(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query(p, value.size()); });
 }
 bool BloomFilterShim::query_and_update_str(rust::Str value) {
   if (value.empty()) return false;
-  return filter_.query_and_update(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query_and_update(p, value.size()); });
 }
 void BloomFilterShim::update_bytes(rust::Slice<const uint8_t> value) {
-  (void)filter_.query_and_update(value.data(), value.size());
+  (void)with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query_and_update(p, value.size()); });
 }
 bool BloomFilterShim::query_bytes(rust::Slice<const uint8_t> value) const {
-  return filter_.query(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query(p, value.size()); });
 }
 bool BloomFilterShim::query_and_update_bytes(rust::Slice<const uint8_t> value) {
-  return filter_.query_and_update(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query_and_update(p, value.size()); });
 }
 
 void BloomFilterShim::union_with_filter(const BloomFilterShim& other) { filter_.union_with(other.inner()); }
@@ -271,10 +299,10 @@ bool WrappedBloomFilterShim::query_f64(double value) const { return filter_.quer
 bool WrappedBloomFilterShim::query_f32(float value) const { return filter_.query(value); }
 bool WrappedBloomFilterShim::query_str(rust::Str value) const {
   if (value.empty()) return false;
-  return filter_.query(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query(p, value.size()); });
 }
 bool WrappedBloomFilterShim::query_bytes(rust::Slice<const uint8_t> value) const {
-  return filter_.query(value.data(), value.size());
+  return with_aligned_item(value.data(), value.size(), [&](const void* p) { return filter_.query(p, value.size()); });
 }
 bool WrappedBloomFilterShim::is_compatible_with_filter(const BloomFilterShim& other) const { return filter_.is_compatible(other.inner()); }
 bool WrappedBloomFilterShim::is_compatible_with_wrapped(const WrappedBloomFilterShim& other) const { return filter_.is_compatible(other.inner()); }

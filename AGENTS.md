@@ -168,6 +168,29 @@ which the docs flag as a security note. Updates go through upstream's
 `query_and_update` so the bits-set count stays exact. Its bench pair
 cross-checks the deterministic `bits_used`, hits and bytes fields exactly.
 
+Input alignment is part of that hardening: upstream reads several inputs
+through typed pointers (Theta and HLL4-aux images, Bloom's XXHash64 items), so
+a shim must copy a misaligned owned-deserialize input into an aligned buffer,
+reject a misaligned zero-copy wrap (Theta, Bloom) with `Deserialization`, and
+hash misaligned Bloom items from an aligned copy. The `*_alignment_test` files
+guard each, and are worth running under `-fsanitize=alignment`. On macOS a
+plain `RUSTFLAGS="-C link-arg=-fsanitize=alignment"` does not link (rustc passes
+`-nodefaultlibs`, dropping the sanitizer runtime); link the runtime explicitly:
+
+```bash
+D=$(dirname "$(clang -print-file-name=libclang_rt.osx.a)")
+CARGO_TARGET_DIR=/tmp/ubsan-target \
+CXXFLAGS="-fsanitize=alignment -fno-sanitize-recover=alignment" \
+RUSTFLAGS="-C link-arg=-fsanitize=alignment -C link-arg=-lc++ \
+  -C link-arg=$D/libclang_rt.ubsan_osx_dynamic.dylib -C link-arg=-Wl,-rpath,$D" \
+cargo test -p apache-datasketches --all-features \
+  --test theta_alignment_test --test hll_alignment_test \
+  --test bloom_alignment_test --test bloom_item_alignment_test
+```
+
+A hit aborts the process at the first misaligned load and prints its
+`file:line`.
+
 ### `cxx::bridge` names must be globally unique across the sys crate
 
 Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique

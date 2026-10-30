@@ -12,6 +12,10 @@ use std::marker::PhantomData;
 /// The lifetime `'a` ties this view to the borrowed bytes; it cannot outlive
 /// them.
 ///
+/// Byte and string items passed to a query (`query_bytes`, `query_str`, ...)
+/// may sit at any address; an item that is not 8-byte aligned is hashed from
+/// an aligned copy, with the same result as the same bytes aligned.
+///
 /// ```compile_fail
 /// use apache_datasketches::bloom::{BloomFilterBuilder, WrappedBloomFilter};
 /// let w = {
