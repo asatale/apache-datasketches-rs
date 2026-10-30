@@ -31,6 +31,8 @@ explicitly. Enable one or more of:
   types, for `double` and `float` items, plus the Kolmogorov–Smirnov test.
 - `req` — raw bridge to the REQ quantiles sketch and its sorted view C++
   types, for `double` and `float` items.
+- `bloom` — raw bridge to the Bloom filter and its zero-copy wrapped view C++
+  types.
 
 ```toml
 [dependencies]
@@ -64,5 +66,10 @@ apache-datasketches-sys = { version = "0.2", features = ["req"] }
 
 ```toml
 [dependencies]
-apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple", "kll", "req"] }
+apache-datasketches-sys = { version = "0.2", features = ["bloom"] }
+```
+
+```toml
+[dependencies]
+apache-datasketches-sys = { version = "0.2", features = ["hll", "theta", "cpc", "tuple", "kll", "req", "bloom"] }
 ```

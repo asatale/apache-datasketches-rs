@@ -22,6 +22,7 @@ cpc = []
 tuple = []
 kll = []
 req = []
+bloom = []
 
 [dependencies]
 cxx = "1"
@@ -141,3 +142,7 @@ required-features = ["req"]
 [[test]]
 name = "req_floats_link_test"
 required-features = ["req"]
+
+[[test]]
+name = "bloom_filter_link_test"
+required-features = ["bloom"]

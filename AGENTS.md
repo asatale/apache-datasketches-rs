@@ -10,8 +10,8 @@ built via the `cxx` crate over a pinned git submodule. Two-crate workspace:
 - `apache-datasketches-sys` — raw `cxx` FFI bridge. Unstable, low-level; not meant to be used directly.
 - `apache-datasketches` — safe, idiomatic Rust API that wraps `-sys`. This is what consumers depend on.
 
-There are six sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`, `kll`, `req`.
-`apache-datasketches` enables all six by default; `apache-datasketches-sys` has `default = []`
+There are seven sketch families, each behind a Cargo feature: `hll`, `theta`, `cpc`, `tuple`, `kll`, `req`, `bloom`.
+`apache-datasketches` enables all seven by default; `apache-datasketches-sys` has `default = []`
 and gets its features turned on by the safe crate. Consumers opt out with `default-features = false`
 plus the families they want — naming none is a `compile_error!`.
 
@@ -40,7 +40,8 @@ cargo test -p apache-datasketches --features cpc
 cargo test -p apache-datasketches --features tuple
 cargo test -p apache-datasketches --features kll
 cargo test -p apache-datasketches --features req
-cargo test --workspace --features hll,theta,cpc,tuple,kll,req
+cargo test -p apache-datasketches --features bloom
+cargo test --workspace --features hll,theta,cpc,tuple,kll,req,bloom
 
 # Run a single test
 cargo test -p apache-datasketches --features hll hll_sketch_test::some_test_name
@@ -56,6 +57,7 @@ cargo run -p apache-datasketches --example tuple --features tuple
 cargo run -p apache-datasketches --example tuple_generic --features tuple
 cargo run -p apache-datasketches --example kll --features kll
 cargo run -p apache-datasketches --example req --features req
+cargo run -p apache-datasketches --example bloom --features bloom
 
 # Throughput harness for the ArrayOfDoubles update path — the one hot loop
 # where shim overhead is measurable. --release is not optional: a debug build
@@ -67,6 +69,7 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 cargo run --release -p apache-datasketches --example bench_tuple_generic_update --features tuple
 cargo run --release -p apache-datasketches --example bench_kll_update --features kll
 cargo run --release -p apache-datasketches --example bench_req_update --features req
+cargo run --release -p apache-datasketches --example bench_bloom_update --features bloom
 # All take an optional trailing item count (default 10M):
 cargo run --release -p apache-datasketches --example bench_tuple_update --features tuple -- 100000000
 
@@ -154,6 +157,17 @@ caller error, and `ReqSketch::new` caps `k` at 254 because upstream's 5.2.0 and
 5.3.0 constructor truncates it to 8 bits. Its bench pair cross-checks the
 deterministic `n`/`min`/`max`/`retained` fields like KLL's.
 
+The `bloom` feature is simpler: a single non-template shim
+(`cpp/bloom/bloom_filter_shim.{h,cc}`) with two bridge-visible types, the
+owned filter and a wrapped view over serialized bytes. The safe
+`WrappedBloomFilter<'a>` carries a `PhantomData` lifetime so the view cannot
+outlive the bytes it borrows. Upstream's deserialize and wrap trust their
+input, so the shim validates the serialized layout first, and the committed
+`bloom_deserialize_fuzz_test` guards that. The default seed (9001) is public,
+which the docs flag as a security note. Updates go through upstream's
+`query_and_update` so the bits-set count stays exact. Its bench pair
+cross-checks the deterministic `bits_used`, hits and bytes fields exactly.
+
 ### `cxx::bridge` names must be globally unique across the sys crate
 
 Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique
@@ -171,7 +185,7 @@ on a duplicate definition — see the comment there for what it does and does no
 - `vendor/datasketches-cpp` (repo root) — the git submodule, pinned to a tag (see its `README.md`).
   This is the source of truth when bumping the pinned version.
 - `apache-datasketches-sys/vendor/datasketches-cpp` — a **manual copy** of just the headers actually
-  compiled (`common/`, `hll/`, `theta/`, `cpc/`, `tuple/`, `kll/`, `req/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
+  compiled (`common/`, `hll/`, `theta/`, `cpc/`, `tuple/`, `kll/`, `req/`, `filters/` `include/` dirs, plus `LICENSE`/`NOTICE`). This copy is
   what `build.rs` actually builds against, and what ships in the published `-sys` crate tarball,
   because `cargo package` only includes files inside the crate's own directory (a `../` path escaping
   it would be missing from the published package).

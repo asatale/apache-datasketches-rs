@@ -4,8 +4,8 @@ Safe, idiomatic Rust bindings for [Apache DataSketches](https://github.com/apach
 built via the `cxx` crate over
 [`apache-datasketches-sys`](https://crates.io/crates/apache-datasketches-sys).
 
-All six sketch families — `hll`, `theta`, `cpc`, `tuple`, `kll` and `req` —
-are enabled by default:
+All seven sketch families — `hll`, `theta`, `cpc`, `tuple`, `kll`, `req` and
+`bloom` — are enabled by default:
 
 ```toml
 [dependencies]
@@ -22,7 +22,7 @@ apache-datasketches = { version = "0.3", default-features = false, features = ["
 Unused families cost nothing at runtime — the linker drops what you do not
 call — so opting out buys C++ compile time, not a smaller binary. Cold debug
 builds of the FFI layer run about 4.5s with no families and about 20s with the
-four families that predate `kll` (not re-measured with all six); `theta` and
+four families that predate `kll` (not re-measured with all seven); `theta` and
 `tuple` account for nearly all of the difference.
 
 Disabling default features without naming at least one family is a compile
@@ -420,6 +420,84 @@ rank bounds, the a-priori error, merging (including the rejected mixed-
 accuracy merge), a shared sorted view, and serialize/deserialize
 round-tripping.
 
+## Bloom filters
+
+The Bloom filter family (`bloom` feature) answers "may this item have been
+added?": a `false` answer is always correct (no false negatives), and a `true`
+answer is wrong at roughly the configured false-positive rate. Filters support
+union and intersection, and serialized filters can be queried in place without
+copying.
+
+```rust
+use apache_datasketches::bloom::{BloomFilterBuilder, WrappedBloomFilter};
+
+let mut filter = BloomFilterBuilder::by_accuracy(1_000, 0.01).build()?;
+for i in 0..100u64 {
+    filter.update_u64(i);
+}
+assert!(filter.query_u64(42));
+assert!(!filter.query_u64(1_000_000));
+
+// Serialize, then query the bytes in place without a full deserialize.
+let bytes = filter.serialize();
+let view = WrappedBloomFilter::wrap(&bytes)?;
+assert!(view.query_u64(42));
+```
+
+- `BloomFilterBuilder` — configures and builds a filter. Size it with
+  `BloomFilterBuilder::by_accuracy(max_distinct_items, target_fpp)` or
+  `BloomFilterBuilder::by_size(num_bits, num_hashes)`, optionally call
+  `.seed(..)`, then `.build()`. `suggest_num_filter_bits`, `suggest_num_hashes`
+  and `suggest_num_hashes_for_fpp` expose the sizing formulas. Sizes above
+  2^32 - 64 bits and `num_hashes` outside `1..=65534` are rejected with
+  `SketchError::InvalidConfig`.
+- `BloomFilter` — the owned, mutable filter. Supports `update_*`, `query_*`
+  and `query_and_update_*` for `u64`, `i64`, `u32`, `i32`, `u16`, `i16`, `u8`,
+  `i8`, `f64`, `f32`, `&str` and `&[u8]`, plus `union_with`, `intersect`,
+  `is_compatible`, `invert`, `reset`, `is_empty`, `capacity`, `num_hashes`,
+  `seed`, `bits_used`, `serialize`/`BloomFilter::deserialize`, and
+  `to_string_summary`.
+- `WrappedBloomFilter` — a zero-copy, read-only view over a serialized
+  filter's bytes, built with `WrappedBloomFilter::wrap`. It answers the same
+  queries, can be the argument of `union_with`/`intersect`, and `to_owned`
+  copies it into a `BloomFilter`. Its lifetime ties it to the bytes it
+  borrows.
+- `BloomInput` — a sealed trait that lets either filter type be passed to
+  `union_with`, `intersect` and `is_compatible`.
+
+The serialized format is upstream's, so a filter interoperates with the Java
+and Python Bloom filters when their seeds match. The default seed is
+`DEFAULT_SEED` (9001); filters must share a seed, a capacity and a number of
+hashes to be combined. Upstream's deserialize trusts its input, so the binding
+validates the serialized layout first and returns `SketchError::Deserialization`
+for corrupt bytes.
+
+Five things differ from the other families:
+
+- **Membership, not an estimate.** A Bloom filter answers yes/no queries
+  rather than returning a cardinality or quantile estimate; `bits_used` is the
+  closest thing to a size measure.
+- **The default seed is public.** A known seed lets an adversary craft inputs
+  that collide. In adversarial settings, set a random seed with
+  `BloomFilterBuilder::seed`.
+- **`bits_used` takes `&mut self`.** Upstream recounts the set bits and
+  caches the result after updates; requiring `&mut` keeps `BloomFilter` safely
+  `Sync`. `WrappedBloomFilter::bits_used` takes `&self`.
+- **Set operations need compatible filters.** `union_with` and `intersect`
+  return `SketchError::InvalidConfig` if the capacity, number of hashes or
+  seed differ.
+- **Empty images can allocate a lot.** An empty filter serializes to 24 bytes
+  but records its capacity, and `BloomFilter::deserialize` and
+  `WrappedBloomFilter::wrap` allocate a bit array of that capacity, up to
+  512 MiB. When reading untrusted bytes, bound the claimed capacity (or the
+  process's memory) yourself.
+
+See `examples/bloom.rs` (`cargo run -p apache-datasketches --example bloom
+--features bloom`) for a complete runnable demo covering membership and the
+measured false-positive rate, deduplicating a stream with `query_and_update`,
+union and a rejected incompatible union, wrapping serialized bytes, and
+`to_owned`.
+
 ## Sketch families
 
 - [x] HLL (HyperLogLog) — `hll` feature (sketch + union).
@@ -434,6 +512,8 @@ round-tripping.
   CDF; merge, sorted view, Kolmogorov–Smirnov test).
 - [x] REQ — `req` feature (relative-error quantiles over `f64`/`f32`; merge,
   sorted view).
+- [x] Bloom — `bloom` feature (approximate set membership: no false
+  negatives; union, intersection; zero-copy wrapped views).
 
 ## License
 

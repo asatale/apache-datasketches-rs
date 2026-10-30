@@ -85,6 +85,12 @@ fn main() {
         }
     }
 
+    if cfg!(feature = "bloom") {
+        let path = "src/bloom_filter.rs";
+        require_exists(path);
+        bridges.push(path);
+    }
+
     check_bridge_name_uniqueness(&bridges);
 
     if bridges.is_empty() {
@@ -121,6 +127,7 @@ fn main() {
         .include(vendor_dir.join("tuple/include"))
         .include(vendor_dir.join("kll/include"))
         .include(vendor_dir.join("req/include"))
+        .include(vendor_dir.join("filters/include"))
         .include("cpp")
         .include("cpp/hll")
         .include("cpp/theta")
@@ -128,13 +135,19 @@ fn main() {
         .include("cpp/tuple")
         .include("cpp/kll")
         .include("cpp/req")
+        .include("cpp/bloom")
         .include(generated_header_dir)
         .flag_if_supported("-std=c++17")
         // Upstream datasketches-cpp declares virtual destructors on some
         // `final` classes (e.g. AuxHashMap) — harmless, but noisy under
         // clang. Silenced here rather than patched in the vendored headers so
-        // we don't diverge from upstream.
-        .flag_if_supported("-Wno-unnecessary-virtual-specifier");
+        // we don't diverge from upstream. Likewise the vendored filters header
+        // bloom_filter_impl.hpp declares a `static` (non-inline) function in a
+        // header (validate_bloom_filter_num_bits_set), which clang warns about
+        // as an unneeded internal declaration; silenced here rather than
+        // patching the vendored copy.
+        .flag_if_supported("-Wno-unnecessary-virtual-specifier")
+        .flag_if_supported("-Wno-unneeded-internal-declaration");
 
     if cfg!(feature = "hll") {
         build
@@ -190,6 +203,12 @@ fn main() {
 
     if cfg!(feature = "req") {
         let path = "cpp/req/req_sketch_shim.cc";
+        require_exists(path);
+        build.file(path);
+    }
+
+    if cfg!(feature = "bloom") {
+        let path = "cpp/bloom/bloom_filter_shim.cc";
         require_exists(path);
         build.file(path);
     }
@@ -275,6 +294,9 @@ fn main() {
     println!("cargo:rerun-if-changed=src/req_floats.rs");
     println!("cargo:rerun-if-changed=cpp/req/req_sketch_shim.h");
     println!("cargo:rerun-if-changed=cpp/req/req_sketch_shim.cc");
+    println!("cargo:rerun-if-changed=src/bloom_filter.rs");
+    println!("cargo:rerun-if-changed=cpp/bloom/bloom_filter_shim.h");
+    println!("cargo:rerun-if-changed=cpp/bloom/bloom_filter_shim.cc");
 }
 
 /// Guards against a collision class that has already caused a real crash on

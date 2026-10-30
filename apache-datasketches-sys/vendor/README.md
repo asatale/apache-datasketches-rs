@@ -7,8 +7,8 @@ inside this crate's own directory — can produce a self-contained tarball.
 
 Only the headers actually compiled (`common/include`, `hll/include`,
 `theta/include`, `cpc/include`, `tuple/include`, `kll/include`,
-`req/include`, `LICENSE`, `NOTICE`) are copied; `version.hpp.in` is skipped
-since none of the compiled headers include it.
+`req/include`, `filters/include`, `LICENSE`, `NOTICE`) are copied;
+`version.hpp.in` is skipped since none of the compiled headers include it.
 
 ## Updating after bumping the submodule's pinned tag
 
@@ -21,6 +21,7 @@ mkdir -p apache-datasketches-sys/vendor/datasketches-cpp/cpc
 mkdir -p apache-datasketches-sys/vendor/datasketches-cpp/tuple
 mkdir -p apache-datasketches-sys/vendor/datasketches-cpp/kll
 mkdir -p apache-datasketches-sys/vendor/datasketches-cpp/req
+mkdir -p apache-datasketches-sys/vendor/datasketches-cpp/filters
 cp -R vendor/datasketches-cpp/common/include apache-datasketches-sys/vendor/datasketches-cpp/common/include
 cp -R vendor/datasketches-cpp/hll/include apache-datasketches-sys/vendor/datasketches-cpp/hll/include
 cp -R vendor/datasketches-cpp/theta/include apache-datasketches-sys/vendor/datasketches-cpp/theta/include
@@ -28,11 +29,12 @@ cp -R vendor/datasketches-cpp/cpc/include apache-datasketches-sys/vendor/dataske
 cp -R vendor/datasketches-cpp/tuple/include apache-datasketches-sys/vendor/datasketches-cpp/tuple/include
 cp -R vendor/datasketches-cpp/kll/include apache-datasketches-sys/vendor/datasketches-cpp/kll/include
 cp -R vendor/datasketches-cpp/req/include apache-datasketches-sys/vendor/datasketches-cpp/req/include
+cp -R vendor/datasketches-cpp/filters/include apache-datasketches-sys/vendor/datasketches-cpp/filters/include
 rm apache-datasketches-sys/vendor/datasketches-cpp/common/include/version.hpp.in
 cp vendor/datasketches-cpp/LICENSE apache-datasketches-sys/vendor/datasketches-cpp/LICENSE
 cp vendor/datasketches-cpp/NOTICE apache-datasketches-sys/vendor/datasketches-cpp/NOTICE
 ```
 
 When a future sketch family needs headers outside `common/`+`hll/`+
-`theta/`+`cpc/`+`tuple/`+`kll/`+`req/`, add its `include/` directory to both
-this script and `build.rs`.
+`theta/`+`cpc/`+`tuple/`+`kll/`+`req/`+`filters/`, add its `include/` directory
+to both this script and `build.rs`.

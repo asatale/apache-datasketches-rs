@@ -17,18 +17,19 @@ categories = ["data-structures", "algorithms"]
 # `default-features = false` plus the families you want. Note that Cargo
 # unifies features across a dependency graph, so opting out only holds if no
 # other crate in the graph pulls this one with default features.
-default = ["hll", "theta", "cpc", "tuple", "kll", "req"]
+default = ["hll", "theta", "cpc", "tuple", "kll", "req", "bloom"]
 hll = ["apache-datasketches-sys/hll"]
 theta = ["apache-datasketches-sys/theta"]
 cpc = ["apache-datasketches-sys/cpc"]
 tuple = ["apache-datasketches-sys/tuple"]
 kll = ["apache-datasketches-sys/kll"]
 req = ["apache-datasketches-sys/req"]
+bloom = ["apache-datasketches-sys/bloom"]
 
 [package.metadata.docs.rs]
 # Explicit rather than implicit: docs.rs should keep building every family
 # even if the default set changes again.
-features = ["hll", "theta", "cpc", "tuple", "kll", "req"]
+features = ["hll", "theta", "cpc", "tuple", "kll", "req", "bloom"]
 
 [dependencies]
 apache-datasketches-sys = { version = "0.2.3", path = "../apache-datasketches-sys", default-features = false }
@@ -63,6 +64,10 @@ required-features = ["kll"]
 name = "req"
 required-features = ["req"]
 
+[[example]]
+name = "bloom"
+required-features = ["bloom"]
+
 # Perf harness for the ArrayOfDoubles update path, deliberately an example
 # rather than a `[[bench]]`: with `harness = false` a bench target is *run* by
 # `cargo test`, which would put a multi-million-item loop in CI. As an example
@@ -91,6 +96,10 @@ required-features = ["theta"]
 [[example]]
 name = "bench_cpc_update"
 required-features = ["cpc"]
+
+[[example]]
+name = "bench_bloom_update"
+required-features = ["bloom"]
 
 [[example]]
 name = "bench_kll_update"
@@ -367,3 +376,39 @@ required-features = ["req"]
 [[test]]
 name = "req_serialization_compat_test"
 required-features = ["req"]
+
+[[test]]
+name = "tuple_seed_hash_test"
+required-features = ["tuple"]
+
+[[test]]
+name = "bloom_filter_smoke_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_wrapped_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_alignment_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_concurrency_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_deserialize_fuzz_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_filter_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_validation_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_serialization_compat_test"
+required-features = ["bloom"]

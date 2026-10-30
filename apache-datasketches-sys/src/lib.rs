@@ -59,3 +59,6 @@ pub mod kll_floats;
 pub mod req_doubles;
 #[cfg(feature = "req")]
 pub mod req_floats;
+
+#[cfg(feature = "bloom")]
+pub mod bloom_filter;
