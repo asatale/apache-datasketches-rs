@@ -69,6 +69,9 @@ impl HllSketch {
 
     /// Reconstructs a sketch from bytes produced by
     /// [`Self::serialize_compact`] or [`Self::serialize_updatable`].
+    ///
+    /// `bytes` may start at any address: a misaligned slice is copied into an
+    /// aligned buffer first.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = sys::hll_sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
