@@ -388,3 +388,15 @@ required-features = ["bloom"]
 [[test]]
 name = "bloom_deserialize_fuzz_test"
 required-features = ["bloom"]
+
+[[test]]
+name = "bloom_filter_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_validation_test"
+required-features = ["bloom"]
+
+[[test]]
+name = "bloom_serialization_compat_test"
+required-features = ["bloom"]
