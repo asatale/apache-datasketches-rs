@@ -47,7 +47,11 @@ std::unique_ptr<CompactThetaSketchShim> theta_sketch_compact(const ThetaSketchSh
 // copied into a std::vector (v1-v3) or unpacked byte-wise into one (v4), so
 // it keeps no pointer into the input and an aligned copy is harmless.
 std::unique_ptr<CompactThetaSketchShim> compact_theta_sketch_deserialize(rust::Slice<const uint8_t> bytes) {
-  if (reinterpret_cast<uintptr_t>(bytes.data()) % alignof(uint64_t) == 0) {
+  // Input shorter than the 8-byte preamble goes straight to upstream, whose
+  // size check throws before any typed read (and a zero-length slice has an
+  // arbitrary address, which must not reach memcpy).
+  if (bytes.size() < sizeof(uint64_t) ||
+      reinterpret_cast<uintptr_t>(bytes.data()) % alignof(uint64_t) == 0) {
     return std::make_unique<CompactThetaSketchShim>(
         datasketches::compact_theta_sketch::deserialize(bytes.data(), bytes.size()));
   }

@@ -202,3 +202,26 @@ fn wrap_accepts_aligned_and_set_ops_work() {
         }
     }
 }
+
+#[test]
+fn short_misaligned_input_is_a_size_error_not_a_crash() {
+    let bytes = sketch_with(100, 12).serialize_compact();
+    for len in 1..8 {
+        for offset in 0..8 {
+            let p = Placed::new(&bytes[..len], offset);
+            assert!(
+                matches!(
+                    CompactThetaSketch::deserialize(p.slice()),
+                    Err(SketchError::Deserialization(_))
+                ),
+                "deserialize len {len} @{offset}"
+            );
+            match WrappedCompactThetaSketch::wrap(p.slice()) {
+                Err(SketchError::Deserialization(m)) => {
+                    assert!(!m.contains("aligned"), "wrap len {len} @{offset}: {m}")
+                }
+                other => panic!("wrap len {len} @{offset}: {:?}", other.map(|_| ())),
+            }
+        }
+    }
+}
