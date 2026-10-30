@@ -7,6 +7,11 @@
 // seeded and nothing is random. Both sides print exact fields instead:
 // bits_used after each scenario, hits for query, and bytes for ser/deser.
 // compare.sh requires those to match. Build and run via run.sh.
+//
+// The update scenarios call query_and_update, not update: the Rust binding
+// routes every update through query_and_update (plain update leaves upstream's
+// bits-set count stale, which causes false negatives), so both sides make the
+// same upstream call and the overhead column isolates the FFI cost.
 
 #include "bloom_filter.hpp"
 
@@ -38,7 +43,7 @@ std::string fields_extra(filter_t& f, const char* name, unsigned long long value
 
 filter_t filled(uint64_t begin, uint64_t end) {
   auto f = build();
-  for (uint64_t i = begin; i < end; ++i) f.update(i);
+  for (uint64_t i = begin; i < end; ++i) (void)f.query_and_update(i);
   return f;
 }
 
@@ -48,7 +53,7 @@ void bench_distinct(uint64_t items, uint64_t reps) {
   for (uint64_t r = 0; r < reps; ++r) {
     auto f = build();
     const auto start = std::chrono::steady_clock::now();
-    for (uint64_t i = 0; i < items; ++i) f.update(i);
+    for (uint64_t i = 0; i < items; ++i) (void)f.query_and_update(i);
     ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(items));
     per_rep.push_back(fields(f));
   }
@@ -82,7 +87,7 @@ void bench_str(uint64_t items, uint64_t reps) {
     const auto start = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < items; ++i) {
       const std::string& key = keys[i % bench::STR_KEY_SPACE];
-      if (!key.empty()) f.update(key.data(), key.size());
+      if (!key.empty()) (void)f.query_and_update(key.data(), key.size());
     }
     ns_per_op.push_back(bench::seconds_since(start) * 1e9 / static_cast<double>(items));
     per_rep.push_back(fields(f));

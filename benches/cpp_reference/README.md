@@ -243,6 +243,11 @@ for `ser`/`deser`. `compare.py` compares them generically, so it needed no
 change. Both sides use `max_distinct_items = 1_000_000` and
 `target_fpp = 0.01`.
 
+The `distinct` and `str` scenarios call `query_and_update` on the C++ side,
+not `update`: the binding routes every update through `query_and_update` to
+keep upstream's bits-set count exact, so both sides make the same upstream
+call and the overhead column measures the binding, not that choice.
+
 `query` times `2 * items` calls, so its ns/op is per query. `union` is over a
 fixed `OP_CALLS`, each call copying one filter and unioning the other into it.
 
