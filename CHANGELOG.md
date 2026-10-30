@@ -20,8 +20,9 @@ fact — this file was introduced during 0.2.1.
   sizing helpers), the owned `BloomFilter` (updates, queries and
   `query_and_update` for the integer, float, string and byte types; `union_with`,
   `intersect`, `invert`, `reset`; `serialize`/`deserialize`) and
-  `WrappedBloomFilter`, a zero-copy read-only view over serialized bytes with
-  `to_owned`. The default seed is `DEFAULT_SEED` (9001); filters interoperate
+  `WrappedBloomFilter`, a zero-copy read-only view over serialized bytes (a
+  non-empty image must be 8-byte aligned, else `Deserialization`) with
+  `to_owned`; `deserialize` accepts any alignment. The default seed is `DEFAULT_SEED` (9001); filters interoperate
   with Java and Python when seeds match. Deserialization validates the
   serialized layout before upstream reads it and is covered by a committed fuzz
   test; sizes above 2^32 - 64 bits and `num_hashes` outside `1..=65534` are

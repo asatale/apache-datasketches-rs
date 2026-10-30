@@ -17,6 +17,10 @@
 //! | 24-31 | bits set (u64), non-empty only |
 //! | 32.. | bit array, `num_longs * 8` bytes, non-empty only |
 //!
+//! Non-empty goldens here use hand-set bits because hashed bit placements
+//! cannot be derived by hand; hash placement is pinned by the exact upstream
+//! values in `bloom_filter_test.rs` `basic_operations`.
+//!
 //! Upstream writes `is_dirty_ ? u64::MAX : num_bits_set_` in the bits-set
 //! field. The binding routes every `update_*` through upstream's
 //! `query_and_update` (which keeps the count exact, never dirty), and

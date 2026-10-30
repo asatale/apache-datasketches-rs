@@ -246,9 +246,12 @@ change. Both sides use `max_distinct_items = 1_000_000` and
 `query` times `2 * items` calls, so its ns/op is per query. `union` is over a
 fixed `OP_CALLS`, each call copying one filter and unioning the other into it.
 
-The Rust `deser` scenario also pays for the shim's up-front validation of the
-bytes, which the C++ side does not, so a `deser` gap is binding cost but not
-FFI overhead alone. Say so before quoting a `deser` ratio.
+The Rust `deser` scenario also runs the shim's layout validation before
+upstream's deserialize, which the C++ side does not. That validation reads only
+the header (constant work); upstream's deserialize, on both sides, counts the
+set bits in the whole bit array. So the validator is a small part of a `deser`
+gap, but it is not zero: say what is and is not measured before quoting a
+`deser` ratio.
 
 ## Reading the numbers
 

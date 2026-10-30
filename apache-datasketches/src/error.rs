@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Error type shared across all sketch families (HLL, Theta, CPC, Tuple,
-/// KLL, REQ) in this crate — there is no per-family error type.
+/// KLL, REQ, Bloom) in this crate — there is no per-family error type.
 ///
 /// Marked `#[non_exhaustive]` so a new family can add a variant without a
 /// breaking release: a `match` on it needs a wildcard arm.
@@ -13,13 +13,16 @@ pub enum SketchError {
     /// A builder or constructor was given an out-of-range configuration
     /// value (e.g. `lg_k`/`lg_config_k` outside its valid bounds, or a
     /// `num_std_dev` outside `1..=3`). The underlying C++ layer rejected the
-    /// value; the string is its exception message.
+    /// value; the string is its exception message. Also returned when a set
+    /// operation is given incompatible operands (e.g. Bloom `union_with` or
+    /// `intersect` of filters with different sizes, hash counts or seeds).
     #[error("invalid sketch configuration: {0}")]
     InvalidConfig(String),
 
     /// `deserialize`/`deserialize_compressed`/`wrap` was given bytes that
     /// don't parse as a valid serialized sketch (e.g. truncated, corrupt,
-    /// or produced by an incompatible seed).
+    /// or produced by an incompatible seed, or a Bloom `wrap` of misaligned
+    /// bytes).
     #[error("failed to deserialize sketch: {0}")]
     Deserialization(String),
 

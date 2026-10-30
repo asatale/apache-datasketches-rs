@@ -22,7 +22,7 @@ apache-datasketches = { version = "0.3", default-features = false, features = ["
 Unused families cost nothing at runtime — the linker drops what you do not
 call — so opting out buys C++ compile time, not a smaller binary. Cold debug
 builds of the FFI layer run about 4.5s with no families and about 20s with the
-four families that predate `kll` (not re-measured with all six); `theta` and
+four families that predate `kll` (not re-measured with all seven); `theta` and
 `tuple` account for nearly all of the difference.
 
 Disabling default features without naming at least one family is a compile

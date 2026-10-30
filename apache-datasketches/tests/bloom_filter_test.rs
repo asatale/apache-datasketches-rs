@@ -12,6 +12,9 @@
 //!   wrapper is read-only by construction: there is no mutating method to
 //!   call, so upstream's `std::logic_error` checks cannot be written).
 //! - `std::istream` / `std::ostream` serialization (Rust uses byte slices).
+//! - `bloom_filter_deserialize_from_java_test.cpp` and
+//!   `bloom_filter_serialize_for_java.cpp`: they need Java-generated `.sk`
+//!   files that are not vendored here.
 //! - `bit_array_ops_test.cpp` (internal helpers) and
 //!   `bloom_filter_allocation_test.cpp` (custom allocator) are not ported.
 //!
