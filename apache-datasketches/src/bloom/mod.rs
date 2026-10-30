@@ -48,5 +48,16 @@ pub const DEFAULT_SEED: u64 = 9001;
 /// :650, :748, :845) never terminate for `u16::MAX`.
 pub(crate) const MAX_NUM_HASHES: u16 = u16::MAX - 1;
 
-/// Largest filter size, in bits, that upstream accepts.
-pub(crate) const MAX_FILTER_SIZE_BITS: u64 = (i32::MAX as u64 - 32) * 8;
+/// Largest filter capacity, in bits, this crate builds: 2^32 - 64, i.e.
+/// (2^26 - 1) 64-bit words. Upstream itself builds up to
+/// `(i32::MAX - 32) * 8` bits, but it reads a serialized image's capacity
+/// with 32-bit arithmetic (`num_longs << 6`, bloom_filter_impl.hpp:392,
+/// :420), so a filter of 2^32 bits or more could be serialized and never read
+/// back; the deserialize validator rejects such images. Capping here keeps
+/// every filter the builder makes round-trippable. It can be raised once
+/// upstream fixes its 32-bit size arithmetic.
+pub(crate) const MAX_FILTER_SIZE_BITS: u64 = (1 << 32) - 64;
+
+/// Why sizes above [`MAX_FILTER_SIZE_BITS`] are rejected, for error messages.
+pub(crate) const MAX_FILTER_SIZE_REASON: &str =
+    "upstream's serialized format cannot read back filters of 2^32 bits or more";

@@ -18,8 +18,9 @@ mod sealed {
 
 /// Either Bloom filter type ([`BloomFilter`] or [`WrappedBloomFilter`]) can
 /// be passed to [`BloomFilter::union_with`], [`BloomFilter::intersect`],
-/// [`BloomFilter::is_compatible`] and [`WrappedBloomFilter::is_compatible`]. This trait is sealed: the shims only have concrete
-/// overloads for these two exact types.
+/// [`BloomFilter::is_compatible`] and [`WrappedBloomFilter::is_compatible`].
+/// This trait is sealed: the shims only have concrete overloads for these two
+/// exact types.
 pub trait BloomInput: sealed::Sealed {
     #[doc(hidden)]
     fn as_bloom_input(&self) -> BloomInputRef<'_>;

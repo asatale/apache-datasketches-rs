@@ -59,8 +59,44 @@ Checked against the vendored 5.3.0 headers:
   bits-set count matches the actual count (or is the "dirty" sentinel).
   The constructor rejects `num_hashes == 0`, zero bits and oversize filters.
 - An **empty** image is 24 bytes but carries `num_longs` (capacity); upstream
-  allocates the full bit array for it, up to `MAX_FILTER_SIZE_BITS` bits
-  (~2 GiB). A genuine large empty filter serializes exactly this way.
+  allocates the full bit array for it. Because of the 32-bit shift below,
+  that is at most 2^32 - 64 bits (**512 MiB**, not ~2 GiB as first
+  assumed). A genuine large empty filter serializes exactly this way.
+
+Found during the hardening task (Task 4), all in 5.3.0
+`bloom_filter_impl.hpp`:
+
+- **32-bit size arithmetic / round-trip limit:** `num_longs` is serialized
+  as `int32_t` (:438, :468) but read as `uint32_t` (:385), and the capacity
+  and byte count are computed as `num_longs << 6` and `num_longs << 3` in 32
+  bits (:392, :398, :420). From 2^26 words the capacity wraps: multiples of
+  2^29 (including negative `int32_t` values) give capacity 0 with a 0-byte
+  array, and `num_longs = 0` does the same. On such a filter `update` /
+  `query_and_update` compute `hash % 0` (:651, :749). On arm64 that is not
+  SIGFPE: `x % 0 == x`, which makes a wild heap write (SIGSEGV observed).
+  Hence upstream can build filters up to `(INT32_MAX - 32) * 8` bits but
+  only read back up to **2^32 - 64 bits**. This crate caps the builder
+  there, so every filter it builds round-trips.
+- **65535 hash functions hang:** every hashing loop is `for (uint16_t i = 1;
+  i <= num_hashes_; i++)` (:650, :748, :845), which never terminates for
+  65535. The builder, `suggest_num_hashes` and the validator cap
+  `num_hashes` at 65534.
+- **Bits-set count bug (false negatives):** `update` marks the cached count
+  dirty (:644-654), but `query_and_update` adds to the stale cached count
+  and clears the dirty flag without recounting (:742-755 via
+  `update_num_bits_set` :552-558). After `update(x)` then
+  `query_and_update(x)`, the count stays 0, `is_empty()` is true and
+  `query(x)` returns false (:843). `bits_used` is also wrong, and serialize
+  writes a count upstream's own deserialize rejects. **Workaround:** the shim's
+  `update_*` call `query_and_update` and discard the result. The same bits
+  are set and the count stays exact, so the filter never goes dirty.
+- **Preamble-3 over-read:** a non-empty image claiming 3 preamble longs
+  passes `ensure_minimum_memory(len, 24)` (:376). Upstream then reads the
+  count and bit array past the buffer (:396-399), because the negative
+  `end_ptr - ptr` converts to a huge `size_t`. For `wrap` that gives a view
+  whose bit array lies outside the borrowed bytes.
+- A non-empty image with `num_hashes == 0` bypasses the constructor check
+  and answers every query true. Flag bits other than "empty" are ignored.
 - Serialization is deterministic given the seed; there is no randomness in
   updates or queries.
 - Upstream's `filters/test/` has no checked-in `.sk` fixtures.
@@ -187,9 +223,15 @@ Notes:
   they were serialized with.
 - **Builder validation in Rust:** `max_distinct_items > 0`; `target_fpp` in
   `(0, 1)` and not NaN (upstream allows exactly 1.0, which is a filter that
-  rejects nothing — rejected here as a configuration error); `num_bits` in
-  `1..=MAX_FILTER_SIZE_BITS`; `num_hashes >= 1`. Violations return
-  `InvalidConfig`.
+  rejects nothing — rejected here as a configuration error). `num_bits` must
+  be in `1..=2^32 - 64`, and so must the size `by_accuracy` and
+  `suggest_num_filter_bits` compute and the bits argument of
+  `suggest_num_hashes`. Upstream's serialized format cannot read back larger
+  filters (32-bit size arithmetic, see above). The limit can be raised once
+  upstream fixes that. `num_hashes` must be in `1..=65534`, and so must
+  `suggest_num_hashes`'s result. Upstream's `suggest_*` casts are unchecked
+  (UB out of range), so the formulas are recomputed in Rust first.
+  Violations return `InvalidConfig`.
 - **`union_with`/`intersect`** check `is_compatible` in Rust first and
   return `InvalidConfig` naming the mismatched parameter; the bridge still
   returns `Result` as a backstop.
@@ -221,7 +263,7 @@ Compile-time tests pin `Sync` for both and the borrow (a
 
 | Condition | Error |
 |---|---|
-| `max_distinct_items == 0`; `target_fpp` NaN or outside `(0, 1)`; `num_bits` 0 or above the maximum; `num_hashes == 0` | `InvalidConfig` |
+| `max_distinct_items == 0`; `target_fpp` NaN or outside `(0, 1)`; `num_bits` (given or computed) 0 or above 2^32 - 64; `num_hashes` 0 or 65535 | `InvalidConfig` |
 | `suggest_*` with invalid arguments | `InvalidConfig` |
 | `union_with` / `intersect` with an incompatible filter | `InvalidConfig` |
 | bytes that do not parse or that `validate_bloom_layout` rejects (`deserialize`, `wrap`) | `Deserialization` |
@@ -237,13 +279,14 @@ Planned as its own task, as for REQ:
    serialize) for anything crafted input can reach that 5.3.0's checks miss.
 2. **`validate_bloom_layout`** in the shim, bounds-checked, before upstream:
    minimum length; preamble longs and flag bits; `num_hashes >= 1`;
-   capacity (`num_longs * 64`) in `1..=MAX_FILTER_SIZE_BITS`; for a
+   `num_hashes <= 65534`; `num_longs` in `1..=2^26 - 1` (capacity at most
+   2^32 - 64 bits, the 32-bit shift limit); preamble 3 exactly when empty; for a
    non-empty image, the bit array fully present; trailing-byte policy
    matching what upstream itself writes. Plus anything the audit finds.
 3. **Empty-image capacity (decided):** accept it as upstream does — a
    genuine large empty filter serializes to 24 bytes — and state clearly in
    the `deserialize` and `wrap` rustdoc that an empty image can make upstream
-   allocate up to ~2 GiB, so callers handling untrusted input should bound
+   allocate up to 512 MiB, so callers handling untrusted input should bound
    it (e.g. check the claimed capacity or cap process memory).
 4. **Committed fuzz regression test** (`bloom_deserialize_fuzz_test.rs`):
    deterministic, fixed-seed mutation of genuine filters (empty, sparse,

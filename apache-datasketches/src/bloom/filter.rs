@@ -176,9 +176,9 @@ impl BloomFilter {
     /// Serializes the filter to bytes readable by [`Self::deserialize`] and
     /// [`WrappedBloomFilter::wrap`](super::WrappedBloomFilter::wrap).
     ///
-    /// A filter with a capacity of 2^32 bits (512 MiB) or more serializes,
-    /// but cannot be read back: upstream computes the capacity it reads in
-    /// 32 bits, so [`Self::deserialize`] rejects such bytes.
+    /// Every filter this crate builds round-trips: the builder caps sizes at
+    /// 2^32 - 64 bits because upstream computes the capacity it reads back
+    /// in 32 bits.
     pub fn serialize(&self) -> Vec<u8> {
         self.inner.serialize().as_slice().to_vec()
     }

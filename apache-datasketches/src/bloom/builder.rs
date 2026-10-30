@@ -1,4 +1,6 @@
-use super::{BloomFilter, DEFAULT_SEED, MAX_FILTER_SIZE_BITS, MAX_NUM_HASHES};
+use super::{
+    BloomFilter, DEFAULT_SEED, MAX_FILTER_SIZE_BITS, MAX_FILTER_SIZE_REASON, MAX_NUM_HASHES,
+};
 use crate::error::SketchError;
 use apache_datasketches_sys::bloom_filter::ffi;
 use std::f64::consts::LN_2;
@@ -66,6 +68,8 @@ fn num_filter_bits_estimate(max_distinct_items: u64, target_fpp: f64) -> f64 {
 /// Checks the filter-size suggestion is a usable size, i.e. at most
 /// [`MAX_FILTER_SIZE_BITS`] (exactly representable as an `f64`). That bound
 /// is far below `u64::MAX`, so passing it also rules out the undefined cast.
+/// A suggestion at most the cap rounds up (to a multiple of 64) to at most the
+/// cap, since the cap is itself a multiple of 64.
 fn check_num_filter_bits_estimate(
     max_distinct_items: u64,
     target_fpp: f64,
@@ -74,7 +78,8 @@ fn check_num_filter_bits_estimate(
     if bits > MAX_FILTER_SIZE_BITS as f64 {
         return Err(invalid(format!(
             "{max_distinct_items} items at target_fpp {target_fpp} need about {bits} bits, \
-             more than the maximum filter size of {MAX_FILTER_SIZE_BITS} bits"
+             more than the maximum filter size of {MAX_FILTER_SIZE_BITS} bits \
+             ({MAX_FILTER_SIZE_REASON})"
         )));
     }
     Ok(())
@@ -84,6 +89,13 @@ impl BloomFilterBuilder {
     /// Sizes the filter for `max_distinct_items` expected distinct items at a
     /// target false-positive probability `target_fpp`, which must lie
     /// strictly between 0 and 1.
+    ///
+    /// The computed size ([`Self::suggest_num_filter_bits`]) must not exceed
+    /// 2^32 - 64 bits, or [`Self::build`] returns
+    /// [`SketchError::InvalidConfig`]: upstream's serialized format cannot read
+    /// back filters of 2^32 bits or more (its size arithmetic is 32-bit). At a
+    /// 1% target that is about 448 million items. The limit may be raised once
+    /// upstream fixes that.
     pub fn by_accuracy(max_distinct_items: u64, target_fpp: f64) -> Self {
         Self {
             sizing: Sizing::Accuracy {
@@ -97,6 +109,11 @@ impl BloomFilterBuilder {
     /// Sizes the filter explicitly: `num_bits` bits (rounded up to a multiple
     /// of 64) and `num_hashes` hash functions, at most `u16::MAX - 1` (upstream's
     /// hashing loop never terminates for `u16::MAX`).
+    ///
+    /// `num_bits` must be in `1..=2^32 - 64`. Upstream reads a serialized
+    /// filter's size with 32-bit arithmetic, so a filter of 2^32 bits or more
+    /// could not be deserialized; this limit may be raised once upstream fixes
+    /// that.
     pub fn by_size(num_bits: u64, num_hashes: u16) -> Self {
         Self {
             sizing: Sizing::Size {
@@ -122,8 +139,11 @@ impl BloomFilterBuilder {
     /// Validates the configuration and builds an empty [`BloomFilter`].
     ///
     /// Returns [`SketchError::InvalidConfig`] if an argument is out of range,
-    /// including a [`Self::by_accuracy`] sizing that would need more than the
-    /// maximum filter size (see [`Self::suggest_num_filter_bits`]).
+    /// including a size above the maximum of 2^32 - 64 bits, directly
+    /// ([`Self::by_size`]) or computed ([`Self::by_accuracy`], see
+    /// [`Self::suggest_num_filter_bits`]). Upstream's serialized format cannot
+    /// read back larger filters (its size arithmetic is 32-bit); the limit may
+    /// be raised once upstream fixes that.
     pub fn build(self) -> Result<BloomFilter, SketchError> {
         let inner = match self.sizing {
             Sizing::Accuracy {
@@ -141,7 +161,8 @@ impl BloomFilterBuilder {
             } => {
                 if num_bits == 0 || num_bits > MAX_FILTER_SIZE_BITS {
                     return Err(invalid(format!(
-                        "num_bits must be in 1..={MAX_FILTER_SIZE_BITS}, got {num_bits}"
+                        "num_bits must be in 1..={MAX_FILTER_SIZE_BITS}, got {num_bits} \
+                         ({MAX_FILTER_SIZE_REASON})"
                     )));
                 }
                 if num_hashes == 0 || num_hashes > MAX_NUM_HASHES {
@@ -162,7 +183,10 @@ impl BloomFilterBuilder {
     ///
     /// Returns [`SketchError::InvalidConfig`] if an argument is out of range
     /// or the suggestion exceeds `u16::MAX - 1`, the most hash functions a
-    /// filter can use (many bits for few items).
+    /// filter can use (many bits for few items). `num_filter_bits` must be in
+    /// `1..=2^32 - 64`, the largest filter this crate builds (upstream's
+    /// serialized format cannot read back filters of 2^32 bits or more; the
+    /// limit may be raised once upstream fixes its 32-bit size arithmetic).
     pub fn suggest_num_hashes(
         max_distinct_items: u64,
         num_filter_bits: u64,
@@ -170,7 +194,8 @@ impl BloomFilterBuilder {
         check_items(max_distinct_items)?;
         if num_filter_bits == 0 || num_filter_bits > MAX_FILTER_SIZE_BITS {
             return Err(invalid(format!(
-                "num_filter_bits must be in 1..={MAX_FILTER_SIZE_BITS}, got {num_filter_bits}"
+                "num_filter_bits must be in 1..={MAX_FILTER_SIZE_BITS}, got {num_filter_bits} \
+                 ({MAX_FILTER_SIZE_REASON})"
             )));
         }
         let hashes = num_hashes_estimate(max_distinct_items, num_filter_bits);
@@ -201,8 +226,10 @@ impl BloomFilterBuilder {
     /// ln(target_fpp) / (ln 2)^2)`.
     ///
     /// Returns [`SketchError::InvalidConfig`] if an argument is out of range
-    /// or the suggestion exceeds the maximum filter size of
-    /// `(i32::MAX - 32) * 8` bits (upstream cannot build a larger filter).
+    /// or the suggestion exceeds the maximum filter size of 2^32 - 64 bits:
+    /// upstream's serialized format cannot read back filters of 2^32 bits or
+    /// more (its size arithmetic is 32-bit). The limit may be raised once
+    /// upstream fixes that.
     pub fn suggest_num_filter_bits(
         max_distinct_items: u64,
         target_fpp: f64,

@@ -267,7 +267,7 @@ fn rejects_num_longs_that_wrap_the_32_bit_shift() {
     image.num_longs = (1 << 29) + 1;
     assert_rejected(&image.bytes(), "non-empty, 2^29 + 1 longs");
     // Empty images: 2^26 wraps to 0 bits, 2^26 + 1 to a 64-bit filter, and
-    // anything at or above MAX_FILTER_SIZE_BITS / 64 is out of range anyway.
+    // the rest are far above the 2^26 - 1 word maximum too.
     for num_longs in [1u32 << 26, (1 << 26) + 1, 1 << 28, 0x8000_0000, u32::MAX] {
         assert_rejected(
             &Image::empty(num_longs, 3, 7).bytes(),
@@ -277,11 +277,21 @@ fn rejects_num_longs_that_wrap_the_32_bit_shift() {
 }
 
 #[test]
-fn rejects_num_longs_above_the_maximum_filter_size() {
-    // MAX_FILTER_SIZE_BITS / 64 = 268_435_451; the buffer cannot hold it.
+fn rejects_num_longs_at_the_maximum_boundary() {
+    // The largest readable capacity is 2^26 - 1 words (2^32 - 64 bits). One
+    // word more is rejected outright, even with a matching (empty) image.
     let mut image = Image::non_empty(1, 3, 7, &[]);
-    image.num_longs = 268_435_452;
-    assert_rejected(&image.bytes(), "non-empty, above maximum");
+    image.num_longs = 1 << 26;
+    image.bits.clear();
+    assert_rejected(&image.bytes(), "non-empty, 2^26 longs");
+    assert_rejected(&Image::empty(1 << 26, 3, 7).bytes(), "empty, 2^26 longs");
+    // 2^26 - 1 words is in range, but a non-empty image needs 512 MiB of bit
+    // array; a truncated buffer is rejected by the length check before
+    // anything is allocated. (A genuine empty image of that size would be
+    // accepted and allocate 512 MiB, so it is not exercised here.)
+    let mut image = Image::non_empty(1, 3, 7, &[]);
+    image.num_longs = (1 << 26) - 1;
+    assert_rejected(&image.bytes(), "non-empty, 2^26 - 1 longs, truncated");
 }
 
 #[test]
@@ -426,7 +436,59 @@ fn mixing_update_and_query_and_update_keeps_count_exact() {
 // unchecked (bloom_filter_builder_impl.hpp:48, :54, :61): out of range is
 // undefined behavior, so the safe layer rejects it first.
 
-const MAX_FILTER_SIZE_BITS: u64 = (i32::MAX as u64 - 32) * 8;
+/// 2^32 - 64 bits: the largest capacity upstream can read back, (2^26 - 1)
+/// words. The builder caps sizes here so every filter round-trips.
+const MAX_FILTER_SIZE_BITS: u64 = (1 << 32) - 64;
+
+fn assert_size_rejected<T>(result: Result<T, SketchError>, what: &str) {
+    match result {
+        Err(SketchError::InvalidConfig(msg)) => assert!(
+            msg.contains("2^32"),
+            "{what}: message should give the reason: {msg:?}"
+        ),
+        Err(e) => panic!("{what}: expected InvalidConfig, got {e:?}"),
+        Ok(_) => panic!("{what}: expected InvalidConfig, got Ok"),
+    }
+}
+
+#[test]
+fn filter_size_is_capped_so_every_filter_round_trips() {
+    // by_size rounds up to a multiple of 64: anything above the cap (which
+    // is a multiple of 64) rounds above it. Building exactly the cap would
+    // allocate 512 MiB, so the accepted boundary is checked via
+    // suggest_num_hashes, which applies the same range check to its bits.
+    for bits in [
+        MAX_FILTER_SIZE_BITS + 1,
+        MAX_FILTER_SIZE_BITS + 63,
+        1 << 32,
+        1 << 33,
+    ] {
+        assert_size_rejected(BloomFilterBuilder::by_size(bits, 3).build(), "by_size");
+        assert_size_rejected(
+            BloomFilterBuilder::suggest_num_hashes(1_000_000_000, bits),
+            "suggest_num_hashes",
+        );
+    }
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_hashes(1_000_000_000, MAX_FILTER_SIZE_BITS).unwrap(),
+        3
+    );
+    // by_accuracy: 500M items at 1% need about 4.8e9 bits.
+    assert_size_rejected(
+        BloomFilterBuilder::by_accuracy(500_000_000, 0.01).build(),
+        "by_accuracy",
+    );
+    assert_size_rejected(
+        BloomFilterBuilder::suggest_num_filter_bits(500_000_000, 0.01),
+        "suggest_num_filter_bits",
+    );
+    // Rounding up to a multiple of 64 is what the cap check accounts for.
+    let f = BloomFilterBuilder::by_size(64 * 1024 - 63, 2)
+        .build()
+        .unwrap();
+    assert_eq!(f.capacity(), 64 * 1024);
+    assert!(BloomFilter::deserialize(&f.serialize()).is_ok());
+}
 
 #[test]
 fn suggest_num_hashes_rejects_results_above_the_maximum() {
@@ -463,12 +525,15 @@ fn suggest_num_hashes_rejects_results_above_the_maximum() {
 
 #[test]
 fn suggest_num_filter_bits_rejects_results_above_the_maximum_size() {
-    // At fpp 0.5, ceil(n / ln 2): 11_908_177_704 items fit in the maximum
-    // filter size, 11_908_177_705 do not.
-    let bits = BloomFilterBuilder::suggest_num_filter_bits(11_908_177_704, 0.5).unwrap();
-    assert!(bits <= MAX_FILTER_SIZE_BITS && bits > MAX_FILTER_SIZE_BITS - 2);
+    // At fpp 0.5, ceil(n / ln 2): 2_977_044_427 items need exactly the
+    // maximum filter size, 2_977_044_428 one bit more. (Only suggested, not
+    // built: building the maximum allocates 512 MiB.)
+    assert_eq!(
+        BloomFilterBuilder::suggest_num_filter_bits(2_977_044_427, 0.5).unwrap(),
+        MAX_FILTER_SIZE_BITS
+    );
     for (n, p) in [
-        (11_908_177_705u64, 0.5),
+        (2_977_044_428u64, 0.5),
         (u64::MAX, 0.01),
         (u64::MAX, 0.999),
         (1 << 40, f64::MIN_POSITIVE),
