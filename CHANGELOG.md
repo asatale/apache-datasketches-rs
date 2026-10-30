@@ -44,7 +44,9 @@ fact — this file was introduced during 0.2.1.
   Bloom `update`/`query`/`query_and_update` for byte and string items, on
   `BloomFilter` and `WrappedBloomFilter`, hash a misaligned item of 8 or more
   bytes from an aligned copy; hash values and filter state are unchanged, and
-  aligned items are hashed in place without a copy.
+  aligned items are hashed in place without a copy. `HllSketch::deserialize`
+  on an empty slice no longer crashes upstream (it read the first byte before
+  any length check) and returns `SketchError::Deserialization`.
 - **`WrappedCompactThetaSketch::wrap` now rejects bytes that are not 8-byte
   aligned** with `SketchError::Deserialization`, for every image kind (the view
   reads the caller's bytes in place, and later set operations iterate them as

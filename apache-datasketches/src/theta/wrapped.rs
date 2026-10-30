@@ -24,7 +24,7 @@ impl<'a> WrappedCompactThetaSketch<'a> {
     ///
     /// Returns [`SketchError::Deserialization`] if the bytes are not a valid
     /// compact theta sketch, or if `bytes` does not start at an 8-byte-aligned
-    /// address (the view reads the bytes in place as 16- and 64-bit words, for
+    /// address (the view reads the bytes in place as 16-, 32- and 64-bit words, for
     /// every image kind including empty and compressed ones). Use
     /// [`CompactThetaSketch::deserialize`](super::CompactThetaSketch::deserialize)
     /// for bytes of unknown alignment: it copies, and accepts any alignment.
