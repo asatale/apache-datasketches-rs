@@ -34,7 +34,8 @@ theta                 10000000 str           5.77     9.99     +4.22  1.73x
 
 It also **fails** if the two sides disagree on any scenario's sketch estimate
 (for KLL, on its deterministic `n`/`min`/`max`/`retained` fields instead —
-see "The KLL pair checks fields, not an estimate" below). That is the check
+see "The KLL pair checks fields, not an estimate" below; for Bloom, on exact
+`bits_used`/`hits`/`bytes` fields). That is the check
 worth having: running the two halves by hand and subtracting works fine right
 up until a parameter is changed on one side only, and then it produces a
 confident-looking ratio that means nothing. The checked values are
@@ -74,6 +75,7 @@ cargo run --release -p apache-datasketches --example bench_tuple_update --featur
 | `cpc_update.cc` | `examples/bench_cpc_update.rs` |
 | `kll_update.cc` | `examples/bench_kll_update.rs` |
 | `req_update.cc` | `examples/bench_req_update.rs` |
+| `bloom_update.cc` | `examples/bench_bloom_update.rs` |
 | `array_of_doubles_update.cc` | `examples/bench_tuple_update.rs` |
 
 `examples/bench_tuple_generic_update.rs` deliberately has no counterpart: the
@@ -96,7 +98,7 @@ definition and the key format.
 to every program — that costs nothing and means adding a benchmark needs no
 change to the include list.
 
-`compare.sh` drives `run.sh` and the seven Rust counterparts and hands both
+`compare.sh` drives `run.sh` and the eight Rust counterparts and hands both
 outputs to `compare.py`, which parses them with one function: the two harnesses
 print an identical line format precisely so that it can. `compare.py` is not
 meant to be run directly. Adding a benchmark means adding a line to the `pairs`
@@ -114,7 +116,9 @@ result sketch does, so there is nothing to deserialize *into* a union. `kll`
 is the other exception: it is parameterized by `k` rather than `lg_k`, has no
 string update and so no `str`, and adds a `quantile` scenario — `distinct`/
 `hot`/`quantile`/`ser`/`deser`. `req` follows the same scenario set as `kll`
-(`k` rather than `lg_k`, no `str`, adds `quantile`). If you change the
+(`k` rather than `lg_k`, no `str`, adds `quantile`). `bloom` has
+`distinct`/`query`/`str`/`union`/`ser`/`deser`, and is parameterized by
+`max_distinct_items`, `target_fpp` and `seed` rather than `lg_k`. If you change the
 parameters on one side, change them on the other or the ratio becomes
 meaningless. Both print the sketch estimate (KLL and REQ:
 `n`/`min`/`max`/`retained`), which is the cheap check that the two harnesses
@@ -227,6 +231,24 @@ cached sorted view.
 The Rust `deser` scenario also pays for the shim's layout validation and NaN
 scan (in both KLL and REQ), which the C++ side does not, so a `deser` gap is
 binding cost but not FFI overhead alone. Say so before quoting a `deser` ratio.
+
+## The Bloom pair checks exact fields
+
+A Bloom filter has no estimate to compare, but unlike KLL it is fully
+deterministic: hashing is seeded (`seed = 9001`) and nothing is random. So
+`bloom_update.cc` and `bench_bloom_update.rs` print exact fields after every
+scenario: `bits_used`, plus `hits` for `query` (all of `0..items` hit; the
+count also includes any false positives among `items..2*items`) and `bytes`
+for `ser`/`deser`. `compare.py` compares them generically, so it needed no
+change. Both sides use `max_distinct_items = 1_000_000` and
+`target_fpp = 0.01`.
+
+`query` times `2 * items` calls, so its ns/op is per query. `union` is over a
+fixed `OP_CALLS`, each call copying one filter and unioning the other into it.
+
+The Rust `deser` scenario also pays for the shim's up-front validation of the
+bytes, which the C++ side does not, so a `deser` gap is binding cost but not
+FFI overhead alone. Say so before quoting a `deser` ratio.
 
 ## Reading the numbers
 

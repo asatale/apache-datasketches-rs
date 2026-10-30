@@ -182,14 +182,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      # compare.sh runs both sides, so this one step covers the seven C++
+      # compare.sh runs both sides, so this one step covers the eight C++
       # programs, run.sh itself (the include paths it derives are as likely to
-      # break as the source), and their seven Rust counterparts.
+      # break as the source), and their eight Rust counterparts.
       #
       # It also gates on the two harnesses agreeing scenario-for-scenario, and
       # that part IS a real assertion rather than a build check: it compares
       # each scenario's labelled fields (estimates for most families; n, min,
-      # max and retained for KLL and REQ, whose estimates are randomized),
+      # max and retained for KLL and REQ, whose estimates are randomized; exact
+      # bits_used, hits and bytes for Bloom),
       # which are deterministic, so it is immune to the runner noise that
       # rules out a timing gate. It catches a parameter changed on one side
       # only -- the failure that otherwise shows up as a published ratio

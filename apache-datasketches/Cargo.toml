@@ -94,6 +94,10 @@ name = "bench_cpc_update"
 required-features = ["cpc"]
 
 [[example]]
+name = "bench_bloom_update"
+required-features = ["bloom"]
+
+[[example]]
 name = "bench_kll_update"
 required-features = ["kll"]
 

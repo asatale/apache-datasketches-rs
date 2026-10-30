@@ -25,7 +25,8 @@ root="$(cd "$here/../.." && pwd)"
 # calls back into Rust per summary and has no C++ counterpart to compare to.
 # bench_kll_update and bench_req_update cross-check n/min/max/retained instead
 # of an estimate: KLL and REQ compaction is randomized, so their estimates
-# legitimately differ run to run.
+# legitimately differ run to run. bench_bloom_update cross-checks exact
+# fields (bits_used, hits, bytes): a Bloom filter has no estimate.
 pairs=(
   "hll:bench_hll_update:hll"
   "hll_union:bench_hll_union_update:hll"
@@ -33,6 +34,7 @@ pairs=(
   "cpc:bench_cpc_update:cpc"
   "kll:bench_kll_update:kll"
   "req:bench_req_update:req"
+  "bloom:bench_bloom_update:bloom"
   "array_of_doubles:bench_tuple_update:tuple"
 )
 
