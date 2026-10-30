@@ -6,6 +6,10 @@ use cxx::UniquePtr;
 /// An owned, mutable Bloom filter. Build one with
 /// [`BloomFilterBuilder`](super::BloomFilterBuilder) or restore one with
 /// [`Self::deserialize`].
+///
+/// Byte and string items (`update_bytes`, `query_str`, ...) may sit at any
+/// address; an item that is not 8-byte aligned is hashed from an aligned copy,
+/// with the same result as the same bytes aligned.
 pub struct BloomFilter {
     pub(crate) inner: UniquePtr<ffi::BloomFilterShim>,
 }

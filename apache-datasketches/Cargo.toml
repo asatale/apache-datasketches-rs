@@ -420,3 +420,7 @@ required-features = ["theta"]
 [[test]]
 name = "hll_alignment_test"
 required-features = ["hll"]
+
+[[test]]
+name = "bloom_item_alignment_test"
+required-features = ["bloom"]
