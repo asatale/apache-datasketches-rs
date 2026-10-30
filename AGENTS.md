@@ -168,6 +168,13 @@ which the docs flag as a security note. Updates go through upstream's
 `query_and_update` so the bits-set count stays exact. Its bench pair
 cross-checks the deterministic `bits_used`, hits and bytes fields exactly.
 
+Input alignment is part of that hardening: upstream reads several inputs
+through typed pointers (Theta and HLL4-aux images, Bloom's XXHash64 items), so
+a shim must copy a misaligned owned-deserialize input into an aligned buffer,
+reject a misaligned zero-copy wrap (Theta, Bloom) with `Deserialization`, and
+hash misaligned Bloom items from an aligned copy. The `*_alignment_test` files
+guard each, and are worth running under `-fsanitize=alignment`.
+
 ### `cxx::bridge` names must be globally unique across the sys crate
 
 Every `#[cxx::bridge]` free-function name, and every shared struct/enum name, must be globally unique

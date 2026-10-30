@@ -33,6 +33,25 @@ fact — this file was introduced during 0.2.1.
 - `apache-datasketches-sys`: a `bloom` feature with the raw bridge to the Bloom
   filter and its wrapped view.
 
+### Security
+- **Misaligned-input undefined behavior fixed (`apache-datasketches-sys`,
+  `apache-datasketches`).** Upstream reads several inputs through typed
+  pointers, which is undefined behavior for a misaligned `&[u8]` or `&str`
+  that safe code can easily produce (for instance `&bytes[1..]`).
+  `CompactThetaSketch::deserialize`/`deserialize_compressed` and
+  `HllSketch::deserialize` (an HLL4 image with a non-empty aux map) now copy a
+  misaligned image into an aligned buffer first and accept any alignment.
+  Bloom `update`/`query`/`query_and_update` for byte and string items, on
+  `BloomFilter` and `WrappedBloomFilter`, hash a misaligned item of 8 or more
+  bytes from an aligned copy; hash values and filter state are unchanged, and
+  aligned items are hashed in place without a copy.
+- **`WrappedCompactThetaSketch::wrap` now rejects bytes that are not 8-byte
+  aligned** with `SketchError::Deserialization`, for every image kind (the view
+  reads the caller's bytes in place, and later set operations iterate them as
+  64-bit words). Previously a misaligned slice was accepted and read
+  misaligned. Use `CompactThetaSketch::deserialize` for bytes of unknown
+  alignment.
+
 ## [0.3.0] — 2026-10-29
 
 `apache-datasketches` 0.3.0 and `apache-datasketches-sys` 0.2.3, both crates.
