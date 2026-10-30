@@ -14,7 +14,24 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
-## [0.3.0] — 2026-10-27
+### Added
+- **Bloom filter family** (`bloom` feature, on by default, `apache-datasketches`):
+  `BloomFilterBuilder` (`by_accuracy`/`by_size`, `seed`, and the `suggest_*`
+  sizing helpers), the owned `BloomFilter` (updates, queries and
+  `query_and_update` for the integer, float, string and byte types; `union_with`,
+  `intersect`, `invert`, `reset`; `serialize`/`deserialize`) and
+  `WrappedBloomFilter`, a zero-copy read-only view over serialized bytes with
+  `to_owned`. The default seed is `DEFAULT_SEED` (9001); filters interoperate
+  with Java and Python when seeds match. Deserialization validates the
+  serialized layout before upstream reads it and is covered by a committed fuzz
+  test; sizes above 2^32 - 64 bits and `num_hashes` outside `1..=65534` are
+  rejected with `SketchError::InvalidConfig`. An empty serialized image is 24
+  bytes but records its capacity, so deserializing or wrapping one allocates up
+  to 512 MiB: bound untrusted input yourself.
+- `apache-datasketches-sys`: a `bloom` feature with the raw bridge to the Bloom
+  filter and its wrapped view.
+
+## [0.3.0] — 2026-10-29
 
 `apache-datasketches` 0.3.0 and `apache-datasketches-sys` 0.2.3, both crates.
 

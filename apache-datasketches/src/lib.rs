@@ -37,8 +37,8 @@
 //!   serialized filters.
 //!
 //! (Module-level docs for each feature are only linked above when built
-//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll`/`req` in
-//! the sidebar.)
+//! with that feature enabled — see `hll`/`theta`/`cpc`/`tuple`/`kll`/`req`/`bloom`
+//! in the sidebar.)
 //!
 //! See each module's documentation for usage examples, or the crate's
 //! `examples/` directory for complete runnable demos.

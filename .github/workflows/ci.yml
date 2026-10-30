@@ -90,7 +90,8 @@ jobs:
           - "--no-default-features --features tuple"
           - "--no-default-features --features kll"
           - "--no-default-features --features req"
-          - "" # default: all six
+          - "--no-default-features --features bloom"
+          - "" # default: all seven
           - "--all-features"
     steps:
       - uses: actions/checkout@v5
