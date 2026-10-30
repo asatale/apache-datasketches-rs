@@ -22,8 +22,9 @@ fact — this file was introduced during 0.2.1.
   `intersect`, `invert`, `reset`; `serialize`/`deserialize`) and
   `WrappedBloomFilter`, a zero-copy read-only view over serialized bytes (a
   non-empty image must be 8-byte aligned, else `Deserialization`) with
-  `to_owned`; `deserialize` accepts any alignment. The default seed is `DEFAULT_SEED` (9001); filters interoperate
-  with Java and Python when seeds match. Deserialization validates the
+  `to_owned`; `deserialize` accepts any alignment. The default seed is
+  `DEFAULT_SEED` (9001); filters interoperate with Java and Python when seeds
+  match. Deserialization validates the
   serialized layout before upstream reads it and is covered by a committed fuzz
   test; sizes above 2^32 - 64 bits and `num_hashes` outside `1..=65534` are
   rejected with `SketchError::InvalidConfig`. An empty serialized image is 24
