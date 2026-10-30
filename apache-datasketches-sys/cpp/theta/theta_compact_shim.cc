@@ -1,5 +1,9 @@
 #include "theta_compact_shim.h"
 
+#include <cstdint>
+#include <cstring>
+#include <vector>
+
 namespace apache_datasketches_rs {
 
 CompactThetaSketchShim::CompactThetaSketchShim(datasketches::compact_theta_sketch sketch)
@@ -37,9 +41,20 @@ std::unique_ptr<CompactThetaSketchShim> theta_sketch_compact(const ThetaSketchSh
       datasketches::compact_theta_sketch(sketch.inner(), ordered));
 }
 
+// Upstream's parser reads the image through typed pointers (u16 seed hash,
+// u64 theta and entries, u32 counts), which is undefined behavior unless the
+// base is 8-byte aligned. The result is an owned sketch whose entries are
+// copied into a std::vector (v1-v3) or unpacked byte-wise into one (v4), so
+// it keeps no pointer into the input and an aligned copy is harmless.
 std::unique_ptr<CompactThetaSketchShim> compact_theta_sketch_deserialize(rust::Slice<const uint8_t> bytes) {
+  if (reinterpret_cast<uintptr_t>(bytes.data()) % alignof(uint64_t) == 0) {
+    return std::make_unique<CompactThetaSketchShim>(
+        datasketches::compact_theta_sketch::deserialize(bytes.data(), bytes.size()));
+  }
+  std::vector<uint64_t> aligned((bytes.size() + sizeof(uint64_t) - 1) / sizeof(uint64_t));
+  std::memcpy(aligned.data(), bytes.data(), bytes.size());
   return std::make_unique<CompactThetaSketchShim>(
-      datasketches::compact_theta_sketch::deserialize(bytes.data(), bytes.size()));
+      datasketches::compact_theta_sketch::deserialize(aligned.data(), bytes.size()));
 }
 
 } // namespace apache_datasketches_rs

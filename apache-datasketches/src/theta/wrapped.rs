@@ -19,6 +19,15 @@ unsafe impl<'a> Send for WrappedCompactThetaSketch<'a> {}
 impl<'a> WrappedCompactThetaSketch<'a> {
     /// Wraps a serialized compact theta sketch's bytes without copying or
     /// fully deserializing them.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SketchError::Deserialization`] if the bytes are not a valid
+    /// compact theta sketch, or if `bytes` does not start at an 8-byte-aligned
+    /// address (the view reads the bytes in place as 16- and 64-bit words, for
+    /// every image kind including empty and compressed ones). Use
+    /// [`CompactThetaSketch::deserialize`](super::CompactThetaSketch::deserialize)
+    /// for bytes of unknown alignment: it copies, and accepts any alignment.
     pub fn wrap(bytes: &'a [u8]) -> Result<Self, SketchError> {
         let inner = sys::wrapped_compact_theta_sketch_wrap(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;

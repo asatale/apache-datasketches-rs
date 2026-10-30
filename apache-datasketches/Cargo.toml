@@ -412,3 +412,7 @@ required-features = ["bloom"]
 [[test]]
 name = "bloom_serialization_compat_test"
 required-features = ["bloom"]
+
+[[test]]
+name = "theta_alignment_test"
+required-features = ["theta"]

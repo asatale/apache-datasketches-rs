@@ -22,6 +22,11 @@ impl CompactThetaSketch {
     /// (compressed) — see [`Self::deserialize_compressed`], which calls the
     /// exact same underlying routine; the two Rust names exist purely for
     /// call-site symmetry with `serialize_compact`/`serialize_compressed`.
+    ///
+    /// `bytes` may start at any address: a misaligned slice is copied into an
+    /// aligned buffer first, and the returned sketch owns its data. Use this
+    /// rather than [`super::WrappedCompactThetaSketch::wrap`] when the alignment of
+    /// the bytes is not under your control.
     pub fn deserialize(bytes: &[u8]) -> Result<Self, SketchError> {
         let inner = sys::compact_theta_sketch_deserialize(bytes)
             .map_err(|e| SketchError::Deserialization(e.what().to_string()))?;
@@ -29,7 +34,8 @@ impl CompactThetaSketch {
     }
 
     /// Deserializes v4 (compressed) bytes. See [`Self::deserialize`] — both
-    /// methods call the same upstream auto-detecting `deserialize()`.
+    /// methods call the same upstream auto-detecting `deserialize()`, and both
+    /// accept bytes at any alignment.
     pub fn deserialize_compressed(bytes: &[u8]) -> Result<Self, SketchError> {
         Self::deserialize(bytes)
     }
