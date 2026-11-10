@@ -1,6 +1,6 @@
 [package]
 name = "apache-datasketches"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -32,7 +32,7 @@ bloom = ["apache-datasketches-sys/bloom"]
 features = ["hll", "theta", "cpc", "tuple", "kll", "req", "bloom"]
 
 [dependencies]
-apache-datasketches-sys = { version = "0.2.3", path = "../apache-datasketches-sys", default-features = false }
+apache-datasketches-sys = { version = "0.2.4", path = "../apache-datasketches-sys", default-features = false }
 cxx = "1"
 thiserror = "1"
 
