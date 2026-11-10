@@ -9,14 +9,14 @@ All seven sketch families — `hll`, `theta`, `cpc`, `tuple`, `kll`, `req` and
 
 ```toml
 [dependencies]
-apache-datasketches = "0.3"
+apache-datasketches = "0.4"
 ```
 
 To compile only what you need, disable default features and name the families:
 
 ```toml
 [dependencies]
-apache-datasketches = { version = "0.3", default-features = false, features = ["hll"] }
+apache-datasketches = { version = "0.4", default-features = false, features = ["hll"] }
 ```
 
 Unused families cost nothing at runtime — the linker drops what you do not

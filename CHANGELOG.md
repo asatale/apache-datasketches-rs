@@ -14,6 +14,14 @@ fact — this file was introduced during 0.2.1.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-10
+
+`apache-datasketches` 0.4.0 and `apache-datasketches-sys` 0.2.4, both crates.
+
+### Breaking (`apache-datasketches`)
+- `WrappedCompactThetaSketch::wrap` rejects input that is not 8-byte aligned
+  with `SketchError::Deserialization`; see Security below.
+
 ### Added
 - **Bloom filter family** (`bloom` feature, on by default, `apache-datasketches`):
   `BloomFilterBuilder` (`by_accuracy`/`by_size`, `seed`, and the `suggest_*`
@@ -667,7 +675,8 @@ period and published all at once.
   family** (`hll` feature) — `HllSketch` and `HllUnion`, with serialization —
   over vendored `datasketches-cpp`, bridged with `cxx`.
 
-[Unreleased]: https://github.com/asatale/apache-datasketches-rs/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/asatale/apache-datasketches-rs/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/asatale/apache-datasketches-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/asatale/apache-datasketches-rs/compare/v0.2.1...v0.2.2
